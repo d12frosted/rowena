@@ -310,7 +310,7 @@ internal sealed class MainWindow : Window
                 continue;
 
             ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("gil each", ImGuiTableColumnFlags.WidthFixed, 80);
+            ImGui.TableSetupColumn($"gil/{group.Unit}", ImGuiTableColumnFlags.WidthFixed, 80);
             ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
@@ -348,6 +348,13 @@ internal sealed class MainWindow : Window
                 var leader = group.Best is { } best && Math.Abs(row.Rate!.Value - best) < 0.001d;
                 // Only the leader is coloured. Marking everything defeats the point.
                 ImGui.TextColored(leader ? Good : Plain, $"{row.Rate!.Value:F2}");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(
+                        $"{row.Rate.Value:F2} gil for every single {group.Unit} you spend.\n"
+                        + $"One run takes {row.PerRun:N0} {group.Unit} and nets {row.Profit:N0} gil.\n"
+                        + $"Your {group.Held:N0} held are worth about {(long)(group.Held * row.Rate.Value):N0} gil.");
+                }
 
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted($"{row.Profit:N0}");
@@ -554,6 +561,20 @@ internal sealed class MainWindow : Window
     }
 
     /// <summary>
+    /// The noun for one unit of a currency, for labelling a rate.
+    /// </summary>
+    /// <remarks>
+    /// "gil each" never said each what, and 71.25 next to a column of millions invites reading it as
+    /// millions too. The tables are already grouped per currency, so the header only needs the noun:
+    /// gil/scrip.
+    /// </remarks>
+    private static string UnitOf(Resource currency)
+    {
+        var words = currency.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 0 ? "unit" : words[^1].ToLowerInvariant();
+    }
+
+    /// <summary>
     /// The tradable thing a conversion ends up with, when there is exactly one worth showing.
     /// </summary>
     private static uint? Produced(Conversion conversion) =>
@@ -595,6 +616,7 @@ internal sealed class MainWindow : Window
                     conversion.Name,
                     Produced(conversion),
                     quote.IsExecutable ? quote.GilPer(currency) : null,
+                    perRun,
                     quote.Profit,
                     perRun == 0 ? null : held / perRun,
                     quote.DaysToAbsorb,
@@ -610,7 +632,7 @@ internal sealed class MainWindow : Window
             .DefaultIfEmpty()
             .Max();
 
-        return new SinkGroup(currency, held, rows, rows.Any(row => row.Priced) ? best : null);
+        return new SinkGroup(currency, UnitOf(currency), held, rows, rows.Any(row => row.Priced) ? best : null);
     }
 
     private FlipRow BuildFlipRow(
@@ -707,13 +729,14 @@ internal sealed class MainWindow : Window
         string Trade,
         uint? ItemId,
         double? Rate,
+        long PerRun,
         long Profit,
         long? Covers,
         double? Absorb,
         string Venue,
         bool Priced);
 
-    private sealed record SinkGroup(Resource Currency, long Held, SinkRow[] Rows, double? Best);
+    private sealed record SinkGroup(Resource Currency, string Unit, long Held, SinkRow[] Rows, double? Best);
 
     private sealed record FlipRow(
         string Trade,
