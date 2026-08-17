@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Rowena.Core.Conversions;
 
 namespace Rowena.Game;
@@ -21,17 +22,36 @@ internal sealed class Balances(IObjectTable objects, IPluginLog log)
     /// <summary>Gil is just an item, and it lives with the other currencies.</summary>
     private const uint GilItemId = 1;
 
-    public long Gil => InCurrency(GilItemId);
+    public long Gil => Currency(GilItemId);
 
     /// <summary>How many of a resource you hold, wherever the game keeps that kind.</summary>
     public long Held(Resource resource) =>
-        resource.Kind == ResourceKind.Currency ? InCurrency(resource.Id) : InBags(resource.Id);
+        resource.Kind == ResourceKind.Currency ? Currency(resource.Id) : InBags(resource.Id);
 
     /// <summary>
-    /// Scrips, tomestones, seals and gil, which live in their own container rather than
-    /// in your bags.
+    /// A bound currency, asking both places the game keeps them.
     /// </summary>
-    private unsafe long InCurrency(uint itemId)
+    /// <remarks>
+    /// Scrips, tomestones and the like are held by CurrencyManager and are not in any
+    /// inventory container. Reading only the Currency container looks like it works, because
+    /// gil is in there and answers correctly, while every scrip silently reads zero. Ask
+    /// CurrencyManager first and fall back to the container, which is where gil actually is.
+    /// </remarks>
+    private long Currency(uint itemId) => InCurrencyManager(itemId) ?? InCurrencyContainer(itemId);
+
+    private unsafe long? InCurrencyManager(uint itemId)
+    {
+        var manager = CurrencyManager.Instance();
+
+        // HasItem is the guard that keeps this from reporting a confident zero for something
+        // CurrencyManager simply does not track, which is what makes the fallback meaningful.
+        if (manager is null || !manager->HasItem(itemId))
+            return null;
+
+        return manager->GetItemCount(itemId);
+    }
+
+    private unsafe long InCurrencyContainer(uint itemId)
     {
         var manager = InventoryManager.Instance();
         if (manager is null)

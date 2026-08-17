@@ -206,7 +206,7 @@ internal sealed class MainWindow : Window
             ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 80);
-            ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 190);
+            ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
             ImGui.TableSetupColumn("earn it", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableHeadersRow();
 
