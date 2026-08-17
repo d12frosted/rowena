@@ -20,6 +20,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IObjectTable Objects { get; private set; } = null!;
+    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private readonly WindowSystem windows = new("Rowena");
@@ -51,8 +52,9 @@ public sealed class Plugin : IDalamudPlugin
         };
 
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
+        var sweep = new FurnishingSweep(new Furnishings(DataManager, Log), market, Log);
 
-        mainWindow = new MainWindow(catalog, market, balances, scope, gatherBuddy, config, Save);
+        mainWindow = new MainWindow(catalog, market, balances, scope, gatherBuddy, sweep, config, Save);
         windows.AddWindow(mainWindow);
 
         PluginInterface.UiBuilder.Draw += windows.Draw;

@@ -34,4 +34,32 @@ public sealed class Configuration : IPluginConfiguration
 
     /// <summary>Largest number of runs to consider when sizing a trade.</summary>
     public int SizingCap { get; set; } = 20;
+
+    /// <summary>
+    /// How many item ids go into one Universalis request.
+    /// </summary>
+    /// <remarks>
+    /// Twenty, measured rather than chosen. Against Light, twenty answers reliably while fifty
+    /// and a hundred both time out with a 504 on every attempt. Raising this does not make a
+    /// sweep faster, it makes it fail.
+    /// </remarks>
+    public int PriceBatchSize { get; set; } = 20;
+
+    /// <summary>
+    /// How many furnishings to cost, after ranking them all on revenue potential.
+    /// </summary>
+    /// <remarks>
+    /// The second pass of a sweep prices the materials of these, and materials are where the
+    /// request count lives. Sixty is generous enough that the leaders are certainly inside it.
+    /// </remarks>
+    public int FurnishingShortlist { get; set; } = 60;
+
+    /// <summary>
+    /// How many crafts a day you could actually perform, or zero for "the market decides".
+    /// </summary>
+    /// <remarks>
+    /// Without this the only ceiling on a craft is the market's appetite, which flatters
+    /// anything quick to make. Retainer slots usually bind before either.
+    /// </remarks>
+    public int CraftsPerDayCap { get; set; }
 }

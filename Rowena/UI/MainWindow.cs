@@ -30,6 +30,9 @@ internal sealed class MainWindow : Window
     /// </summary>
     private static readonly TimeSpan RebuildEvery = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>How many craft rows the table shows. The count it was trimmed from is shown too.</summary>
+    private const int CraftsInTable = 25;
+
     private static readonly Vector4 Dim = new(0.60f, 0.60f, 0.62f, 1f);
     private static readonly Vector4 Plain = new(1f, 1f, 1f, 1f);
     private static readonly Vector4 Good = new(0.40f, 0.80f, 0.45f, 1f);
@@ -40,6 +43,7 @@ internal sealed class MainWindow : Window
     private readonly Balances balances;
     private readonly PricingScope scope;
     private readonly GatherBuddyIpc gatherBuddy;
+    private readonly FurnishingSweep sweep;
     private readonly Configuration config;
     private readonly Action save;
 
@@ -56,6 +60,7 @@ internal sealed class MainWindow : Window
         Balances balances,
         PricingScope scope,
         GatherBuddyIpc gatherBuddy,
+        FurnishingSweep sweep,
         Configuration config,
         Action save)
         : base("Rowena###rowena-main")
@@ -65,6 +70,7 @@ internal sealed class MainWindow : Window
         this.balances = balances;
         this.scope = scope;
         this.gatherBuddy = gatherBuddy;
+        this.sweep = sweep;
         this.config = config;
         this.save = save;
 
@@ -123,6 +129,90 @@ internal sealed class MainWindow : Window
         DrawSinks(current);
         ImGui.Spacing();
         DrawFlips(current);
+        ImGui.Spacing();
+        DrawCrafts(current, where);
+    }
+
+    private void DrawCrafts(Model current, string where)
+    {
+        ImGui.TextUnformatted("Crafts: furnishings, ranked by what they would earn in a day");
+        ImGui.SameLine();
+
+        if (sweep.Running)
+        {
+            ImGui.TextColored(Dim, $"  {sweep.Detail}");
+            return;
+        }
+
+        if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
+            sweep.Start(where, config.PriceBatchSize, config.FurnishingShortlist);
+
+        ImGui.SameLine();
+
+        if (sweep.State == FurnishingSweep.Phase.Failed)
+        {
+            ImGui.TextColored(Bad, sweep.Detail);
+            return;
+        }
+
+        if (sweep.ReadyAt is null)
+        {
+            // Said plainly, because it is minutes of small polite requests and should not start
+            // itself the first time the window happens to open.
+            ImGui.TextColored(
+                Dim,
+                $"  not swept yet. Twenty ids a request, so this takes a few minutes.");
+            return;
+        }
+
+        // Never a silent cap: the table is trimmed for legibility and says by how much.
+        ImGui.TextColored(
+            Dim,
+            $"  {sweep.Detail}, showing {current.Crafts.Length} of {current.CraftsRanked}"
+            + (current.CraftsDiscarded > 0 ? $", {current.CraftsDiscarded} unpriceable" : ""));
+
+        if (current.Crafts.Length == 0)
+            return;
+
+        if (!ImGui.BeginTable("crafts", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+            return;
+
+        ImGui.TableSetupColumn("Furnishing", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 45);
+        ImGui.TableSetupColumn("materials", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 75);
+        ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableHeadersRow();
+
+        foreach (var row in current.Crafts)
+        {
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(row.Item);
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(Dim, row.Job);
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"{row.Materials:N0}");
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(row.Profit > 0 ? Good : Bad, $"{row.Profit:N0}");
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(row.Roi is { } roi ? $"{roi:P0}" : "-");
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(Dim, $"{row.SalesPerDay:F1}");
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(row.GilPerDay > 0 ? Good : Dim, $"{row.GilPerDay:N0}");
+        }
+
+        ImGui.EndTable();
     }
 
     private void DrawHeader(string? where)
@@ -135,7 +225,7 @@ internal sealed class MainWindow : Window
 
         ImGui.SameLine();
 
-        if (market.Refreshing)
+        if (market.Busy)
             ImGui.TextColored(Dim, "fetching...");
         else if (market.LastError is { } error)
             ImGui.TextColored(Bad, error);
@@ -324,12 +414,49 @@ internal sealed class MainWindow : Window
 
         var flipRows = flips.Select(conversion => BuildFlipRow(conversion, allocated, tax)).ToArray();
 
+        var (crafts, ranked, discarded) = BuildCrafts(tax);
+
         return new Model(
             balances.Gil,
             sinks,
             flipRows,
             allocated.Values.Sum(allocation => allocation.Profit),
-            GatheringLine());
+            GatheringLine(),
+            crafts,
+            ranked,
+            discarded);
+    }
+
+    /// <summary>Ranks the swept furnishings, trims the table, and counts what could not be priced.</summary>
+    /// <remarks>
+    /// The discard count is not decoration. It is the measurement that decides whether following
+    /// recipe trees down to raw materials is worth building: if a handful of furnishings are lost
+    /// to an untraded intermediate, direct ingredients are enough, and if a third of them are,
+    /// they are not.
+    /// </remarks>
+    private (CraftRow[] Rows, int Ranked, int Discarded) BuildCrafts(MarketTax tax)
+    {
+        if (sweep.State != FurnishingSweep.Phase.Ready || sweep.Shortlist.Count == 0)
+            return ([], 0, 0);
+
+        var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
+        var ranked = ConversionRanking.ByGilPerDay(sweep.Shortlist, market.Lookup, tax, cap);
+
+        var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
+
+        var rows = priceable
+            .Take(CraftsInTable)
+            .Select(earnings => new CraftRow(
+                earnings.Conversion.Name,
+                earnings.Conversion.Venue,
+                earnings.Quote.GilOutlay,
+                earnings.Quote.Profit,
+                earnings.Quote.ReturnOnOutlay,
+                earnings.RunsPerDay,
+                earnings.GilPerDay))
+            .ToArray();
+
+        return (rows, priceable.Length, ranked.Count - priceable.Length);
     }
 
     private SinkGroup BuildSinkGroup(Resource currency, MarketTax tax)
@@ -476,10 +603,22 @@ internal sealed class MainWindow : Window
         bool Idle,
         string? Problem);
 
+    private sealed record CraftRow(
+        string Item,
+        string Job,
+        long Materials,
+        long Profit,
+        double? Roi,
+        double SalesPerDay,
+        long GilPerDay);
+
     private sealed record Model(
         long Gil,
         SinkGroup[] Sinks,
         FlipRow[] Flips,
         long TotalFlipProfit,
-        string? Gathering);
+        string? Gathering,
+        CraftRow[] Crafts,
+        int CraftsRanked,
+        int CraftsDiscarded);
 }
