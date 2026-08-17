@@ -380,7 +380,7 @@ internal sealed class MainWindow : Window
                 continue;
 
             ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn($"per {group.Unit}", ImGuiTableColumnFlags.WidthFixed, 95);
+            ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
@@ -422,15 +422,17 @@ internal sealed class MainWindow : Window
                 ImGui.TextColored(leader ? Good : Plain, $"{row.Rate!.Value:F2} gil");
                 if (ImGui.IsItemHovered())
                 {
+                    // Said as a yield rather than a price, because the column was read as one and
+                    // the objection was fair: a scrip has no price. Nobody sells them and nobody
+                    // can buy them. This is what one turns into by being spent here.
                     ImGui.SetTooltip(
-                        $"Seventy-one-ish gil, not thousands: {row.Rate.Value:F2} gil buys nothing on "
-                        + $"its own.\n"
-                        + $"It is what one {group.Unit} is worth, and a run takes {row.PerRun:N0} of "
-                        + $"them.\n"
-                        + $"{row.PerRun:N0} x {row.Rate.Value:F2} = {row.Profit:N0} gil, which is the "
-                        + $"next column.\n"
-                        + $"Your {group.Held:N0} held are worth about "
-                        + $"{(long)(group.Held * row.Rate.Value):N0} gil.");
+                        $"What one {group.Unit} turns into, spent on this trade and the result sold.\n"
+                        + $"Not a price: {group.Unit} cannot be bought, only earned and spent.\n"
+                        + $"\n"
+                        + $"One run takes {row.PerRun:N0} and nets {row.Profit:N0} gil.\n"
+                        + $"{row.PerRun:N0} x {row.Rate.Value:F2} gil is where that comes from.\n"
+                        + $"The {group.Held:N0} you hold would earn about "
+                        + $"{(long)(group.Held * row.Rate.Value):N0} gil this way.");
                 }
 
                 ImGui.TableNextColumn();
