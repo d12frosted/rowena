@@ -32,6 +32,17 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
         Shortlisting,
         Ingredients,
         Ready,
+
+        /// <summary>
+        /// Finished, but with holes. Usable and honest about not being complete.
+        /// </summary>
+        /// <remarks>
+        /// A run that lost most of its batches to timeouts looks identical to one that found
+        /// nothing for sale, and reporting the second when the first happened is the worst kind of
+        /// wrong: confident. This state exists so that never happens again.
+        /// </remarks>
+        Partial,
+
         Failed,
     }
 
@@ -62,6 +73,9 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
     public bool Running => State is Phase.Products or Phase.Shortlisting or Phase.Ingredients;
 
+    /// <summary>There is a shortlist worth showing, complete or not.</summary>
+    public bool HasResults => State is Phase.Ready or Phase.Partial;
+
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
@@ -88,7 +102,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// </remarks>
     public void Restore(StoredSweep stored)
     {
-        if (Running || State == Phase.Ready)
+        if (Running || HasResults)
             return;
 
         State = Phase.Shortlisting;
@@ -133,7 +147,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
     /// <summary>The sweep as it goes to disk. Null until one has finished.</summary>
     public StoredSweep? Snapshot() =>
-        State == Phase.Ready && ReadyAt is { } at
+        HasResults && ReadyAt is { } at
             ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
             : null;
 
@@ -157,8 +171,17 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 .Distinct()
                 .ToArray();
 
+            // Only what is missing or stale. This is what makes Re-sweep resume rather than start
+            // again: a run that lost a hundred products to timeouts asks for those hundred next
+            // time, not for all nine hundred.
+            var wanted = products.Where(id => market.IsStale(id, maxAge)).ToArray();
+
             State = Phase.Products;
-            await Price(scope, products, chunkSize, "products").ConfigureAwait(false);
+            await Price(scope, wanted, chunkSize, "products").ConfigureAwait(false);
+
+            // Counted from the cache rather than from the fetch, so prices carried over from an
+            // earlier run count exactly as much as ones just fetched.
+            var gaps = products.Count(id => market.Book(id) is null);
 
             State = Phase.Shortlisting;
             Detail = "picking what is worth costing";
@@ -167,9 +190,22 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             if (shortlist.Length == 0)
             {
                 Shortlist = [];
-                State = Phase.Ready;
                 ReadyAt = DateTimeOffset.UtcNow;
-                Detail = $"none of {Candidates} furnishings are selling on this board";
+
+                // The distinction that matters. "Nothing is selling" is a finding; "I never got the
+                // prices" is a failure, and they must not read the same.
+                if (gaps > 0)
+                {
+                    State = Phase.Partial;
+                    Detail = $"no prices for {gaps} of {products.Length} furnishings, so nothing could "
+                        + "be ranked. Re-sweep asks only for the gaps.";
+                }
+                else
+                {
+                    State = Phase.Ready;
+                    Detail = $"none of {Candidates} furnishings are selling on this board";
+                }
+
                 return;
             }
 
@@ -182,13 +218,18 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 .ToArray();
 
             State = Phase.Ingredients;
-            await Price(scope, ingredients, chunkSize, "materials").ConfigureAwait(false);
+            var materials = await Price(scope, ingredients, chunkSize, "materials").ConfigureAwait(false);
 
             Shortlist = shortlist;
             Blockers = Blocking(shortlist);
-            State = Phase.Ready;
             ReadyAt = DateTimeOffset.UtcNow;
-            Detail = $"{shortlist.Length} of {Candidates} costed";
+
+            var incomplete = gaps > 0 || materials.FailedChunks > 0;
+            State = incomplete ? Phase.Partial : Phase.Ready;
+
+            Detail = incomplete
+                ? $"{shortlist.Length} of {Candidates} costed, {gaps} furnishings still unpriced"
+                : $"{shortlist.Length} of {Candidates} costed";
 
             log.Information($"Furnishing sweep done: {shortlist.Length} of {Candidates} costed.");
 
@@ -203,10 +244,10 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
         }
     }
 
-    private async Task Price(string scope, uint[] ids, int chunkSize, string what)
+    private async Task<MarketCache.PricingResult> Price(string scope, uint[] ids, int chunkSize, string what)
     {
         if (ids.Length == 0)
-            return;
+            return new MarketCache.PricingResult(0, 0, 0);
 
         // MarketCache refuses overlapping work, so wait for whatever else is in flight rather
         // than silently skipping the pass.
@@ -215,7 +256,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
         Detail = $"pricing {ids.Length} {what}";
 
-        await market
+        return await market
             .PriceAsync(scope, ids, chunkSize, (done, total) => Detail = $"pricing {what}: {done} of {total}")
             .ConfigureAwait(false);
     }

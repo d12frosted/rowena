@@ -20,11 +20,23 @@ namespace Rowena.Market;
 /// </remarks>
 internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IPluginLog log)
 {
-    /// <summary>One retry, because a 504 is usually the service and not the request.</summary>
-    private const int Attempts = 2;
+    /// <summary>
+    /// Three tries, because a 504 says the service is struggling rather than that the request was
+    /// wrong, and struggling usually passes.
+    /// </summary>
+    private const int Attempts = 3;
 
     private static readonly TimeSpan BetweenChunks = TimeSpan.FromMilliseconds(300);
-    private static readonly TimeSpan AfterFailure = TimeSpan.FromSeconds(2);
+
+    /// <summary>Waits between attempts at the same chunk, lengthening each time.</summary>
+    private static readonly TimeSpan[] Backoff =
+    [
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(6),
+    ];
+
+    /// <summary>How far the gap between chunks is allowed to stretch once things start failing.</summary>
+    private static readonly TimeSpan SlowestBetweenChunks = TimeSpan.FromSeconds(3);
 
     private readonly ConcurrentDictionary<uint, Snapshot> books = new();
 
@@ -123,16 +135,30 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
         _ = Task.Run(() => PriceAsync(scope, wanted, chunkSize: 20));
     }
 
+    /// <param name="Answered">Ids that came back with something, empty book included.</param>
+    /// <param name="FailedChunks">Batches given up on, each one a hole in the data.</param>
+    public readonly record struct PricingResult(int Requested, int Answered, int FailedChunks)
+    {
+        /// <summary>Fraction of what was asked for that actually arrived.</summary>
+        public double Coverage => Requested == 0 ? 1d : (double)Answered / Requested;
+    }
+
     /// <summary>
     /// Prices a list of items in small sequential batches.
     /// </summary>
-    /// <returns>How many of the requested ids ended up with an answer.</returns>
     /// <remarks>
-    /// A chunk that fails twice is logged and skipped rather than failing the sweep. Losing the
-    /// prices for twenty items is a gap in one table; abandoning the run loses the other
-    /// fourteen hundred as well.
+    /// A chunk that fails every attempt is logged and skipped rather than failing the run. Losing
+    /// twenty prices is a gap in one table; abandoning the run loses the other fourteen hundred too.
+    ///
+    /// But skipping quietly is its own trap: a run that lost most of its chunks looks exactly like
+    /// a run that found nothing for sale, and that is a confident wrong answer. So the count comes
+    /// back with the result and the caller is expected to care.
+    ///
+    /// The gap between chunks stretches as failures accumulate. A service returning 504s is asking
+    /// to be left alone for a moment, and carrying on at the same rate is how a bad minute becomes
+    /// a failed sweep.
     /// </remarks>
-    public async Task<int> PriceAsync(
+    public async Task<PricingResult> PriceAsync(
         string scope,
         IReadOnlyList<uint> itemIds,
         int chunkSize,
@@ -140,11 +166,12 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
         CancellationToken cancellationToken = default)
     {
         if (Busy || itemIds.Count == 0)
-            return 0;
+            return new PricingResult(itemIds.Count, 0, 0);
 
         Busy = true;
         var covered = 0;
         var seen = 0;
+        var failedChunks = 0;
 
         try
         {
@@ -156,12 +183,20 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
 
                 if (await Fetch(scope, chunk, cancellationToken).ConfigureAwait(false))
                     covered += chunk.Length;
+                else
+                    failedChunks++;
 
                 seen += chunk.Length;
                 onProgress?.Invoke(seen, itemIds.Count);
 
                 if (seen < itemIds.Count)
-                    await Task.Delay(BetweenChunks, cancellationToken).ConfigureAwait(false);
+                {
+                    var pause = TimeSpan.FromMilliseconds(
+                        Math.Min(SlowestBetweenChunks.TotalMilliseconds,
+                                 BetweenChunks.TotalMilliseconds * (1 + failedChunks)));
+
+                    await Task.Delay(pause, cancellationToken).ConfigureAwait(false);
+                }
             }
 
             LastRefresh = DateTimeOffset.UtcNow;
@@ -183,7 +218,10 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             Busy = false;
         }
 
-        return covered;
+        if (failedChunks > 0)
+            log.Warning($"Priced {covered} of {itemIds.Count} ids; {failedChunks} batches were given up on.");
+
+        return new PricingResult(itemIds.Count, covered, failedChunks);
     }
 
     private async Task<bool> Fetch(string scope, uint[] chunk, CancellationToken cancellationToken)
@@ -201,8 +239,8 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             }
             catch (Exception error) when (attempt < Attempts)
             {
-                log.Verbose(error, $"Retrying a batch of {chunk.Length}.");
-                await Task.Delay(AfterFailure, cancellationToken).ConfigureAwait(false);
+                log.Verbose(error, $"Retrying a batch of {chunk.Length} (attempt {attempt}).");
+                await Task.Delay(Backoff[attempt - 1], cancellationToken).ConfigureAwait(false);
             }
             catch (Exception error)
             {

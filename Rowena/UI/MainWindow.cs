@@ -183,10 +183,17 @@ internal sealed class MainWindow : Window
         // make but should not be mistaken for live depth.
         var age = sweep.ReadyAt is { } at ? $"swept {Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
 
+        var incomplete = sweep.State == FurnishingSweep.Phase.Partial;
+
+        // Coloured when the run had holes in it, because "nothing was found" and "most of it never
+        // arrived" must not look the same at a glance.
         ImGui.TextColored(
-            Dim,
-            $"  {age}{sweep.Detail}, showing {current.Crafts.Length} of {current.CraftsRanked}"
-            + (current.CraftsDiscarded > 0 ? $", {current.CraftsDiscarded} unpriceable" : ""));
+            incomplete ? Bad : Dim,
+            $"  {age}{sweep.Detail}"
+            + (current.Crafts.Length > 0
+                ? $", showing {current.Crafts.Length} of {current.CraftsRanked}"
+                  + (current.CraftsDiscarded > 0 ? $", {current.CraftsDiscarded} unpriceable" : "")
+                : ""));
 
         // Which materials are doing the blocking. This is the evidence for whether following
         // recipes down to raw materials is worth building, so it belongs on screen and not
@@ -514,7 +521,7 @@ internal sealed class MainWindow : Window
     /// </remarks>
     private (CraftRow[] Rows, int Ranked, int Discarded) BuildCrafts(MarketTax tax)
     {
-        if (sweep.State != FurnishingSweep.Phase.Ready || sweep.Shortlist.Count == 0)
+        if (!sweep.HasResults || sweep.Shortlist.Count == 0)
             return ([], 0, 0);
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
