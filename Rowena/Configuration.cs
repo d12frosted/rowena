@@ -85,6 +85,17 @@ public sealed class Configuration : IPluginConfiguration
     public int SweepMaxAgeHours { get; set; } = 12;
 
     /// <summary>
+    /// The same span, floored at an hour.
+    /// </summary>
+    /// <remarks>
+    /// A method rather than a property so it does not end up in the saved file as a duplicate of the
+    /// number it is derived from. Two callers, which is why the floor lives here: a zero typed into
+    /// the settings would otherwise mean "everything is stale" in one place and "resweep constantly"
+    /// in the other.
+    /// </remarks>
+    public TimeSpan SweepAge() => TimeSpan.FromHours(Math.Max(1, SweepMaxAgeHours));
+
+    /// <summary>
     /// How many crafts a day you could actually perform, or zero for "the market decides".
     /// </summary>
     /// <remarks>
