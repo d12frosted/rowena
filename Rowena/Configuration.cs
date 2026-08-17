@@ -83,4 +83,28 @@ public sealed class Configuration : IPluginConfiguration
     /// anything quick to make. Retainer slots usually bind before either.
     /// </remarks>
     public int CraftsPerDayCap { get; set; }
+
+    /// <summary>
+    /// Crafts queued up for an Artisan list that has not been exported yet.
+    /// </summary>
+    /// <remarks>
+    /// In the configuration and not the price cache: a basket is something you meant rather than
+    /// something that was fetched, so it should survive a reload for the same reason a setting does.
+    /// </remarks>
+    public List<BasketItem> ArtisanBasket { get; set; } = [];
+
+    /// <summary>The name given to the list Artisan imports.</summary>
+    public string ArtisanListName { get; set; } = "Rowena picks";
+
+    public sealed class BasketItem
+    {
+        /// <summary>Artisan keys list entries by recipe, not by item.</summary>
+        public uint RecipeId { get; set; }
+
+        public uint ItemId { get; set; }
+
+        public string Name { get; set; } = "";
+
+        public int Quantity { get; set; }
+    }
 }

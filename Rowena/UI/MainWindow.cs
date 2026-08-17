@@ -46,6 +46,7 @@ internal sealed class MainWindow : Window
     private readonly FurnishingSweep sweep;
     private readonly Furnishings furnishings;
     private readonly ItemCells cells;
+    private readonly CraftBasket basket;
     private readonly Configuration config;
     private readonly Action save;
 
@@ -67,6 +68,7 @@ internal sealed class MainWindow : Window
         FurnishingSweep sweep,
         Furnishings furnishings,
         ItemCells cells,
+        CraftBasket basket,
         Configuration config,
         Action save)
         : base("Rowena###rowena-main")
@@ -79,6 +81,7 @@ internal sealed class MainWindow : Window
         this.sweep = sweep;
         this.furnishings = furnishings;
         this.cells = cells;
+        this.basket = basket;
         this.config = config;
         this.save = save;
 
@@ -146,8 +149,66 @@ internal sealed class MainWindow : Window
         DrawCrafts(current, where);
     }
 
+    /// <summary>
+    /// Crafts picked out but not yet handed over.
+    /// </summary>
+    /// <remarks>
+    /// It exists because Artisan's clipboard importer always makes a new list and nothing it exposes
+    /// can add to one. Exporting per click would leave a list per furnishing, so they gather here and
+    /// go over together.
+    /// </remarks>
+    private void DrawBasket()
+    {
+        if (basket.Count == 0)
+            return;
+
+        ImGui.TextUnformatted($"Basket: {basket.Count} recipes, {basket.TotalCrafts} crafts");
+        ImGui.SameLine();
+
+        if (ImGui.Button("Copy for Artisan"))
+            basket.CopyForArtisan(config.ArtisanListName);
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                "Puts the list on your clipboard.\n"
+                + "In Artisan, press \"Import List From Clipboard (Artisan Export)\".\n"
+                + "It arrives as a new list; Artisan offers no way to add to an existing one.");
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Clear"))
+            basket.Clear();
+
+        uint? removing = null;
+
+        foreach (var item in basket.Items)
+        {
+            ImGui.PushID((int)item.RecipeId);
+
+            cells.Icon(item.ItemId, 16f);
+            ImGui.SameLine(0f, 4f);
+            ImGui.TextColored(Dim, $"{item.Quantity}x {item.Name}");
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton("x"))
+                removing = item.RecipeId;
+
+            ImGui.PopID();
+        }
+
+        // Removed after the loop rather than during it, since the list is what is being walked.
+        if (removing is { } recipeId)
+            basket.Remove(recipeId);
+
+        ImGui.Spacing();
+    }
+
     private void DrawCrafts(Model current, string where)
     {
+        DrawBasket();
+
         ImGui.TextUnformatted("Crafts: furnishings, ranked by what they would earn in a day");
         ImGui.SameLine();
 

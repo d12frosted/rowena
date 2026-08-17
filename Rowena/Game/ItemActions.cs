@@ -18,9 +18,22 @@ namespace Rowena.Game;
 internal sealed class ItemActions(
     ArtisanIpc artisan,
     AllaganToolsIpc allaganTools,
+    CraftBasket basket,
+    Configuration config,
     IChatGui chat,
     IPluginLog log)
 {
+    /// <summary>Crafts waiting to be handed to Artisan as a list.</summary>
+    public CraftBasket Basket => basket;
+
+    /// <summary>Lists Artisan already holds, which can be started but not added to.</summary>
+    public IReadOnlyDictionary<int, string> ArtisanLists() => artisan.Lists();
+
+    public void StartArtisanList(int id) => artisan.StartList(id);
+
+    /// <summary>Copies the basket in Artisan's import format.</summary>
+    public bool CopyBasketForArtisan() => basket.CopyForArtisan(config.ArtisanListName);
+
     public bool CanCraft => artisan.Available;
 
     public bool CraftingBusy => artisan.Busy;

@@ -26,6 +26,12 @@ internal sealed class ArtisanIpc(IDalamudPluginInterface plugin, IPluginLog log)
     private readonly ICallGateSubscriber<ushort, int, object> craftItem =
         plugin.GetIpcSubscriber<ushort, int, object>($"{Prefix}.CraftItem");
 
+    private readonly ICallGateSubscriber<Dictionary<int, string>> getLists =
+        plugin.GetIpcSubscriber<Dictionary<int, string>>($"{Prefix}.GetLists");
+
+    private readonly ICallGateSubscriber<int, object> startList =
+        plugin.GetIpcSubscriber<int, object>($"{Prefix}.StartListById");
+
     /// <summary>Whether Artisan answers at all.</summary>
     public bool Available
     {
@@ -73,6 +79,26 @@ internal sealed class ArtisanIpc(IDalamudPluginInterface plugin, IPluginLog log)
             },
             false);
     }
+
+    /// <summary>
+    /// The lists Artisan already has, by id.
+    /// </summary>
+    /// <remarks>
+    /// Readable and startable, but not extendable: Artisan exposes no way to add to one. That is why
+    /// new items accumulate in a basket here and go over as a fresh list.
+    /// </remarks>
+    public IReadOnlyDictionary<int, string> Lists() =>
+        Try<IReadOnlyDictionary<int, string>>(() => getLists.InvokeFunc(), new Dictionary<int, string>());
+
+    public bool StartList(int id) =>
+        Try(
+            () =>
+            {
+                startList.InvokeAction(id);
+                log.Information($"Asked Artisan to start list {id}.");
+                return true;
+            },
+            false);
 
     private T Try<T>(Func<T> call, T fallback)
     {

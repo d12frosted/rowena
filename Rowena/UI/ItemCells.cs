@@ -190,6 +190,33 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
             ImGui.TextColored(Dim, "   Artisan not found");
         }
 
+        if (actions.CanCraft)
+        {
+            ImGui.Separator();
+
+            // Accumulated rather than exported one at a time, because Artisan's importer always
+            // creates a new list and there is no way to add to one.
+            foreach (var quantity in (int[])[1, 5, 10])
+            {
+                if (ImGui.MenuItem($"Add {quantity} to the Artisan basket"))
+                    actions.Basket.Add(craftable, itemId, label, quantity);
+            }
+
+            var lists = actions.ArtisanLists();
+            if (lists.Count > 0 && ImGui.BeginMenu("Start an existing Artisan list"))
+            {
+                foreach (var (id, name) in lists)
+                {
+                    if (ImGui.MenuItem(name))
+                        actions.StartArtisanList(id);
+                }
+
+                ImGui.EndMenu();
+            }
+        }
+
+        ImGui.Separator();
+
         if (actions.CanMakeLists)
         {
             if (ImGui.MenuItem("Make an AllaganTools list of 5"))
