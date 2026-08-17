@@ -89,7 +89,8 @@ read about. Break that file and you lose your edit, not the plugin.
 
 ## The plugin
 
-`/rowena` opens one window: what you are holding, and what it is worth turning into.
+`/rowena` opens one window: what you are holding, and what it is worth turning into. Naming
+a tab, `/rowena craft`, opens on that one instead of toggling.
 
 Deliberately not a market browser. It only answers the questions that need both halves of
 the picture, your balances and the depth of the board, because either alone is already

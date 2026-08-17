@@ -81,7 +81,9 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open Rowena. What you are holding, and what it is worth turning into.",
+            HelpMessage =
+                "Open Rowena. What you are holding, and what it is worth turning into. "
+                + "Add convert, craft or settings to open on that tab.",
         });
     }
 
@@ -125,7 +127,43 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     private void OpenSettings() => mainWindow.Show(MainWindow.Tab.Settings);
 
-    private void OnCommand(string command, string arguments) => mainWindow.Toggle();
+    /// <summary>
+    /// Opens the window, on a named tab when one is named.
+    /// </summary>
+    /// <remarks>
+    /// Naming a tab shows it rather than toggling the window, because "/rowena craft" is a request to
+    /// look at something and closing the window is never what it meant. Bare stays a toggle, which is
+    /// what a keybind wants. An argument that names nothing says so instead of quietly toggling.
+    /// </remarks>
+    private void OnCommand(string command, string arguments)
+    {
+        var wanted = arguments.Trim().ToLowerInvariant();
+
+        if (wanted.Length == 0)
+        {
+            mainWindow.Toggle();
+            return;
+        }
+
+        switch (wanted)
+        {
+            case "convert" or "sinks" or "flips":
+                mainWindow.Show(MainWindow.Tab.Convert);
+                break;
+
+            case "craft" or "crafts":
+                mainWindow.Show(MainWindow.Tab.Craft);
+                break;
+
+            case "settings" or "config":
+                mainWindow.Show(MainWindow.Tab.Settings);
+                break;
+
+            default:
+                ChatGui.Print($"Rowena has no \"{wanted}\" tab. Try convert, craft or settings.");
+                break;
+        }
+    }
 
     public void Dispose()
     {
