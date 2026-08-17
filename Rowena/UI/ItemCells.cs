@@ -194,40 +194,40 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
                 ImGui.TextColored(Dim, "   Artisan is busy");
             }
 
-            // Named for its destination and carrying its count, because "add" beside "run" read as
-            // two steps of one flow when they have nothing to do with each other. This one collects
-            // into a list being built here; nothing reaches Artisan until it is copied over.
+            // Collected here because Artisan's importer only ever creates a new list, and copying
+            // per item would leave a list per furnishing.
             var waiting = actions.Basket.Count;
-            var collect = waiting == 0 ? "Add to a new list" : $"Add to a new list ({waiting} so far)";
+            var collect = waiting == 0
+                ? "Collect for a new Artisan list"
+                : $"Collect for a new Artisan list ({waiting} so far)";
 
             if (ImGui.MenuItem(collect))
                 actions.Basket.Add(craftable, itemId, label, 1);
-
-            // "Start crafting a saved list": a whole verb, and "saved" to separate Artisan's own
-            // lists from the one being built above. It does not touch that one.
-            var lists = actions.ArtisanLists();
-            if (lists.Count > 0 && ImGui.BeginMenu("Start crafting a saved list"))
-            {
-                foreach (var (id, name) in lists)
-                {
-                    if (ImGui.MenuItem(name))
-                        actions.StartArtisanList(id);
-                }
-
-                ImGui.EndMenu();
-            }
         }
 
         ImGui.Separator();
 
-        if (actions.CanMakeLists)
-        {
-            if (ImGui.MenuItem("Add to AllaganTools list"))
-                actions.AddToCraftList(label, itemId, 1);
-        }
-        else
+        // AllaganTools is where the list features live, because it is the only one of the three that
+        // can add to a list that already exists. Artisan exposes no such gate at all.
+        if (!actions.CanMakeLists)
         {
             ImGui.TextColored(Dim, "   AllaganTools not found");
+            return;
+        }
+
+        if (ImGui.MenuItem("Add to a new AllaganTools list"))
+            actions.AddToCraftList(label, itemId, 1);
+
+        var existing = actions.CraftLists();
+        if (existing.Count > 0 && ImGui.BeginMenu("Add to an AllaganTools list"))
+        {
+            foreach (var (key, name) in existing)
+            {
+                if (ImGui.MenuItem(name))
+                    actions.AddToExistingList(key, itemId, 1);
+            }
+
+            ImGui.EndMenu();
         }
     }
 

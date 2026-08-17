@@ -41,6 +41,12 @@ internal sealed class AllaganToolsIpc(IDalamudPluginInterface plugin, IPluginLog
     private readonly ICallGateSubscriber<string, Dictionary<uint, uint>, string> addCraftList =
         plugin.GetIpcSubscriber<string, Dictionary<uint, uint>, string>($"{Prefix}.AddNewCraftList");
 
+    private readonly ICallGateSubscriber<Dictionary<string, string>> craftLists =
+        plugin.GetIpcSubscriber<Dictionary<string, string>>($"{Prefix}.GetCraftLists");
+
+    private readonly ICallGateSubscriber<string, uint, uint, bool> addToCraftList =
+        plugin.GetIpcSubscriber<string, uint, uint, bool>($"{Prefix}.AddItemToCraftList");
+
     private ulong[] cachedOwners = [];
     private DateTime ownersCachedAt = DateTime.MinValue;
 
@@ -111,6 +117,31 @@ internal sealed class AllaganToolsIpc(IDalamudPluginInterface plugin, IPluginLog
             log.Information($"Created AllaganTools craft list '{name}' with {items.Count} items.");
 
         return result;
+    }
+
+    /// <summary>The craft lists AllaganTools already holds, by key.</summary>
+    public IReadOnlyDictionary<string, string> CraftLists() =>
+        Available
+            ? Try<IReadOnlyDictionary<string, string>>(() => craftLists.InvokeFunc(), new Dictionary<string, string>())
+            : new Dictionary<string, string>();
+
+    /// <summary>
+    /// Adds to a list that already exists.
+    /// </summary>
+    /// <remarks>
+    /// The one thing Artisan cannot do at all, which is why the crafting-list features here run
+    /// through AllaganTools rather than through the plugin that does the crafting.
+    /// </remarks>
+    public bool AddToExistingList(string listKey, uint itemId, uint quantity)
+    {
+        if (!Available)
+            return false;
+
+        // Its own return value reports the write rather than the outcome, so success is inferred
+        // from not throwing.
+        Try(() => addToCraftList.InvokeFunc(listKey, itemId, quantity), false);
+        log.Information($"Added {quantity}x {itemId} to AllaganTools list {listKey}.");
+        return true;
     }
 
     private ulong[] Owners()

@@ -26,10 +26,11 @@ internal sealed class ItemActions(
     /// <summary>Crafts waiting to be handed to Artisan as a list.</summary>
     public CraftBasket Basket => basket;
 
-    /// <summary>Lists Artisan already holds, which can be started but not added to.</summary>
-    public IReadOnlyDictionary<int, string> ArtisanLists() => artisan.Lists();
+    /// <summary>Craft lists AllaganTools holds, which can be added to.</summary>
+    public IReadOnlyDictionary<string, string> CraftLists() => allaganTools.CraftLists();
 
-    public void StartArtisanList(int id) => artisan.StartList(id);
+    public bool AddToExistingList(string listKey, uint itemId, uint quantity) =>
+        allaganTools.AddToExistingList(listKey, itemId, quantity);
 
     /// <summary>Copies the basket in Artisan's import format.</summary>
     public bool CopyBasketForArtisan() => basket.CopyForArtisan(config.ArtisanListName);
