@@ -162,20 +162,28 @@ internal sealed class MainWindow : Window
         if (basket.Count == 0)
             return;
 
-        ImGui.TextUnformatted($"Basket: {basket.Count} recipes, {basket.TotalCrafts} crafts");
+        // Named for what it becomes, and the two steps spelled out, because handing this over is not
+        // one click and pretending otherwise leaves you wondering why Artisan has not changed.
+        ImGui.TextUnformatted(
+            $"A new Artisan list: {basket.Count} recipes, {basket.TotalCrafts} crafts");
+
         ImGui.SameLine();
 
-        if (ImGui.Button("Copy for Artisan"))
+        if (ImGui.Button("Copy"))
             basket.CopyForArtisan(config.ArtisanListName);
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
                 "Puts the list on your clipboard.\n"
-                + "In Artisan, press \"Import List From Clipboard (Artisan Export)\".\n"
-                + "It arrives as a new list; Artisan offers no way to add to an existing one.");
+                + "Then in Artisan press \"Import List From Clipboard (Artisan Export)\".\n"
+                + "\n"
+                + "It arrives as a new list. Artisan offers no way to add to one it already has,\n"
+                + "which is why these gather here first.");
         }
 
+        ImGui.SameLine();
+        ImGui.TextColored(Dim, "then import it in Artisan");
         ImGui.SameLine();
 
         if (ImGui.Button("Clear"))

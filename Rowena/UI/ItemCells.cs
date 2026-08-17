@@ -194,15 +194,19 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
                 ImGui.TextColored(Dim, "   Artisan is busy");
             }
 
-            // Adds one. The amount is adjusted in the basket, where the whole list is in view,
-            // rather than guessed at from a menu.
-            if (ImGui.MenuItem("Add to Artisan basket"))
+            // Named for its destination and carrying its count, because "add" beside "run" read as
+            // two steps of one flow when they have nothing to do with each other. This one collects
+            // into a list being built here; nothing reaches Artisan until it is copied over.
+            var waiting = actions.Basket.Count;
+            var collect = waiting == 0 ? "Add to a new list" : $"Add to a new list ({waiting} so far)";
+
+            if (ImGui.MenuItem(collect))
                 actions.Basket.Add(craftable, itemId, label, 1);
 
-            // "Run", not "start an existing list", which read as though it might add to one.
-            // Artisan lets another plugin run a list it already has, and nothing else.
+            // "Start crafting a saved list": a whole verb, and "saved" to separate Artisan's own
+            // lists from the one being built above. It does not touch that one.
             var lists = actions.ArtisanLists();
-            if (lists.Count > 0 && ImGui.BeginMenu("Run an Artisan list"))
+            if (lists.Count > 0 && ImGui.BeginMenu("Start crafting a saved list"))
             {
                 foreach (var (id, name) in lists)
                 {
