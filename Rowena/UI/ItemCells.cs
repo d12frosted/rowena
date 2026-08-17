@@ -26,9 +26,6 @@ internal sealed class ItemCells(
     MarketCache market,
     PricingScope scope)
 {
-    private static readonly Vector4 Dim = new(0.60f, 0.60f, 0.62f, 1f);
-    private static readonly Vector4 Bad = new(0.85f, 0.45f, 0.40f, 1f);
-
     private const float IconSize = 20f;
 
     private const uint JobIconBase = 62000;
@@ -63,7 +60,7 @@ internal sealed class ItemCells(
         // The class and job icon set runs from 62000, offset by the ClassJob row.
         RawIcon(classJobId == 0 ? 0 : JobIconBase + classJobId, 16f);
         ImGui.SameLine(0f, 4f);
-        ImGui.TextColored(Dim, abbreviation);
+        ImGui.TextColored(Palette.Dim, abbreviation);
     }
 
     /// <summary>
@@ -116,19 +113,19 @@ internal sealed class ItemCells(
         if (book?.Floor is { } floor)
         {
             ImGui.TextColored(
-                Dim,
+                Palette.Dim,
                 $"{floor:N0} gil on {scope.Selling}, {book.UnitsListed} listed, "
                 + $"{book.SaleVelocityPerDay:F1} sold a day");
         }
         else
         {
-            ImGui.TextColored(Bad, $"nothing listed on {scope.Selling ?? "your world"}");
+            ImGui.TextColored(Palette.Bad, $"nothing listed on {scope.Selling ?? "your world"}");
         }
 
         if (materials is { Count: > 0 })
         {
             ImGui.Separator();
-            ImGui.TextColored(Dim, "materials");
+            ImGui.TextColored(Palette.Dim, "materials");
 
             foreach (var material in materials)
             {
@@ -138,13 +135,13 @@ internal sealed class ItemCells(
                 if (material.Sourced)
                     ImGui.TextUnformatted($"{material.Quantity}x {material.Name}   {material.Cost:N0}");
                 else
-                    ImGui.TextColored(Bad, $"{material.Quantity}x {material.Name}   not on the board");
+                    ImGui.TextColored(Palette.Bad, $"{material.Quantity}x {material.Name}   not on the board");
             }
         }
 
         ImGui.Separator();
         ImGui.TextColored(
-            Dim,
+            Palette.Dim,
             recipeId is null ? "right-click for actions" : "click to open the crafting log, right-click for more");
 
         ImGui.EndTooltip();
@@ -171,7 +168,7 @@ internal sealed class ItemCells(
 
         if (!actions.CanCraft)
         {
-            ImGui.TextColored(Dim, "   Artisan not found");
+            ImGui.TextColored(Palette.Dim, "   Artisan not found");
         }
         else
         {
@@ -201,7 +198,7 @@ internal sealed class ItemCells(
             if (busy)
             {
                 ImGui.EndDisabled();
-                ImGui.TextColored(Dim, "   Artisan is busy");
+                ImGui.TextColored(Palette.Dim, "   Artisan is busy");
             }
 
         }
@@ -227,7 +224,7 @@ internal sealed class ItemCells(
 
         if (!actions.CanMakeLists)
         {
-            ImGui.TextColored(Dim, "   AllaganTools not found");
+            ImGui.TextColored(Palette.Dim, "   AllaganTools not found");
             return;
         }
 

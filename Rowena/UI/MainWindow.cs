@@ -24,19 +24,8 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class MainWindow : Window
 {
-    /// <summary>
-    /// How often the numbers are recomputed. Nothing here changes faster than the eye, and a
-    /// scrip balance that lags by a fraction of a second has never misled anyone.
-    /// </summary>
-    private static readonly TimeSpan RebuildEvery = TimeSpan.FromMilliseconds(500);
-
     /// <summary>How many craft rows the table shows. The count it was trimmed from is shown too.</summary>
     private const int CraftsInTable = 25;
-
-    private static readonly Vector4 Dim = new(0.60f, 0.60f, 0.62f, 1f);
-    private static readonly Vector4 Plain = new(1f, 1f, 1f, 1f);
-    private static readonly Vector4 Good = new(0.40f, 0.80f, 0.45f, 1f);
-    private static readonly Vector4 Bad = new(0.85f, 0.45f, 0.40f, 1f);
 
     private readonly ConversionCatalog catalog;
     private readonly MarketCache market;
@@ -55,8 +44,8 @@ internal sealed class MainWindow : Window
     private readonly Resource[] spendableCurrencies;
     private readonly Conversion[] flips;
 
-    private Model? model;
-    private DateTime builtAt;
+    private readonly Rebuilt<Model> model;
+
     private bool restoreAttempted;
     private long persistedSweepAt;
 
@@ -122,6 +111,8 @@ internal sealed class MainWindow : Window
             .. catalog.Conversions
                 .Where(conversion => conversion.Inputs.All(input => input.Resource.Kind == ResourceKind.Item)),
         ];
+
+        model = new Rebuilt<Model>(Build);
     }
 
     public override void Draw()
@@ -134,7 +125,7 @@ internal sealed class MainWindow : Window
 
         if (buying is null || selling is null)
         {
-            ImGui.TextColored(Bad, "Not logged in. Prices cannot be fetched.");
+            ImGui.TextColored(Palette.Bad, "Not logged in. Prices cannot be fetched.");
             return;
         }
 
@@ -143,7 +134,7 @@ internal sealed class MainWindow : Window
         RestoreSweepOnce(buying, selling);
         PersistFinishedSweep();
 
-        var current = Current();
+        var current = model.Current;
 
         DrawWhatYouHold(current);
         ImGui.Separator();
@@ -225,7 +216,7 @@ internal sealed class MainWindow : Window
         if (ImGui.Button("Clear"))
             basket.Clear();
 
-        ImGui.TextColored(Dim, "    Artisan is one paste. Teamcraft is five steps but reaches any tool.");
+        ImGui.TextColored(Palette.Dim, "    Artisan is one paste. Teamcraft is five steps but reaches any tool.");
 
         uint? removing = null;
 
@@ -244,7 +235,7 @@ internal sealed class MainWindow : Window
             ImGui.SameLine(0f, 6f);
             cells.Icon(item.ItemId, 16f);
             ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(Dim, $"{item.Quantity}x {item.Name}");
+            ImGui.TextColored(Palette.Dim, $"{item.Quantity}x {item.Name}");
             ImGui.SameLine();
 
             if (ImGui.SmallButton("remove"))
@@ -269,7 +260,7 @@ internal sealed class MainWindow : Window
 
         if (sweep.Running)
         {
-            ImGui.TextColored(Dim, $"  {sweep.Detail}");
+            ImGui.TextColored(Palette.Dim, $"  {sweep.Detail}");
             return;
         }
 
@@ -282,7 +273,7 @@ internal sealed class MainWindow : Window
 
         if (sweep.State == FurnishingSweep.Phase.Failed)
         {
-            ImGui.TextColored(Bad, sweep.Detail);
+            ImGui.TextColored(Palette.Bad, sweep.Detail);
             return;
         }
 
@@ -291,7 +282,7 @@ internal sealed class MainWindow : Window
             // Said plainly, because it is minutes of small polite requests and should not start
             // itself the first time the window happens to open.
             ImGui.TextColored(
-                Dim,
+                Palette.Dim,
                 $"  not swept yet. Twenty ids a request, so this takes a few minutes.");
             return;
         }
@@ -299,14 +290,14 @@ internal sealed class MainWindow : Window
         // Never a silent cap: the table is trimmed for legibility and says by how much. The age is
         // shown because a restored sweep can be hours old, and that is fine for choosing what to
         // make but should not be mistaken for live depth.
-        var age = sweep.ReadyAt is { } at ? $"swept {Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
+        var age = sweep.ReadyAt is { } at ? $"swept {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
 
         var incomplete = sweep.State == FurnishingSweep.Phase.Partial;
 
         // Coloured when the run had holes in it, because "nothing was found" and "most of it never
         // arrived" must not look the same at a glance.
         ImGui.TextColored(
-            incomplete ? Bad : Dim,
+            incomplete ? Palette.Bad : Palette.Dim,
             $"  {age}{sweep.Detail}"
             + (current.Crafts.Length > 0
                 ? $", showing {current.Crafts.Length} of {current.CraftsRanked}"
@@ -322,7 +313,7 @@ internal sealed class MainWindow : Window
                 ", ",
                 sweep.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
 
-            ImGui.TextColored(Dim, $"    blocked mostly by: {worst}");
+            ImGui.TextColored(Palette.Dim, $"    blocked mostly by: {worst}");
         }
 
         if (current.Crafts.Length == 0)
@@ -354,16 +345,16 @@ internal sealed class MainWindow : Window
             ImGui.TextUnformatted($"{row.Materials:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Profit > 0 ? Good : Bad, $"{row.Profit:N0}");
+            ImGui.TextColored(row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(row.Roi is { } roi ? $"{roi:P0}" : "-");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Dim, $"{row.SalesPerDay:F1}");
+            ImGui.TextColored(Palette.Dim, $"{row.SalesPerDay:F1}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.GilPerDay > 0 ? Good : Dim, $"{row.GilPerDay:N0}");
+            ImGui.TextColored(row.GilPerDay > 0 ? Palette.Good : Palette.Dim, $"{row.GilPerDay:N0}");
             if (ImGui.IsItemHovered())
             {
                 // Worth saying out loud on every row. The figure is the whole market's daily
@@ -390,13 +381,13 @@ internal sealed class MainWindow : Window
         ImGui.SameLine();
 
         if (market.Busy)
-            ImGui.TextColored(Dim, "fetching...");
+            ImGui.TextColored(Palette.Dim, "fetching...");
         else if (market.LastError is { } error)
-            ImGui.TextColored(Bad, error);
+            ImGui.TextColored(Palette.Bad, error);
         else if (market.LastRefresh is { } at)
-            ImGui.TextColored(Dim, $"prices {Ago(DateTimeOffset.UtcNow - at)} old");
+            ImGui.TextColored(Palette.Dim, $"prices {Phrases.Ago(DateTimeOffset.UtcNow - at)} old");
         else
-            ImGui.TextColored(Dim, "no prices yet");
+            ImGui.TextColored(Palette.Dim, "no prices yet");
     }
 
     private void DrawWhatYouHold(Model current)
@@ -406,11 +397,11 @@ internal sealed class MainWindow : Window
         foreach (var group in current.Sinks)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Dim, $"   {group.Currency.Name} {group.Held:N0}");
+            ImGui.TextColored(Palette.Dim, $"   {group.Currency.Name} {group.Held:N0}");
         }
 
         if (current.Gathering is { } gathering)
-            ImGui.TextColored(Dim, gathering);
+            ImGui.TextColored(Palette.Dim, gathering);
     }
 
     private void DrawSinks(Model current)
@@ -423,7 +414,7 @@ internal sealed class MainWindow : Window
                 continue;
 
             ImGui.Spacing();
-            ImGui.TextColored(Dim, $"{group.Currency.Name} ({group.Held:N0} held)");
+            ImGui.TextColored(Palette.Dim, $"{group.Currency.Name} ({group.Held:N0} held)");
 
             if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
                 continue;
@@ -451,15 +442,15 @@ internal sealed class MainWindow : Window
                 if (!row.Priced)
                 {
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Dim, "-");
+                    ImGui.TextColored(Palette.Dim, "-");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Dim, "no prices yet");
+                    ImGui.TextColored(Palette.Dim, "no prices yet");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Dim, "-");
+                    ImGui.TextColored(Palette.Dim, "-");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Dim, "-");
+                    ImGui.TextColored(Palette.Dim, "-");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Dim, row.Venue);
+                    ImGui.TextColored(Palette.Dim, row.Venue);
                     continue;
                 }
 
@@ -468,7 +459,7 @@ internal sealed class MainWindow : Window
                 // Only the leader is coloured. Marking everything defeats the point.
                 // The unit is printed in the cell, not only in the header. Two decimals beside a
                 // column of millions reads as millions, and this number really is under a hundred.
-                ImGui.TextColored(leader ? Good : Plain, $"{row.Rate!.Value:F2} gil");
+                ImGui.TextColored(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
                 if (ImGui.IsItemHovered())
                 {
                     // Said as a yield rather than a price, because the column was read as one and
@@ -491,10 +482,10 @@ internal sealed class MainWindow : Window
                 ImGui.TextUnformatted(row.Covers is { } covers ? $"{covers:N0} runs" : "-");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(Absorb(row.Absorb));
+                ImGui.TextUnformatted(Phrases.Absorb(row.Absorb));
 
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Dim, row.Venue);
+                ImGui.TextColored(Palette.Dim, row.Venue);
             }
 
             ImGui.EndTable();
@@ -511,7 +502,7 @@ internal sealed class MainWindow : Window
         if (current.TotalFlipProfit > 0)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
+            ImGui.TextColored(Palette.Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
         }
 
         if (!ImGui.BeginTable("flips", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
@@ -539,15 +530,15 @@ internal sealed class MainWindow : Window
             if (row.Problem is { } problem)
             {
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Dim, "-");
+                ImGui.TextColored(Palette.Dim, "-");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(row.HeldCovers > 0 ? Good : Dim, $"{row.HeldCovers}");
+                ImGui.TextColored(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Dim, problem);
+                ImGui.TextColored(Palette.Dim, problem);
                 continue;
             }
 
-            var tint = row.Idle ? Dim : Plain;
+            var tint = row.Idle ? Palette.Dim : Palette.Plain;
 
             ImGui.TableNextColumn();
             ImGui.TextColored(tint, $"{row.Runs}");
@@ -555,7 +546,7 @@ internal sealed class MainWindow : Window
                 ImGui.SetTooltip("The shared inputs pay more on another row, or your gil will not cover a run.");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.HeldCovers > 0 ? Good : Dim, $"{row.HeldCovers}");
+            ImGui.TextColored(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
             if (row.HeldCovers > 0 && ImGui.IsItemHovered())
                 ImGui.SetTooltip("Runs your own stock already covers, retainers included. Not deducted from the outlay: what you hold is still worth what the board would pay for it.");
 
@@ -563,13 +554,13 @@ internal sealed class MainWindow : Window
             ImGui.TextColored(tint, $"{row.Outlay:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Idle ? Dim : row.Profit > 0 ? Good : Bad, $"{row.Profit:N0}");
+            ImGui.TextColored(row.Idle ? Palette.Dim : row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
             ImGui.TextColored(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(tint, Absorb(row.Absorb));
+            ImGui.TextColored(tint, Phrases.Absorb(row.Absorb));
         }
 
         ImGui.EndTable();
@@ -626,17 +617,6 @@ internal sealed class MainWindow : Window
 
         persistedSweepAt = snapshot.At;
         _ = Task.Run(() => market.Persist(snapshot));
-    }
-
-    /// <summary>The current numbers, rebuilt only when they have had time to change.</summary>
-    private Model Current()
-    {
-        if (model is not null && DateTime.UtcNow - builtAt < RebuildEvery)
-            return model;
-
-        model = Build();
-        builtAt = DateTime.UtcNow;
-        return model;
     }
 
     private Model Build()
@@ -708,20 +688,6 @@ internal sealed class MainWindow : Window
     }
 
     /// <summary>
-    /// The noun for one unit of a currency, for labelling a rate.
-    /// </summary>
-    /// <remarks>
-    /// "gil each" never said each what, and 71.25 next to a column of millions invites reading it as
-    /// millions too. The tables are already grouped per currency, so the header only needs the noun:
-    /// gil/scrip.
-    /// </remarks>
-    private static string UnitOf(Resource currency)
-    {
-        var words = currency.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return words.Length == 0 ? "unit" : words[^1].ToLowerInvariant();
-    }
-
-    /// <summary>
     /// The tradable thing a conversion ends up with, when there is exactly one worth showing.
     /// </summary>
     private static uint? Produced(Conversion conversion) =>
@@ -779,7 +745,7 @@ internal sealed class MainWindow : Window
             .DefaultIfEmpty()
             .Max();
 
-        return new SinkGroup(currency, UnitOf(currency), held, rows, rows.Any(row => row.Priced) ? best : null);
+        return new SinkGroup(currency, Phrases.UnitOf(currency), held, rows, rows.Any(row => row.Priced) ? best : null);
     }
 
     private FlipRow BuildFlipRow(
@@ -857,20 +823,6 @@ internal sealed class MainWindow : Window
     public override void OnClose() => save();
 
     private static double? Multiply(double? days, int factor) => days is { } value ? value * factor : null;
-
-    private static string Absorb(double? days) => days switch
-    {
-        null => "never",
-        < 1d => "<1 day",
-        _ => $"{days.Value:F1} days",
-    };
-
-    private static string Ago(TimeSpan span) => span switch
-    {
-        { TotalMinutes: < 1 } => "seconds",
-        { TotalHours: < 1 } => $"{span.TotalMinutes:F0} min",
-        _ => $"{span.TotalHours:F0} h",
-    };
 
     private sealed record SinkRow(
         string Trade,
