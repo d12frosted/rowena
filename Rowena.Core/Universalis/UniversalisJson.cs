@@ -55,9 +55,16 @@ public static class UniversalisJson
     /// Parses the aggregated endpoint, which summarises many items cheaply.
     /// </summary>
     /// <remarks>
-    /// The shape nests every figure under a scope: a data-centre answer and a region-wide one. Only
-    /// the data centre is read, because the region includes worlds you cannot list on, and a floor
-    /// from one of those would look like an opportunity that does not exist.
+    /// Every figure is nested under a scope, and which ones are present depends on what was asked
+    /// for: a world request carries world, dc and region, while a data-centre request carries only
+    /// dc and region. So the narrowest one present is the one that answers the question actually
+    /// asked, and reading a fixed branch silently returns someone else's board.
+    ///
+    /// That is not hypothetical. Reading dc unconditionally made a Shiva survey report Light's
+    /// numbers: 49,900 and 128 sales a day where the world itself had 56,997 and 10.
+    ///
+    /// Region is never read. It spans worlds you cannot list on, so a floor from one of those is an
+    /// opportunity that does not exist.
     /// </remarks>
     public static IReadOnlyDictionary<uint, MarketSummary> ParseSurvey(string json)
     {
@@ -78,28 +85,32 @@ public static class UniversalisJson
 
             summaries[itemId] = new MarketSummary(
                 itemId,
-                DataCentre(quality, "minListing", "price") is { } floor ? (long)floor : null,
-                DataCentre(quality, "dailySaleVelocity", "quantity") ?? 0d);
+                Narrowest(quality, "minListing", "price") is { } floor ? (long)floor : null,
+                Narrowest(quality, "dailySaleVelocity", "quantity") ?? 0d);
         }
 
         return summaries;
     }
 
-    /// <summary>Reads one figure out of the data-centre branch of a summary section.</summary>
-    private static double? DataCentre(JsonElement quality, string section, string field)
+    /// <summary>
+    /// Reads a figure from the tightest scope the answer carries: the world if it is there, the data
+    /// centre otherwise.
+    /// </summary>
+    private static double? Narrowest(JsonElement quality, string section, string field)
     {
-        if (quality.ValueKind != JsonValueKind.Object
-            || !quality.TryGetProperty(section, out var scoped)
-            || !scoped.TryGetProperty("dc", out var dc)
-            || dc.ValueKind != JsonValueKind.Object
-            || !dc.TryGetProperty(field, out var value)
-            || value.ValueKind != JsonValueKind.Number)
-        {
+        if (quality.ValueKind != JsonValueKind.Object || !quality.TryGetProperty(section, out var scoped))
             return null;
-        }
 
-        return value.GetDouble();
+        return Read(scoped, "world", field) ?? Read(scoped, "dc", field);
     }
+
+    private static double? Read(JsonElement scoped, string branch, string field) =>
+        scoped.TryGetProperty(branch, out var value)
+        && value.ValueKind == JsonValueKind.Object
+        && value.TryGetProperty(field, out var found)
+        && found.ValueKind == JsonValueKind.Number
+            ? found.GetDouble()
+            : null;
 
     private static OrderBook ReadItem(JsonElement item)
     {

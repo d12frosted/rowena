@@ -84,6 +84,32 @@ public class UniversalisJsonTests
     }
 
     [Fact]
+    public void AWorldScopedSurveyReportsTheWorldAndNotItsDataCentre()
+    {
+        // The bug this pins: a world request carries world, dc and region branches, and reading dc
+        // unconditionally made a Shiva survey report Light's numbers. Recorded on the same day, the
+        // world had 56,997 and about 10 sales where the data centre had 49,900 and 128.
+        var world = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.AggregatedWorld))[41807u];
+        var dataCentre = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated))[41807u];
+
+        Assert.Equal(56_997, world.Floor);
+        Assert.NotEqual(dataCentre.Floor, world.Floor);
+        Assert.True(
+            world.SaleVelocityPerDay < dataCentre.SaleVelocityPerDay,
+            "one world cannot sell faster than the data centre containing it");
+    }
+
+    [Fact]
+    public void ADataCentreScopedSurveyStillWorksWithNoWorldBranch()
+    {
+        // The narrowest-branch rule has to degrade to the data centre when that is all there is,
+        // or scoping to a data centre would come back empty.
+        var survey = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated));
+
+        Assert.All(survey.Values, summary => Assert.NotNull(summary.Floor));
+    }
+
+    [Fact]
     public void TheTwoEndpointsDisagreeAboutHowFastThingsSell()
     {
         // Recorded, not hypothetical. Whichever is right, mixing them would mean shortlisting an

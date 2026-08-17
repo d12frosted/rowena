@@ -16,6 +16,9 @@ internal static class Fixtures
     /// <summary>The aggregated endpoint's answer for a bench, a wardrobe and a Mount Token.</summary>
     public const string Aggregated = "light-aggregated.json";
 
+    /// <summary>The same call scoped to one world, which carries a world branch as well as a dc one.</summary>
+    public const string AggregatedWorld = "shiva-aggregated.json";
+
     /// <summary>
     /// A listing recorded at 48,795 gil for three units, carrying a tax of 7,319. Used to
     /// pin how the board rounds its cut.
