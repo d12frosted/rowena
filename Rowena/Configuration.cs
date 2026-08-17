@@ -32,6 +32,9 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public int PriceTtlMinutes { get; set; } = 10;
 
+    /// <summary>The same span, floored at a minute. A method, so it stays out of the saved file.</summary>
+    public TimeSpan PriceTtl() => TimeSpan.FromMinutes(Math.Max(1, PriceTtlMinutes));
+
     /// <summary>
     /// How many listings deep to fetch.
     /// </summary>

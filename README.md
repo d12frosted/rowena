@@ -107,6 +107,10 @@ away. Under it, a tab per question:
   thing here that is a workspace rather than a report. The tab counts what is in the list,
   since the crafting itself happens in somebody else's window and a half-built list is easy
   to forget.
+- **Settings.** The knobs, with a line under each saying what it does to the plugin rather
+  than restating its name. The two that decide whether any other number is right, which
+  boards to price against, used to be file-only, and Dalamud's settings gear used to open the
+  market screen and call that settings. The catalogue is still a file, read at load.
 
 Tabs rather than one long screen. The furnishing table is twenty-five rows and was pushing
 the scrip tables off the top, and nobody has ever needed both in view at once. It also means

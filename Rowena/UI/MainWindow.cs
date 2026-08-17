@@ -32,9 +32,11 @@ internal sealed class MainWindow : Window
     private readonly StatusStrip strip;
     private readonly ConvertTab convert;
     private readonly CraftTab crafts;
+    private readonly SettingsTab settings;
     private readonly Configuration config;
     private readonly Action save;
 
+    private Tab? pending;
     private bool restoreAttempted;
     private long persistedSweepAt;
 
@@ -47,6 +49,7 @@ internal sealed class MainWindow : Window
         FurnishingSweep sweep,
         ConvertTab convert,
         CraftTab crafts,
+        SettingsTab settings,
         Configuration config,
         Action save)
         : base("Rowena###rowena-main")
@@ -57,6 +60,7 @@ internal sealed class MainWindow : Window
         this.sweep = sweep;
         this.convert = convert;
         this.crafts = crafts;
+        this.settings = settings;
         this.config = config;
         this.save = save;
 
@@ -96,7 +100,7 @@ internal sealed class MainWindow : Window
         // The label carries the tab's identity in ImGui unless it is told otherwise, so every one of
         // these pins its own id after ###. Without that, a label that counts something would hand the
         // tab a new identity each time the count changed, and reset the selection along with it.
-        if (ImGui.BeginTabItem("Convert###convert"))
+        if (ImGui.BeginTabItem("Convert###convert", Selecting(Tab.Convert)))
         {
             if (buying is null || selling is null)
                 NoBoard();
@@ -106,7 +110,7 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem(crafts.Label))
+        if (ImGui.BeginTabItem(crafts.Label, Selecting(Tab.Craft)))
         {
             if (buying is { } craftBuying && selling is { } craftSelling)
                 crafts.Draw(craftBuying, craftSelling);
@@ -116,7 +120,36 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
+        // Reachable without a board, unlike the other two, since typing a world in here is what you
+        // would be doing if the game could not tell you one.
+        if (ImGui.BeginTabItem("Settings###settings", Selecting(Tab.Settings)))
+        {
+            settings.Draw();
+            ImGui.EndTabItem();
+        }
+
         ImGui.EndTabBar();
+
+        // Cleared after the whole bar, not when it matches: the flag has to survive long enough for
+        // every tab to have been offered it, and the tab that wanted it has already read it.
+        pending = null;
+    }
+
+    /// <summary>Opens the window on a particular tab, for the callers that mean a specific one.</summary>
+    public void Show(Tab tab)
+    {
+        pending = tab;
+        IsOpen = true;
+    }
+
+    private ImGuiTabItemFlags Selecting(Tab tab) =>
+        pending == tab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+
+    internal enum Tab
+    {
+        Convert,
+        Craft,
+        Settings,
     }
 
     /// <summary>

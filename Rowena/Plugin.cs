@@ -54,10 +54,7 @@ public sealed class Plugin : IDalamudPlugin
         var store = new PriceStore(
             Path.Combine(PluginInterface.ConfigDirectory.FullName, "prices.json.gz"), Log);
 
-        market = new MarketCache(source, store, Log)
-        {
-            Ttl = TimeSpan.FromMinutes(Math.Max(1, config.PriceTtlMinutes)),
-        };
+        market = new MarketCache(source, store, Log) { Ttl = config.PriceTtl() };
 
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
@@ -71,14 +68,16 @@ public sealed class Plugin : IDalamudPlugin
         var trades = new Trades(catalog);
         var convertTab = new ConvertTab(trades, boards, balances, cells, config);
         var craftTab = new CraftTab(sweep, furnishings, boards, cells, basket, config);
+        var settingsTab = new SettingsTab(config, market, Save);
 
         mainWindow = new MainWindow(
-            trades, market, balances, scope, gatherBuddy, sweep, convertTab, craftTab, config, Save);
+            trades, market, balances, scope, gatherBuddy, sweep,
+            convertTab, craftTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
-        PluginInterface.UiBuilder.OpenConfigUi += OpenMainUi;
+        PluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -121,6 +120,11 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OpenMainUi() => mainWindow.IsOpen = true;
 
+    /// <summary>
+    /// The gear in Dalamud's plugin list, which used to open the market screen and call it settings.
+    /// </summary>
+    private void OpenSettings() => mainWindow.Show(MainWindow.Tab.Settings);
+
     private void OnCommand(string command, string arguments) => mainWindow.Toggle();
 
     public void Dispose()
@@ -132,7 +136,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
-        PluginInterface.UiBuilder.OpenConfigUi -= OpenMainUi;
+        PluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         windows.RemoveAllWindows();
         http.Dispose();
     }
