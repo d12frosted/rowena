@@ -17,6 +17,38 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class ConvertTab
 {
+    /// <remarks>
+    /// One entry per column, null where the header says enough on its own. Written out rather than
+    /// built per frame, since a table redraws sixty times a second and none of this ever changes.
+    /// </remarks>
+    private static readonly string?[] SinkHelp =
+    [
+        null,
+        "What one unit of the currency turns into: spent on this trade, with the result sold.\n"
+        + "Not a price. The currency cannot be bought, only earned and spent.",
+        "Gil left over from a single run, after the market's cut and after buying anything\n"
+        + "the trade needs that you have not got.",
+        "How many runs the balance you are holding pays for.",
+        "How long the board would take to absorb the output of one run at the rate it\n"
+        + "currently sells. A margin you cannot sell into is not a margin.",
+        "The counter in the world where the trade actually happens.",
+    ];
+
+    private static readonly string?[] FlipHelp =
+    [
+        null,
+        "How many runs your gil is best spent on, once every row has competed for the same\n"
+        + "order book. A zero means the shared inputs pay more on another row.",
+        "Runs your own stock already covers, retainers included. Not deducted from the outlay:\n"
+        + "what you hold is still worth what the board would pay for it.",
+        "What buying the inputs costs, walked down the book rather than multiplied out from\n"
+        + "the cheapest listing.",
+        "Gil left over once the output is sold and the market has taken its cut.",
+        "Profit over outlay. Worth reading next to the column beside it: a high return on a\n"
+        + "trade that takes a month to sell is not a good trade.",
+        "How long the board would take to absorb everything these runs would produce.",
+    ];
+
     private readonly Trades trades;
     private readonly Boards boards;
     private readonly Balances balances;
@@ -71,7 +103,7 @@ internal sealed class ConvertTab
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
             ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
-            ImGui.TableHeadersRow();
+            Cell.Headers(SinkHelp);
 
             foreach (var row in group.Rows)
             {
@@ -88,13 +120,13 @@ internal sealed class ConvertTab
                 if (!row.Priced)
                 {
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Palette.Dim, "-");
+                    Cell.Right(Palette.Dim, "-");
                     ImGui.TableNextColumn();
                     ImGui.TextColored(Palette.Dim, "no prices yet");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Palette.Dim, "-");
+                    Cell.Right(Palette.Dim, "-");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(Palette.Dim, "-");
+                    Cell.Right(Palette.Dim, "-");
                     ImGui.TableNextColumn();
                     ImGui.TextColored(Palette.Dim, row.Venue);
                     continue;
@@ -105,7 +137,7 @@ internal sealed class ConvertTab
                 // Only the leader is coloured. Marking everything defeats the point.
                 // The unit is printed in the cell, not only in the header. Two decimals beside a
                 // column of millions reads as millions, and this number really is under a hundred.
-                ImGui.TextColored(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
+                Cell.Right(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
                 if (ImGui.IsItemHovered())
                 {
                     // Said as a yield rather than a price, because the column was read as one and
@@ -122,13 +154,13 @@ internal sealed class ConvertTab
                 }
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{row.Profit:N0}");
+                Cell.Right($"{row.Profit:N0}");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(row.Covers is { } covers ? $"{covers:N0} runs" : "-");
+                Cell.Right(row.Covers is { } covers ? $"{covers:N0} runs" : "-");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(Phrases.Absorb(row.Absorb));
+                Cell.Right(Phrases.Absorb(row.Absorb));
 
                 ImGui.TableNextColumn();
                 ImGui.TextColored(Palette.Dim, row.Venue);
@@ -161,7 +193,7 @@ internal sealed class ConvertTab
         ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 120);
         ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
-        ImGui.TableHeadersRow();
+        Cell.Headers(FlipHelp);
 
         foreach (var row in current.Flips)
         {
@@ -176,9 +208,9 @@ internal sealed class ConvertTab
             if (row.Problem is { } problem)
             {
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Palette.Dim, "-");
+                Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
+                Cell.Right(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
                 ImGui.TableNextColumn();
                 ImGui.TextColored(Palette.Dim, problem);
                 continue;
@@ -187,26 +219,26 @@ internal sealed class ConvertTab
             var tint = row.Idle ? Palette.Dim : Palette.Plain;
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(tint, $"{row.Runs}");
+            Cell.Right(tint, $"{row.Runs}");
             if (row.Idle && ImGui.IsItemHovered())
                 ImGui.SetTooltip("The shared inputs pay more on another row, or your gil will not cover a run.");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
+            Cell.Right(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
             if (row.HeldCovers > 0 && ImGui.IsItemHovered())
                 ImGui.SetTooltip("Runs your own stock already covers, retainers included. Not deducted from the outlay: what you hold is still worth what the board would pay for it.");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(tint, $"{row.Outlay:N0}");
+            Cell.Right(tint, $"{row.Outlay:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Idle ? Palette.Dim : row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
+            Cell.Right(row.Idle ? Palette.Dim : row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");
+            Cell.Right(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(tint, Phrases.Absorb(row.Absorb));
+            Cell.Right(tint, Phrases.Absorb(row.Absorb));
         }
 
         ImGui.EndTable();

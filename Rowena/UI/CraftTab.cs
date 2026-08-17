@@ -20,6 +20,25 @@ internal sealed class CraftTab
     /// <summary>How many craft rows the table shows. The count it was trimmed from is shown too.</summary>
     private const int CraftsInTable = 25;
 
+    /// <remarks>
+    /// One entry per column, null where the header says enough on its own. The gil/day caveat is on
+    /// the header as well as on every cell, because it is the column the whole table is ranked by and
+    /// it is a ceiling rather than a forecast.
+    /// </remarks>
+    private static readonly string?[] Help =
+    [
+        null,
+        "The crafting job the recipe belongs to.",
+        "What the direct materials cost, walked down the book rather than multiplied out from\n"
+        + "the cheapest listing. Sub-crafts are priced as bought, not as made.",
+        "Gil left over from one craft, once it sells and the market has taken its cut.",
+        "Profit over what the materials cost.",
+        "How many the board is currently selling in a day, on your world rather than the whole\n"
+        + "data centre: your retainer sells where it stands.",
+        "Profit times sales a day, which is what the table is ranked by. A ceiling, not a\n"
+        + "forecast: it assumes you take every sale at today's price.",
+    ];
+
     private readonly FurnishingSweep sweep;
     private readonly Furnishings furnishings;
     private readonly Boards boards;
@@ -265,7 +284,7 @@ internal sealed class CraftTab
         ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 75);
         ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableHeadersRow();
+        Cell.Headers(Help);
 
         foreach (var row in current.Crafts)
         {
@@ -278,19 +297,19 @@ internal sealed class CraftTab
             cells.Job(row.JobId, row.Job);
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{row.Materials:N0}");
+            Cell.Right($"{row.Materials:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
+            Cell.Right(row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(row.Roi is { } roi ? $"{roi:P0}" : "-");
+            Cell.Right(row.Roi is { } roi ? $"{roi:P0}" : "-");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, $"{row.SalesPerDay:F1}");
+            Cell.Right(Palette.Dim, $"{row.SalesPerDay:F1}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.GilPerDay > 0 ? Palette.Good : Palette.Dim, $"{row.GilPerDay:N0}");
+            Cell.Right(row.GilPerDay > 0 ? Palette.Good : Palette.Dim, $"{row.GilPerDay:N0}");
             if (ImGui.IsItemHovered())
             {
                 // Worth saying out loud on every row. The figure is the whole market's daily
