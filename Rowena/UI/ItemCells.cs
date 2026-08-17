@@ -19,7 +19,12 @@ namespace Rowena.UI;
 /// here rather than one: a drawn tooltip carrying the market facts, which is what this window is
 /// actually for, and "link in chat" for when the real thing with every stat on it is wanted.
 /// </remarks>
-internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActions actions, MarketCache market)
+internal sealed class ItemCells(
+    Items items,
+    ITextureProvider textures,
+    ItemActions actions,
+    MarketCache market,
+    PricingScope scope)
 {
     private static readonly Vector4 Dim = new(0.60f, 0.60f, 0.62f, 1f);
     private static readonly Vector4 Bad = new(0.85f, 0.45f, 0.40f, 1f);
@@ -103,16 +108,21 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
         ImGui.SameLine();
         ImGui.TextUnformatted(label);
 
-        var book = market.Book(itemId);
+        // Shown for the board you would sell on, since that is what an item is worth to you. The
+        // data centre's cheaper listings are what you would pay to buy one, which is a different
+        // question and belongs in the material breakdown below.
+        var book = scope.Selling is { } selling ? market.Book(selling, itemId) : null;
+
         if (book?.Floor is { } floor)
         {
             ImGui.TextColored(
                 Dim,
-                $"{floor:N0} gil, {book.UnitsListed} listed, {book.SaleVelocityPerDay:F1} sold a day");
+                $"{floor:N0} gil on {scope.Selling}, {book.UnitsListed} listed, "
+                + $"{book.SaleVelocityPerDay:F1} sold a day");
         }
         else
         {
-            ImGui.TextColored(Bad, "nothing listed");
+            ImGui.TextColored(Bad, $"nothing listed on {scope.Selling ?? "your world"}");
         }
 
         if (materials is { Count: > 0 })

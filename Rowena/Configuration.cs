@@ -16,6 +16,15 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public string Scope { get; set; } = "";
 
+    /// <summary>
+    /// The world to price sales against, or empty for the one you are logged in to.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Scope"/> because buying and selling do not happen on the same board.
+    /// Your retainers sell where they stand.
+    /// </remarks>
+    public string HomeScope { get; set; } = "";
+
     /// <summary>How long a price snapshot is trusted before it is refetched.</summary>
     /// <remarks>
     /// Universalis is free and crowdsourced and asks callers to be reasonable. Nothing here

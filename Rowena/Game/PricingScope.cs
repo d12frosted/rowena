@@ -12,9 +12,28 @@ namespace Rowena.Game;
 internal sealed class PricingScope(Configuration config, Balances balances)
 {
     /// <summary>
-    /// The configured scope, or wherever you are logged in. Null when neither is known, which
-    /// is a real state worth showing rather than papering over with a default.
+    /// Where you buy: the whole data centre.
     /// </summary>
-    public string? Current =>
+    /// <remarks>
+    /// Listings sit on individual worlds and you can travel to any of them, so the cheapest material
+    /// anywhere on the data centre is one you can actually go and get. Optimistic only by the cost of
+    /// the trip.
+    /// </remarks>
+    public string? Buying =>
         string.IsNullOrWhiteSpace(config.Scope) ? balances.DataCentre : config.Scope;
+
+    /// <summary>
+    /// Where you sell: your own world.
+    /// </summary>
+    /// <remarks>
+    /// A retainer sells where it stands, so the price you get and the demand you meet are your home
+    /// world's, not the data centre's. Using the data centre for both combined its cheapest listing
+    /// with its total demand, and the second half of that was badly wrong: measured on Light, a Glade
+    /// Bench fetches 57% more at home and sells a tenth as often.
+    /// </remarks>
+    public string? Selling =>
+        string.IsNullOrWhiteSpace(config.HomeScope) ? balances.HomeWorld : config.HomeScope;
+
+    /// <summary>Both known, which is what pricing anything needs.</summary>
+    public bool Ready => Buying is not null && Selling is not null;
 }

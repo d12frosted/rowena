@@ -79,14 +79,20 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
-    public void Start(string? scope, int chunkSize, int surveyBatch, int shortlistSize, TimeSpan maxAge)
+    public void Start(
+        string? buying,
+        string? selling,
+        int chunkSize,
+        int surveyBatch,
+        int shortlistSize,
+        TimeSpan maxAge)
     {
-        if (Running || string.IsNullOrWhiteSpace(scope))
+        if (Running || string.IsNullOrWhiteSpace(buying) || string.IsNullOrWhiteSpace(selling))
             return;
 
         State = Phase.Products;
         Detail = "reading the sheets";
-        _ = Task.Run(() => Run(scope, chunkSize, surveyBatch, shortlistSize, maxAge));
+        _ = Task.Run(() => Run(buying, selling, chunkSize, surveyBatch, shortlistSize, maxAge));
     }
 
     /// <summary>
@@ -100,10 +106,14 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// The sheet walk still happens, on this thread, because a shortlist is a list of ids and the
     /// conversions behind them are not stored.
     /// </remarks>
-    public void Restore(StoredSweep stored)
+    public void Restore(StoredSweep stored, string buying, string selling)
     {
         if (Running || HasResults)
             return;
+
+        SellingBoard = selling;
+        RestoredBuying = buying;
+        RestoredSelling = selling;
 
         State = Phase.Shortlisting;
         Detail = "restoring the last sweep";
@@ -129,7 +139,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
                 Candidates = stored.Candidates;
                 Shortlist = shortlist;
-                Blockers = Blocking(shortlist);
+                Blockers = Blocking(shortlist, RestoredBuying, RestoredSelling);
                 ReadyAt = DateTimeOffset.FromUnixTimeMilliseconds(stored.At);
                 State = Phase.Ready;
                 Detail = $"{shortlist.Length} of {Candidates} costed";
@@ -151,7 +161,13 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
             : null;
 
-    private async Task Run(string scope, int chunkSize, int surveyBatch, int shortlistSize, TimeSpan maxAge)
+    private async Task Run(
+        string buying,
+        string selling,
+        int chunkSize,
+        int surveyBatch,
+        int shortlistSize,
+        TimeSpan maxAge)
     {
         try
         {
@@ -177,17 +193,22 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             //
             // Only what is missing or stale, which is what makes Re-sweep resume rather than start
             // again: a run that lost a hundred products asks for those hundred next time.
-            var wanted = products.Where(id => market.SummaryIsStale(id, maxAge)).ToArray();
+            // Surveyed on the selling board. Revenue potential is about demand, and the demand that
+            // counts is the one your retainer can actually meet.
+            var wanted = products.Where(id => market.SummaryIsStale(selling, id, maxAge)).ToArray();
 
             State = Phase.Products;
-            await Survey(scope, wanted, surveyBatch).ConfigureAwait(false);
+            await Survey(selling, wanted, surveyBatch).ConfigureAwait(false);
 
             // Counted from the cache rather than from the fetch, so data carried over from an
             // earlier run counts exactly as much as what was just fetched.
-            var gaps = products.Count(id => market.Summary(id) is null);
+            var gaps = products.Count(id => market.Summary(selling, id) is null);
 
             State = Phase.Shortlisting;
             Detail = "picking what is worth costing";
+            SellingBoard = selling;
+            RestoredBuying = buying;
+            RestoredSelling = selling;
             var shortlist = Shortlisted(candidates, shortlistSize);
 
             if (shortlist.Length == 0)
@@ -215,19 +236,30 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             // Full books now, and for the products too: a summary carries no depth, and the profit
             // on a craft is the difference between what the materials really cost and what the
             // product really fetches.
-            var needDepth = shortlist
-                .SelectMany(conversion => conversion.Inputs.Concat(conversion.Outputs))
+            // Materials on the buying board, products on the selling one: the two halves of a craft
+            // happen in different places and pricing them together is what made the old numbers wrong.
+            var materialIds = shortlist
+                .SelectMany(conversion => conversion.Inputs)
                 .Where(amount => amount.Resource.Kind == ResourceKind.Item)
                 .Select(amount => amount.Resource.Id)
                 .Distinct()
-                .Where(id => market.IsStale(id, maxAge))
+                .Where(id => market.IsStale(buying, id, maxAge))
+                .ToArray();
+
+            var productIds = shortlist
+                .SelectMany(conversion => conversion.Outputs)
+                .Where(amount => amount.Resource.Kind == ResourceKind.Item)
+                .Select(amount => amount.Resource.Id)
+                .Distinct()
+                .Where(id => market.IsStale(selling, id, maxAge))
                 .ToArray();
 
             State = Phase.Ingredients;
-            var materials = await Price(scope, needDepth, chunkSize, "materials").ConfigureAwait(false);
+            var materials = await Price(buying, materialIds, chunkSize, "materials").ConfigureAwait(false);
+            await Price(selling, productIds, chunkSize, "products").ConfigureAwait(false);
 
             Shortlist = shortlist;
-            Blockers = Blocking(shortlist);
+            Blockers = Blocking(shortlist, buying, selling);
             ReadyAt = DateTimeOffset.UtcNow;
 
             var incomplete = gaps > 0 || materials.FailedChunks > 0;
@@ -307,10 +339,11 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// <summary>
     /// Which materials are doing the blocking, counted across the shortlist.
     /// </summary>
-    private Blocker[] Blocking(IReadOnlyList<Conversion> shortlist) =>
+    private Blocker[] Blocking(IReadOnlyList<Conversion> shortlist, string buying, string selling) =>
     [
         .. shortlist
-            .Select(conversion => ConversionEvaluator.Evaluate(conversion, 1, market.Lookup, MarketTax.Standard))
+            .Select(conversion => ConversionEvaluator.Evaluate(
+                conversion, 1, market.Lookup(buying), market.Lookup(selling), MarketTax.Standard))
             .Where(quote => !quote.IsExecutable)
             // Unsourced is a material the board could not supply; Unpriced is one nobody lists at
             // all. Both stop a row being costed, and for this question they count the same.
@@ -320,13 +353,20 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             .OrderByDescending(blocker => blocker.Blocks),
     ];
 
+    /// <summary>The board a restore or a run last used for selling, for recomputing derived figures.</summary>
+    private string SellingBoard { get; set; } = "";
+
+    private string RestoredBuying { get; set; } = "";
+
+    private string RestoredSelling { get; set; } = "";
+
     private double Revenue(Conversion conversion)
     {
         double total = 0;
 
         foreach (var output in conversion.Outputs)
         {
-            if (market.Summary(output.Resource.Id) is { } summary)
+            if (market.Summary(SellingBoard, output.Resource.Id) is { } summary)
                 total += summary.DailyRevenue * output.Quantity;
         }
 

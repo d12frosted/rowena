@@ -66,7 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, config, ChatGui, Log);
-        var cells = new ItemCells(new Items(DataManager), Textures, actions, market);
+        var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
 
         mainWindow = new MainWindow(
             catalog, market, balances, scope, gatherBuddy, sweep, furnishings, cells, basket, config, Save);
@@ -123,7 +123,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         // A sweep is minutes of requests and a reload is constant in dev mode, so it is written out
         // on the way past rather than only when it finishes.
-        market.Persist(scope.Current ?? "", sweep.Snapshot());
+        market.Persist(sweep.Snapshot());
 
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;

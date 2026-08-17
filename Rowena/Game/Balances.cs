@@ -94,25 +94,32 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
     }
 
     /// <summary>
+    /// The world you are logged in to. Where your retainers stand, and so the only board you can
+    /// actually sell on.
+    /// </summary>
+    public string? HomeWorld => World(world => world.Name.ExtractText());
+
+    /// <summary>
     /// The data centre you are logged in to, for pricing against the board you can
     /// actually reach. Null when not logged in or when the sheets will not say.
     /// </summary>
-    public string? DataCentre
+    public string? DataCentre => World(world => world.DataCenter.ValueNullable?.Name.ExtractText());
+
+    private string? World(Func<Lumina.Excel.Sheets.World, string?> read)
     {
-        get
+        try
         {
-            try
-            {
-                var world = objects.LocalPlayer?.CurrentWorld.ValueNullable;
-                var name = world?.DataCenter.ValueNullable?.Name.ExtractText();
-                return string.IsNullOrWhiteSpace(name) ? null : name;
-            }
-            catch (Exception error)
-            {
-                // Worth surviving rather than throwing: the window falls back to asking.
-                log.Warning(error, "Could not work out the current data centre.");
+            if (objects.LocalPlayer?.CurrentWorld.ValueNullable is not { } world)
                 return null;
-            }
+
+            var name = read(world);
+            return string.IsNullOrWhiteSpace(name) ? null : name;
+        }
+        catch (Exception error)
+        {
+            // Worth surviving rather than throwing: the window falls back to asking.
+            log.Warning(error, "Could not work out where you are logged in.");
+            return null;
         }
     }
 }

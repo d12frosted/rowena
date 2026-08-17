@@ -35,8 +35,10 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// <summary>How far the gap between chunks may stretch once things start failing.</summary>
     private static readonly TimeSpan SlowestBetweenChunks = TimeSpan.FromSeconds(3);
 
-    private readonly ConcurrentDictionary<uint, BookSnapshot> books = new();
-    private readonly ConcurrentDictionary<uint, SummarySnapshot> summaries = new();
+    // Keyed by board as well as item, because the two sides of a trade happen on different ones and
+    // an item can be an input to one conversion and an output of another.
+    private readonly ConcurrentDictionary<(string Scope, uint ItemId), BookSnapshot> books = new();
+    private readonly ConcurrentDictionary<(string Scope, uint ItemId), SummarySnapshot> summaries = new();
 
     private bool restored;
 
@@ -50,16 +52,17 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// <summary>The last failure, kept so the window can say so instead of showing nothing.</summary>
     public string? LastError { get; private set; }
 
-    public OrderBook? Book(uint itemId) => books.TryGetValue(itemId, out var snapshot) ? snapshot.Book : null;
+    public OrderBook? Book(string scope, uint itemId) =>
+        books.TryGetValue((scope, itemId), out var snapshot) ? snapshot.Book : null;
 
-    /// <summary>A lookup shaped for the evaluator.</summary>
-    public Func<uint, OrderBook?> Lookup => Book;
+    /// <summary>A lookup shaped for the evaluator, bound to one board.</summary>
+    public Func<uint, OrderBook?> Lookup(string scope) => itemId => Book(scope, itemId);
 
     /// <summary>The cheap answer, when one has been fetched.</summary>
-    public MarketSummary? Summary(uint itemId) =>
-        summaries.TryGetValue(itemId, out var snapshot) ? snapshot.Summary : null;
+    public MarketSummary? Summary(string scope, uint itemId) =>
+        summaries.TryGetValue((scope, itemId), out var snapshot) ? snapshot.Summary : null;
 
-    public bool IsStale(uint itemId) => IsStale(itemId, Ttl);
+    public bool IsStale(string scope, uint itemId) => IsStale(scope, itemId, Ttl);
 
     /// <summary>
     /// Whether an item's book is older than the caller is willing to accept.
@@ -70,11 +73,13 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// from minutes ago. Deciding which of nine hundred furnishings is worth making wants a rough
     /// map, and one from this morning is fine, which is what makes a sweep affordable.
     /// </remarks>
-    public bool IsStale(uint itemId, TimeSpan maxAge) =>
-        !books.TryGetValue(itemId, out var snapshot) || DateTimeOffset.UtcNow - snapshot.Fetched > maxAge;
+    public bool IsStale(string scope, uint itemId, TimeSpan maxAge) =>
+        !books.TryGetValue((scope, itemId), out var snapshot)
+        || DateTimeOffset.UtcNow - snapshot.Fetched > maxAge;
 
-    public bool SummaryIsStale(uint itemId, TimeSpan maxAge) =>
-        !summaries.TryGetValue(itemId, out var snapshot) || DateTimeOffset.UtcNow - snapshot.Fetched > maxAge;
+    public bool SummaryIsStale(string scope, uint itemId, TimeSpan maxAge) =>
+        !summaries.TryGetValue((scope, itemId), out var snapshot)
+        || DateTimeOffset.UtcNow - snapshot.Fetched > maxAge;
 
     /// <param name="Answered">Ids that came back with something, an empty answer included.</param>
     /// <param name="FailedChunks">Batches given up on, each one a hole in the data.</param>
@@ -103,7 +108,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             return;
         }
 
-        var wanted = force ? [.. itemIds] : itemIds.Where(IsStale).ToArray();
+        var wanted = force ? [.. itemIds] : itemIds.Where(id => IsStale(scope, id)).ToArray();
         if (wanted.Length == 0)
             return;
 
@@ -121,7 +126,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             itemIds,
             chunkSize,
             async (chunk, token) =>
-                StoreBooks(await source.FetchAsync(scope, chunk, token).ConfigureAwait(false), chunk),
+                StoreBooks(scope, await source.FetchAsync(scope, chunk, token).ConfigureAwait(false), chunk),
             onProgress,
             cancellationToken);
 
@@ -136,7 +141,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             itemIds,
             chunkSize,
             async (chunk, token) =>
-                StoreSummaries(await source.SurveyAsync(scope, chunk, token).ConfigureAwait(false), chunk),
+                StoreSummaries(scope, await source.SurveyAsync(scope, chunk, token).ConfigureAwait(false), chunk),
             onProgress,
             cancellationToken);
 
@@ -257,20 +262,24 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// for those keeps "asked, and there is nothing listed" apart from "never asked", and stops
     /// every refresh requesting them again forever.
     /// </remarks>
-    private bool StoreBooks(IReadOnlyDictionary<uint, OrderBook> fetched, IReadOnlyCollection<uint> requested)
+    private bool StoreBooks(
+        string scope,
+        IReadOnlyDictionary<uint, OrderBook> fetched,
+        IReadOnlyCollection<uint> requested)
     {
         var now = DateTimeOffset.UtcNow;
 
         foreach (var itemId in requested)
         {
             var book = fetched.TryGetValue(itemId, out var found) ? found : OrderBook.Empty(itemId);
-            books[itemId] = new BookSnapshot(WithSurveyedVelocity(book), now);
+            books[(scope, itemId)] = new BookSnapshot(WithSurveyedVelocity(scope, book), now);
         }
 
         return true;
     }
 
     private bool StoreSummaries(
+        string scope,
         IReadOnlyDictionary<uint, MarketSummary> fetched,
         IReadOnlyCollection<uint> requested)
     {
@@ -282,12 +291,15 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
                 ? found
                 : new MarketSummary(itemId, null, 0d);
 
-            summaries[itemId] = new SummarySnapshot(summary, now);
+            summaries[(scope, itemId)] = new SummarySnapshot(summary, now);
 
             // A book already held was fetched with the other endpoint's sale rate. Bring it into
             // line rather than leaving two numbers in play.
-            if (books.TryGetValue(itemId, out var existing))
-                books[itemId] = existing with { Book = existing.Book.WithVelocity(summary.SaleVelocityPerDay) };
+            if (books.TryGetValue((scope, itemId), out var existing))
+            {
+                books[(scope, itemId)] =
+                    existing with { Book = existing.Book.WithVelocity(summary.SaleVelocityPerDay) };
+            }
         }
 
         return true;
@@ -301,17 +313,17 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// truth, one of them has to win everywhere, or an item gets shortlisted on one number and
     /// ranked on another. The survey wins because it is the one every candidate has.
     /// </remarks>
-    private OrderBook WithSurveyedVelocity(OrderBook book) =>
-        summaries.TryGetValue(book.ItemId, out var summary)
+    private OrderBook WithSurveyedVelocity(string scope, OrderBook book) =>
+        summaries.TryGetValue((scope, book.ItemId), out var summary)
             ? book.WithVelocity(summary.Summary.SaleVelocityPerDay)
             : book;
 
     /// <summary>Everything held, for writing to disk.</summary>
-    public IEnumerable<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> ExportBooks() =>
-        books.Select(entry => (entry.Key, entry.Value.Book, entry.Value.Fetched));
+    public IEnumerable<(string Scope, OrderBook Book, DateTimeOffset Fetched)> ExportBooks() =>
+        books.Select(entry => (entry.Key.Scope, entry.Value.Book, entry.Value.Fetched));
 
-    public IEnumerable<(MarketSummary Summary, DateTimeOffset Fetched)> ExportSummaries() =>
-        summaries.Select(entry => (entry.Value.Summary, entry.Value.Fetched));
+    public IEnumerable<(string Scope, MarketSummary Summary, DateTimeOffset Fetched)> ExportSummaries() =>
+        summaries.Select(entry => (entry.Key.Scope, entry.Value.Summary, entry.Value.Fetched));
 
     /// <summary>What a previous session swept, if it is still worth having.</summary>
     public StoredSweep? RestoredSweep { get; private set; }
@@ -323,30 +335,30 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// Not in the constructor, because which board we are pricing against is only knowable after a
     /// character is loaded, and prices from the wrong one are worse than none.
     /// </remarks>
-    public void RestoreOnce(string scope, TimeSpan maxAge)
+    public void RestoreOnce(TimeSpan maxAge)
     {
         if (restored)
             return;
 
         restored = true;
 
-        if (store.Load(scope, maxAge) is not { } loaded)
+        if (store.Load(maxAge) is not { } loaded)
             return;
 
         // Summaries first, so the books that follow are stamped with the winning sale rate.
-        foreach (var (summary, fetched) in loaded.Summaries)
-            summaries[summary.ItemId] = new SummarySnapshot(summary, fetched);
+        foreach (var (scope, summary, fetched) in loaded.Summaries)
+            summaries[(scope, summary.ItemId)] = new SummarySnapshot(summary, fetched);
 
-        foreach (var (itemId, book, fetched) in loaded.Books)
-            books[itemId] = new BookSnapshot(WithSurveyedVelocity(book), fetched);
+        foreach (var (scope, book, fetched) in loaded.Books)
+            books[(scope, book.ItemId)] = new BookSnapshot(WithSurveyedVelocity(scope, book), fetched);
 
         RestoredSweep = loaded.Sweep;
     }
 
-    public void Persist(string scope, StoredSweep? sweep)
+    public void Persist(StoredSweep? sweep)
     {
         if (!books.IsEmpty || !summaries.IsEmpty)
-            store.Save(scope, ExportBooks(), ExportSummaries(), sweep);
+            store.Save(ExportBooks(), ExportSummaries(), sweep);
     }
 
     private readonly record struct BookSnapshot(OrderBook Book, DateTimeOffset Fetched);

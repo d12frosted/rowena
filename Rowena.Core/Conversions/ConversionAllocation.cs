@@ -42,6 +42,23 @@ public static class ConversionAllocation
         Func<uint, OrderBook?> books,
         MarketTax tax,
         long gilBudget,
+        int capPerConversion) =>
+        Allocate(conversions, books, books, tax, gilBudget, capPerConversion);
+
+    /// <summary>
+    /// Allocates where buying and selling happen on different boards.
+    /// </summary>
+    /// <remarks>
+    /// Only the buying side is consumed as the allocation proceeds. The selling side is not: outputs
+    /// are valued at the floor throughout, which is the same deliberate optimism as everywhere else,
+    /// with the pessimism kept in absorption instead.
+    /// </remarks>
+    public static IReadOnlyList<Allocation> Allocate(
+        IReadOnlyList<Conversion> conversions,
+        Func<uint, OrderBook?> buying,
+        Func<uint, OrderBook?> selling,
+        MarketTax tax,
+        long gilBudget,
         int capPerConversion)
     {
         var competing = conversions
@@ -67,7 +84,7 @@ public static class ConversionAllocation
             if (left.TryGetValue(itemId, out var book))
                 return book;
 
-            if (books(itemId) is not { } original)
+            if (buying(itemId) is not { } original)
                 return null;
 
             left[itemId] = original;
@@ -87,7 +104,7 @@ public static class ConversionAllocation
                     continue;
 
                 // One more run, priced against what is left rather than the whole book.
-                var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, tax);
+                var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, selling, tax);
 
                 if (!quote.IsExecutable || quote.Profit <= 0 || quote.GilOutlay > budget)
                     continue;

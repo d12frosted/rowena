@@ -6,11 +6,28 @@ namespace Rowena.Core.Conversions;
 public static class ConversionEvaluator
 {
     /// <summary>
+    /// Values a conversion where buying and selling happen on the same board.
+    /// </summary>
+    public static ConversionQuote Evaluate(
+        Conversion conversion,
+        int runs,
+        Func<uint, OrderBook?> books,
+        MarketTax tax) =>
+        Evaluate(conversion, runs, books, books, tax);
+
+    /// <summary>
     /// Values <paramref name="runs"/> repetitions of a conversion.
     /// </summary>
-    /// <param name="books">
-    /// Looks up an item's order book, or null when the item is not on the board at all.
-    /// Null and empty mean different things and the quote reports them differently.
+    /// <param name="buying">
+    /// Where the inputs come from, or null when an item is not on that board at all. Null and empty
+    /// mean different things and the quote reports them differently.
+    /// </param>
+    /// <param name="selling">
+    /// Where the outputs go. Not the same board as <paramref name="buying"/> in general: the market
+    /// is per world, so materials can be fetched from anywhere on the data centre by travelling,
+    /// while a retainer sells only where it stands. Pricing both together combines the whole data
+    /// centre's cheapest listing with the whole data centre's demand, and the second half of that is
+    /// badly wrong: measured on Light, a Glade Bench sells for more at home and a tenth as often.
     /// </param>
     /// <remarks>
     /// Inputs are priced by walking the book, which is the entire reason this library
@@ -29,7 +46,8 @@ public static class ConversionEvaluator
     public static ConversionQuote Evaluate(
         Conversion conversion,
         int runs,
-        Func<uint, OrderBook?> books,
+        Func<uint, OrderBook?> buying,
+        Func<uint, OrderBook?> selling,
         MarketTax tax)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(runs, 1);
@@ -48,7 +66,7 @@ public static class ConversionEvaluator
                 continue;
             }
 
-            var book = books(input.Resource.Id);
+            var book = buying(input.Resource.Id);
             if (book is null)
             {
                 unsourced.Add(input);
@@ -74,7 +92,7 @@ public static class ConversionEvaluator
             if (output.Resource.Kind == ResourceKind.Currency)
                 continue;
 
-            var book = books(output.Resource.Id);
+            var book = selling(output.Resource.Id);
             if (book?.Floor is not { } floor)
             {
                 unpriced.Add(output);
@@ -117,13 +135,22 @@ public static class ConversionEvaluator
         Conversion conversion,
         Func<uint, OrderBook?> books,
         MarketTax tax,
+        int cap) =>
+        LargestProfitableSize(conversion, books, books, tax, cap);
+
+    /// <inheritdoc cref="LargestProfitableSize(Conversion, Func{uint, OrderBook}, MarketTax, int)"/>
+    public static int LargestProfitableSize(
+        Conversion conversion,
+        Func<uint, OrderBook?> buying,
+        Func<uint, OrderBook?> selling,
+        MarketTax tax,
         int cap)
     {
         var best = 0;
 
         for (var runs = 1; runs <= cap; runs++)
         {
-            var quote = Evaluate(conversion, runs, books, tax);
+            var quote = Evaluate(conversion, runs, buying, selling, tax);
             if (!quote.IsExecutable || quote.Profit <= 0)
                 break;
 

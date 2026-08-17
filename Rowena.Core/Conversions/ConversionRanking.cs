@@ -43,11 +43,27 @@ public static class ConversionRanking
         Func<uint, OrderBook?> books,
         MarketTax tax,
         double? maxRunsPerDay = null) =>
+        ByGilPerDay(conversions, books, books, tax, maxRunsPerDay);
+
+    /// <summary>
+    /// Ranks where buying and selling happen on different boards.
+    /// </summary>
+    /// <remarks>
+    /// This is where the split matters most. Demand is what the ranking multiplies by, and the
+    /// demand that counts is the one on the board your retainer stands on, not the whole data
+    /// centre's.
+    /// </remarks>
+    public static IReadOnlyList<ExpectedEarnings> ByGilPerDay(
+        IEnumerable<Conversion> conversions,
+        Func<uint, OrderBook?> buying,
+        Func<uint, OrderBook?> selling,
+        MarketTax tax,
+        double? maxRunsPerDay = null) =>
     [
         .. conversions
             .Select(conversion => For(
                 conversion,
-                ConversionEvaluator.Evaluate(conversion, 1, books, tax),
+                ConversionEvaluator.Evaluate(conversion, 1, buying, selling, tax),
                 maxRunsPerDay))
             .OrderByDescending(earnings => earnings.GilPerDay),
     ];

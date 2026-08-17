@@ -10,16 +10,15 @@ namespace Rowena.Market;
 /// Deliberately terse. Names would triple the file for no benefit, and the world a listing sits
 /// on is not used by anything that reads this back.
 /// </remarks>
-internal sealed record StoredBook(uint I, long T, double V, long[][] L);
+internal sealed record StoredBook(string S, uint I, long T, double V, long[][] L);
 
 internal sealed record StoredSweep(long At, int Candidates, string[] Shortlist);
 
 /// <summary>One item's cheap summary as it goes to disk.</summary>
-internal sealed record StoredSummary(uint I, long T, long F, double V);
+internal sealed record StoredSummary(string S, uint I, long T, long F, double V);
 
 internal sealed record StoredPrices(
     int Version,
-    string Scope,
     StoredBook[] Books,
     StoredSummary[] Summaries,
     StoredSweep? Sweep);
@@ -35,35 +34,36 @@ internal sealed record StoredPrices(
 /// nothing, and beside the configuration rather than inside it: this is a cache, and losing it
 /// should cost a sweep and never a setting.
 ///
-/// The scope is stored with it. Prices from Light say nothing useful about Chaos, so data saved
-/// under a different one is discarded rather than quietly believed.
+/// Every entry carries the board it came from, because buying and selling happen on different ones
+/// and both are held at once. Prices from Light say nothing useful about Chaos, and nothing about
+/// what a retainer on Shiva can actually sell for, so they are never mixed.
 /// </remarks>
 internal sealed class PriceStore(string path, IPluginLog log)
 {
-    private const int CurrentVersion = 2;
+    private const int CurrentVersion = 3;
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
     public void Save(
-        string scope,
-        IEnumerable<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> books,
-        IEnumerable<(MarketSummary Summary, DateTimeOffset Fetched)> summaries,
+        IEnumerable<(string Scope, OrderBook Book, DateTimeOffset Fetched)> books,
+        IEnumerable<(string Scope, MarketSummary Summary, DateTimeOffset Fetched)> summaries,
         StoredSweep? sweep)
     {
         try
         {
             var stored = new StoredPrices(
                 CurrentVersion,
-                scope,
                 [
                     .. books.Select(entry => new StoredBook(
-                        entry.ItemId,
+                        entry.Scope,
+                        entry.Book.ItemId,
                         entry.Fetched.ToUnixTimeMilliseconds(),
                         entry.Book.SaleVelocityPerDay,
                         [.. entry.Book.Listings.Select(listing => new[] { listing.UnitPrice, listing.Quantity })])),
                 ],
                 [
                     .. summaries.Select(entry => new StoredSummary(
+                        entry.Scope,
                         entry.Summary.ItemId,
                         entry.Fetched.ToUnixTimeMilliseconds(),
                         entry.Summary.Floor ?? -1,
@@ -91,12 +91,11 @@ internal sealed class PriceStore(string path, IPluginLog log)
     /// <summary>
     /// Reads back what was saved, or null when there is nothing usable.
     /// </summary>
-    /// <param name="scope">Only data saved under this scope is returned.</param>
-    /// <param name="maxAge">Books older than this are dropped as they are read.</param>
+    /// <param name="maxAge">Entries older than this are dropped as they are read.</param>
     public (
-        List<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> Books,
-        List<(MarketSummary Summary, DateTimeOffset Fetched)> Summaries,
-        StoredSweep? Sweep)? Load(string scope, TimeSpan maxAge)
+        List<(string Scope, OrderBook Book, DateTimeOffset Fetched)> Books,
+        List<(string Scope, MarketSummary Summary, DateTimeOffset Fetched)> Summaries,
+        StoredSweep? Sweep)? Load(TimeSpan maxAge)
     {
         try
         {
@@ -115,14 +114,8 @@ internal sealed class PriceStore(string path, IPluginLog log)
                 return null;
             }
 
-            if (!string.Equals(stored.Scope, scope, StringComparison.OrdinalIgnoreCase))
-            {
-                log.Information($"Stored prices are for {stored.Scope}, not {scope}; ignoring them.");
-                return null;
-            }
-
             var cutoff = DateTimeOffset.UtcNow - maxAge;
-            var books = new List<(uint, OrderBook, DateTimeOffset)>();
+            var books = new List<(string, OrderBook, DateTimeOffset)>();
 
             foreach (var book in stored.Books ?? [])
             {
@@ -131,7 +124,7 @@ internal sealed class PriceStore(string path, IPluginLog log)
                     continue;
 
                 books.Add((
-                    book.I,
+                    book.S ?? "",
                     OrderBook.Create(
                         book.I,
                         (book.L ?? []).Where(pair => pair.Length >= 2)
@@ -141,7 +134,7 @@ internal sealed class PriceStore(string path, IPluginLog log)
                     fetched));
             }
 
-            var summaries = new List<(MarketSummary, DateTimeOffset)>();
+            var summaries = new List<(string, MarketSummary, DateTimeOffset)>();
 
             foreach (var summary in stored.Summaries ?? [])
             {
@@ -152,11 +145,12 @@ internal sealed class PriceStore(string path, IPluginLog log)
                 // A floor of -1 is how "nothing listed" survives a round trip, since the field is
                 // nullable in memory and a number on disk.
                 summaries.Add((
+                    summary.S ?? "",
                     new MarketSummary(summary.I, summary.F < 0 ? null : summary.F, summary.V),
                     fetched));
             }
 
-            log.Information($"Restored {books.Count} books and {summaries.Count} summaries for {scope}.");
+            log.Information($"Restored {books.Count} books and {summaries.Count} summaries.");
             return (books, summaries, stored.Sweep);
         }
         catch (Exception error)

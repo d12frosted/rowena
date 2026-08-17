@@ -50,7 +50,8 @@ internal sealed class MainWindow : Window
     private readonly Configuration config;
     private readonly Action save;
 
-    private readonly uint[] pricedItems;
+    private readonly uint[] boughtItems;
+    private readonly uint[] soldItems;
     private readonly Resource[] spendableCurrencies;
     private readonly Conversion[] flips;
 
@@ -91,12 +92,15 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        // Every tradable thing the catalogue mentions, on either side of any trade. This is
-        // the whole fetch list, and it is small enough to be one batched request.
-        pricedItems =
+        // Split by side, because they are priced on different boards. An item appearing as both is
+        // fetched twice, once for each, which is correct rather than wasteful: they are two numbers.
+        boughtItems = ItemsOn(conversion => conversion.Inputs);
+        soldItems = ItemsOn(conversion => conversion.Outputs);
+
+        uint[] ItemsOn(Func<Conversion, IReadOnlyList<ResourceAmount>> side) =>
         [
             .. catalog.Conversions
-                .SelectMany(conversion => conversion.Inputs.Concat(conversion.Outputs))
+                .SelectMany(side)
                 .Select(amount => amount.Resource)
                 .Where(resource => resource.Kind == ResourceKind.Item)
                 .Select(resource => resource.Id)
@@ -122,21 +126,22 @@ internal sealed class MainWindow : Window
 
     public override void Draw()
     {
-        var where = scope.Current;
+        var buying = scope.Buying;
+        var selling = scope.Selling;
 
-        DrawHeader(where);
+        DrawHeader(buying, selling);
         ImGui.Separator();
 
-        if (where is null)
+        if (buying is null || selling is null)
         {
-            ImGui.TextColored(Bad, "Not logged in, and no data centre set. Prices cannot be fetched.");
+            ImGui.TextColored(Bad, "Not logged in. Prices cannot be fetched.");
             return;
         }
 
         // Prices saved by a previous session, as soon as there is a board to compare them against.
-        market.RestoreOnce(where, SweepMaxAge);
-        RestoreSweepOnce();
-        PersistFinishedSweep(where);
+        market.RestoreOnce(SweepMaxAge);
+        RestoreSweepOnce(buying, selling);
+        PersistFinishedSweep();
 
         var current = Current();
 
@@ -146,7 +151,7 @@ internal sealed class MainWindow : Window
         ImGui.Spacing();
         DrawFlips(current);
         ImGui.Spacing();
-        DrawCrafts(current, where);
+        DrawCrafts(current, buying, selling);
     }
 
     /// <summary>
@@ -255,7 +260,7 @@ internal sealed class MainWindow : Window
         ImGui.Spacing();
     }
 
-    private void DrawCrafts(Model current, string where)
+    private void DrawCrafts(Model current, string buying, string selling)
     {
         DrawBasket();
 
@@ -269,7 +274,9 @@ internal sealed class MainWindow : Window
         }
 
         if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
-            sweep.Start(where, config.PriceBatchSize, config.SurveyBatchSize, config.FurnishingShortlist, SweepMaxAge);
+            sweep.Start(
+                buying, selling, config.PriceBatchSize, config.SurveyBatchSize,
+                config.FurnishingShortlist, SweepMaxAge);
 
         ImGui.SameLine();
 
@@ -371,13 +378,14 @@ internal sealed class MainWindow : Window
         ImGui.EndTable();
     }
 
-    private void DrawHeader(string? where)
+    private void DrawHeader(string? buying, string? selling)
     {
-        ImGui.TextUnformatted($"Pricing against {where ?? "nowhere"}");
+        // Both boards named, because they are different and the difference is the point.
+        ImGui.TextUnformatted($"Buying on {buying ?? "nowhere"}, selling on {selling ?? "nowhere"}");
         ImGui.SameLine();
 
         if (ImGui.Button("Refresh"))
-            market.RefreshInBackground(where, pricedItems, force: true);
+            RefreshCatalogue(buying, selling, force: true);
 
         ImGui.SameLine();
 
@@ -567,6 +575,12 @@ internal sealed class MainWindow : Window
         ImGui.EndTable();
     }
 
+    /// <summary>Where the inputs come from.</summary>
+    private Func<uint, OrderBook?> Buying => market.Lookup(scope.Buying ?? "");
+
+    /// <summary>Where the outputs go.</summary>
+    private Func<uint, OrderBook?> Selling => market.Lookup(scope.Selling ?? "");
+
     private TimeSpan SweepMaxAge => TimeSpan.FromHours(Math.Max(1, config.SweepMaxAgeHours));
 
     /// <summary>
@@ -576,13 +590,26 @@ internal sealed class MainWindow : Window
     /// Attempted once. A restore that finds nothing usable leaves the sweep idle, and retrying that
     /// every frame would walk the recipe sheet forever.
     /// </remarks>
-    private void RestoreSweepOnce()
+    private void RestoreSweepOnce(string buying, string selling)
     {
         if (restoreAttempted || market.RestoredSweep is not { } stored)
             return;
 
         restoreAttempted = true;
-        sweep.Restore(stored);
+        sweep.Restore(stored, buying, selling);
+    }
+
+    /// <summary>
+    /// Refreshes the catalogue's items, each on the board it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// Inputs and outputs go to different places, and an item can be both, so this is two passes
+    /// rather than one over a merged list.
+    /// </remarks>
+    private void RefreshCatalogue(string? buying, string? selling, bool force = false)
+    {
+        market.RefreshInBackground(buying, boughtItems, force);
+        market.RefreshInBackground(selling, soldItems, force);
     }
 
     /// <summary>
@@ -592,13 +619,13 @@ internal sealed class MainWindow : Window
     /// On a background task: it is a few hundred kilobytes of gzip and has no business inside a
     /// frame.
     /// </remarks>
-    private void PersistFinishedSweep(string where)
+    private void PersistFinishedSweep()
     {
         if (sweep.Snapshot() is not { } snapshot || snapshot.At == persistedSweepAt)
             return;
 
         persistedSweepAt = snapshot.At;
-        _ = Task.Run(() => market.Persist(where, snapshot));
+        _ = Task.Run(() => market.Persist(snapshot));
     }
 
     /// <summary>The current numbers, rebuilt only when they have had time to change.</summary>
@@ -621,7 +648,7 @@ internal sealed class MainWindow : Window
             .ToArray();
 
         var allocated = ConversionAllocation
-            .Allocate(flips, market.Lookup, tax, balances.Gil, config.SizingCap)
+            .Allocate(flips, Buying, Selling, tax, balances.Gil, config.SizingCap)
             .ToDictionary(allocation => allocation.Conversion.Id, StringComparer.Ordinal);
 
         var flipRows = flips.Select(conversion => BuildFlipRow(conversion, allocated, tax)).ToArray();
@@ -652,7 +679,7 @@ internal sealed class MainWindow : Window
             return ([], 0, 0);
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
-        var ranked = ConversionRanking.ByGilPerDay(sweep.Shortlist, market.Lookup, tax, cap);
+        var ranked = ConversionRanking.ByGilPerDay(sweep.Shortlist, Buying, Selling, tax, cap);
 
         var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
 
@@ -710,7 +737,7 @@ internal sealed class MainWindow : Window
             .Where(input => input.Resource.Kind == ResourceKind.Item)
             .Select(input =>
             {
-                var quote = market.Book(input.Resource.Id)?.CostToBuy(input.Quantity);
+                var quote = Buying(input.Resource.Id)?.CostToBuy(input.Quantity);
 
                 return new ItemCells.MaterialLine(
                     input.Resource.Id,
@@ -729,7 +756,7 @@ internal sealed class MainWindow : Window
             .Where(conversion => conversion.Consumes(currency) > 0)
             .Select(conversion =>
             {
-                var quote = ConversionEvaluator.Evaluate(conversion, 1, market.Lookup, tax);
+                var quote = ConversionEvaluator.Evaluate(conversion, 1, Buying, Selling, tax);
                 var perRun = conversion.Consumes(currency);
 
                 return new SinkRow(
@@ -760,7 +787,7 @@ internal sealed class MainWindow : Window
         IReadOnlyDictionary<string, Allocation> allocated,
         MarketTax tax)
     {
-        var single = ConversionEvaluator.Evaluate(conversion, 1, market.Lookup, tax);
+        var single = ConversionEvaluator.Evaluate(conversion, 1, Buying, Selling, tax);
 
         // Runs your own stock already covers, counting retainers. Deliberately reported beside
         // the outlay rather than subtracted from it: materials you happen to own are not free,
@@ -825,7 +852,7 @@ internal sealed class MainWindow : Window
     }
 
     /// <summary>Called on open so a stale window fills itself in without being asked.</summary>
-    public override void OnOpen() => market.RefreshInBackground(scope.Current, pricedItems);
+    public override void OnOpen() => RefreshCatalogue(scope.Buying, scope.Selling);
 
     public override void OnClose() => save();
 
