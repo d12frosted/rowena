@@ -171,6 +171,18 @@ internal sealed class MainWindow : Window
             $"  {sweep.Detail}, showing {current.Crafts.Length} of {current.CraftsRanked}"
             + (current.CraftsDiscarded > 0 ? $", {current.CraftsDiscarded} unpriceable" : ""));
 
+        // Which materials are doing the blocking. This is the evidence for whether following
+        // recipes down to raw materials is worth building, so it belongs on screen and not
+        // only in the log.
+        if (sweep.Blockers.Count > 0)
+        {
+            var worst = string.Join(
+                ", ",
+                sweep.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
+
+            ImGui.TextColored(Dim, $"    blocked mostly by: {worst}");
+        }
+
         if (current.Crafts.Length == 0)
             return;
 
@@ -210,6 +222,15 @@ internal sealed class MainWindow : Window
 
             ImGui.TableNextColumn();
             ImGui.TextColored(row.GilPerDay > 0 ? Good : Dim, $"{row.GilPerDay:N0}");
+            if (ImGui.IsItemHovered())
+            {
+                // Worth saying out loud on every row. The figure is the whole market's daily
+                // turnover, which you only earn by taking every sale from whoever has it now.
+                ImGui.SetTooltip(
+                    "A ceiling, not a forecast: it assumes you take every sale at today's price.\n"
+                    + "Furnishings sit in thin books, often a wall of single units at a round\n"
+                    + "number, so adding supply tends to move the price rather than join it.");
+            }
         }
 
         ImGui.EndTable();

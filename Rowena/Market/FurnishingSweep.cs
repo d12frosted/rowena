@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 using Rowena.Game;
 
 namespace Rowena.Market;
@@ -47,7 +48,22 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
     public DateTimeOffset? ReadyAt { get; private set; }
 
+    /// <summary>
+    /// The materials standing between the shortlist and a price, commonest first.
+    /// </summary>
+    /// <remarks>
+    /// This exists to settle one question with evidence instead of opinion: whether following
+    /// recipes down to raw materials is worth building. Direct-ingredient pricing discards any
+    /// furnishing whose materials are not on the board, and the tree would rescue precisely those
+    /// whose blocker is itself craftable. If the blockers turn out to be restoration mats, map
+    /// drops or untradables, no amount of tree walking helps and the work should not be done.
+    /// </remarks>
+    public IReadOnlyList<Blocker> Blockers { get; private set; } = [];
+
     public bool Running => State is Phase.Products or Phase.Shortlisting or Phase.Ingredients;
+
+    /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
+    public sealed record Blocker(string Material, int Blocks);
 
     public void Start(string? scope, int chunkSize, int shortlistSize)
     {
@@ -107,11 +123,15 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             await Price(scope, ingredients, chunkSize, "materials").ConfigureAwait(false);
 
             Shortlist = shortlist;
+            Blockers = Blocking(shortlist);
             State = Phase.Ready;
             ReadyAt = DateTimeOffset.UtcNow;
             Detail = $"{shortlist.Length} of {Candidates} costed";
 
             log.Information($"Furnishing sweep done: {shortlist.Length} of {Candidates} costed.");
+
+            foreach (var blocker in Blockers.Take(15))
+                log.Information($"  blocked by {blocker.Material} ({blocker.Blocks})");
         }
         catch (Exception error)
         {
@@ -158,6 +178,22 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             .OrderByDescending(candidate => candidate.Revenue)
             .Take(Math.Max(1, shortlistSize))
             .Select(candidate => candidate.Conversion),
+    ];
+
+    /// <summary>
+    /// Which materials are doing the blocking, counted across the shortlist.
+    /// </summary>
+    private Blocker[] Blocking(IReadOnlyList<Conversion> shortlist) =>
+    [
+        .. shortlist
+            .Select(conversion => ConversionEvaluator.Evaluate(conversion, 1, market.Lookup, MarketTax.Standard))
+            .Where(quote => !quote.IsExecutable)
+            // Unsourced is a material the board could not supply; Unpriced is one nobody lists at
+            // all. Both stop a row being costed, and for this question they count the same.
+            .SelectMany(quote => quote.Unsourced.Concat(quote.Unpriced))
+            .GroupBy(amount => amount.Resource.Name)
+            .Select(group => new Blocker(group.Key, group.Count()))
+            .OrderByDescending(blocker => blocker.Blocks),
     ];
 
     private double Revenue(Conversion conversion)
