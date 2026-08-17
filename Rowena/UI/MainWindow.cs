@@ -153,37 +153,32 @@ internal sealed class MainWindow : Window
     /// Crafts picked out but not yet handed over.
     /// </summary>
     /// <remarks>
-    /// It exists because Artisan's clipboard importer always makes a new list and nothing it exposes
-    /// can add to one. Exporting per click would leave a list per furnishing, so they gather here and
-    /// go over together.
+    /// Collected rather than exported per click, which would leave a list per furnishing, and sent as
+    /// a Teamcraft link rather than any one plugin's format, which is the only thing they all read.
     /// </remarks>
     private void DrawBasket()
     {
         if (basket.Count == 0)
             return;
 
-        // Named for what it becomes, and the two steps spelled out, because handing this over is not
-        // one click and pretending otherwise leaves you wondering why Artisan has not changed.
-        ImGui.TextUnformatted(
-            $"A new Artisan list: {basket.Count} recipes, {basket.TotalCrafts} crafts");
-
+        ImGui.TextUnformatted($"List: {basket.Count} items, {basket.TotalCrafts} crafts");
         ImGui.SameLine();
 
-        if (ImGui.Button("Copy"))
-            basket.CopyForArtisan(config.ArtisanListName);
+        if (ImGui.Button("Open in Teamcraft"))
+            basket.Open();
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                "Puts the list on your clipboard.\n"
-                + "Then in Artisan press \"Import List From Clipboard (Artisan Export)\".\n"
-                + "\n"
-                + "It arrives as a new list. Artisan offers no way to add to one it already has,\n"
-                + "which is why these gather here first.");
+                "Opens the list on ffxivteamcraft.com, which works out the sub-crafts.\n"
+                + "From there it exports to Artisan, Vulcan, or whatever else you use.");
         }
 
         ImGui.SameLine();
-        ImGui.TextColored(Dim, "then import it in Artisan");
+
+        if (ImGui.Button("Copy link"))
+            basket.Copy();
+
         ImGui.SameLine();
 
         if (ImGui.Button("Clear"))

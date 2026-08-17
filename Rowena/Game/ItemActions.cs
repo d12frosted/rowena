@@ -32,9 +32,6 @@ internal sealed class ItemActions(
     public bool AddToExistingList(string listKey, uint itemId, uint quantity) =>
         allaganTools.AddToExistingList(listKey, itemId, quantity);
 
-    /// <summary>Copies the basket in Artisan's import format.</summary>
-    public bool CopyBasketForArtisan() => basket.CopyForArtisan(config.ArtisanListName);
-
     public bool CanCraft => artisan.Available;
 
     public bool CraftingBusy => artisan.Busy;

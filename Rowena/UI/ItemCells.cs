@@ -194,12 +194,10 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
                 ImGui.TextColored(Dim, "   Artisan is busy");
             }
 
-            // Collected here because Artisan's importer only ever creates a new list, and copying
-            // per item would leave a list per furnishing.
+            // No plugin named here any more. It collects into a Teamcraft link, which Artisan,
+            // Vulcan and the site itself all read, so naming one of them would be arbitrary.
             var waiting = actions.Basket.Count;
-            var collect = waiting == 0
-                ? "Collect for a new Artisan list"
-                : $"Collect for a new Artisan list ({waiting} so far)";
+            var collect = waiting == 0 ? "Add to list" : $"Add to list ({waiting} so far)";
 
             if (ImGui.MenuItem(collect))
                 actions.Basket.Add(craftable, itemId, label, 1);

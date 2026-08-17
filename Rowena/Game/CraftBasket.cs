@@ -1,5 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
+using Dalamud.Utility;
+using Rowena.Core.Lists;
 
 namespace Rowena.Game;
 
@@ -7,9 +9,12 @@ namespace Rowena.Game;
 /// Things you have decided to craft, held until there are enough of them to be worth a list.
 /// </summary>
 /// <remarks>
-/// This exists because Artisan's importer always creates a new list and there is no way to append to
-/// one. Exporting on every click would leave you with a list per furnishing; gathering them here
-/// first means one list with everything in it.
+/// Gathered here and sent as one Teamcraft link, rather than exported per click, which would leave a
+/// list per furnishing.
+///
+/// Teamcraft rather than any one plugin's own format because it is the only thing they all read:
+/// Artisan imports and exports it, GatherBuddyReborn's Vulcan window has a tab for it, and the site
+/// itself resolves the sub-crafts, which no plugin-specific export here would have done.
 ///
 /// Kept in the configuration rather than the price cache. A basket is something you meant, not
 /// something that was fetched, so it should survive a reload for the same reason a setting does.
@@ -81,28 +86,37 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
         save();
     }
 
-    /// <summary>
-    /// Puts the basket on the clipboard in Artisan's import format.
-    /// </summary>
-    /// <returns>False when there is nothing to copy.</returns>
-    public bool CopyForArtisan(string name)
+    /// <summary>The Teamcraft link for everything collected, or empty when there is nothing.</summary>
+    public string Link() =>
+        TeamcraftList.Url(config.ArtisanBasket.Select(item => new TeamcraftEntry(item.ItemId, item.Quantity)));
+
+    /// <summary>Puts the link on the clipboard.</summary>
+    public bool Copy()
     {
-        if (config.ArtisanBasket.Count == 0)
+        var url = Link();
+        if (url.Length == 0)
+            return false;
+
+        ImGui.SetClipboardText(url);
+        log.Information($"Copied a Teamcraft link for {config.ArtisanBasket.Count} items.");
+        return true;
+    }
+
+    /// <summary>Opens the link in a browser.</summary>
+    public bool Open()
+    {
+        var url = Link();
+        if (url.Length == 0)
             return false;
 
         try
         {
-            var json = ArtisanList.Build(
-                name,
-                config.ArtisanBasket.Select(item => new ArtisanList.Entry(item.RecipeId, item.Quantity)));
-
-            ImGui.SetClipboardText(json);
-            log.Information($"Copied {config.ArtisanBasket.Count} recipes to the clipboard for Artisan.");
+            Util.OpenLink(url);
             return true;
         }
         catch (Exception error)
         {
-            log.Warning(error, "Could not build the Artisan list.");
+            log.Warning(error, "Could not open the Teamcraft link.");
             return false;
         }
     }
