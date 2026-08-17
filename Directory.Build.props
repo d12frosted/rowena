@@ -1,0 +1,30 @@
+<Project>
+
+  <!--
+    Nothing here needs Dalamud yet. The core library and its tests are deliberately
+    plain .NET so they build and run on any machine, including CI. The lookup below
+    is kept from the start so that adding a plugin project later is one csproj and
+    not a build-system change.
+
+    Order of preference:
+      1. DALAMUD_HOME environment variable (or -p:DalamudLibPath=... on the command line)
+      2. Windows: XIVLauncher's addon/Hooks/dev
+      3. macOS: XIV on Mac
+      4. Linux / XIVLauncher.Core: ~/.xlcore
+
+    Trailing slash matters, HintPath concatenates directly onto it.
+  -->
+  <PropertyGroup>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND '$(DALAMUD_HOME)' != ''">$(DALAMUD_HOME)/</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND '$(OS)' == 'Windows_NT'">$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND Exists('$(HOME)/Library/Application Support/XIV on Mac/dalamud/Hooks/dev')">$(HOME)/Library/Application Support/XIV on Mac/dalamud/Hooks/dev/</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND Exists('$(HOME)/.xlcore/dalamud/Hooks/dev')">$(HOME)/.xlcore/dalamud/Hooks/dev/</DalamudLibPath>
+  </PropertyGroup>
+
+  <!-- Only projects that actually reference Dalamud need it present to build. -->
+  <Target Name="CheckDalamudLibPath" BeforeTargets="BeforeBuild" Condition="'$(UsesDalamud)' == 'true'">
+    <Error Condition="!Exists('$(DalamudLibPath)Dalamud.dll')"
+           Text="Dalamud.dll not found under '$(DalamudLibPath)'. Set DALAMUD_HOME to your Dalamud dev directory (the one containing Dalamud.dll)." />
+  </Target>
+
+</Project>
