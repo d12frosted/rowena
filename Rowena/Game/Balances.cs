@@ -2,6 +2,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Rowena.Core.Conversions;
+using Rowena.IPC;
 
 namespace Rowena.Game;
 
@@ -21,16 +22,26 @@ namespace Rowena.Game;
 /// off it, and the raw pointers are only merely unsafe rather than loudly so, which is worse.
 /// Anything wanting these values on a background task must be handed them, not the object.
 /// </remarks>
-internal sealed class Balances(IObjectTable objects, IPluginLog log)
+internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTools, IPluginLog log)
 {
     /// <summary>Gil is just an item, and it lives with the other currencies.</summary>
     private const uint GilItemId = 1;
 
     public long Gil => Currency(GilItemId);
 
-    /// <summary>How many of a resource you hold, wherever the game keeps that kind.</summary>
+    /// <summary>
+    /// How many of a resource you hold, wherever it is kept.
+    /// </summary>
+    /// <remarks>
+    /// Items go through AllaganTools when it is there, because the game's own count covers your
+    /// bags, armoury and what you are wearing and stops at the retainer's door. A hundred Mount
+    /// Tokens sitting in a retainer read as none, which is the kind of undercount that quietly
+    /// tells you to go and buy what you already own.
+    /// </remarks>
     public long Held(Resource resource) =>
-        resource.Kind == ResourceKind.Currency ? Currency(resource.Id) : InBags(resource.Id);
+        resource.Kind == ResourceKind.Currency
+            ? Currency(resource.Id)
+            : allaganTools.Owned(resource.Id) ?? InBags(resource.Id);
 
     /// <summary>
     /// A bound currency, asking both places the game keeps them.

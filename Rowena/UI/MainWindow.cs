@@ -241,11 +241,12 @@ internal sealed class MainWindow : Window
             ImGui.TextColored(Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
         }
 
-        if (!ImGui.BeginTable("flips", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("flips", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, 55);
+        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("outlay", ImGuiTableColumnFlags.WidthFixed, 120);
         ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 120);
         ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
@@ -264,6 +265,8 @@ internal sealed class MainWindow : Window
                 ImGui.TableNextColumn();
                 ImGui.TextColored(Dim, "-");
                 ImGui.TableNextColumn();
+                ImGui.TextColored(row.HeldCovers > 0 ? Good : Dim, $"{row.HeldCovers}");
+                ImGui.TableNextColumn();
                 ImGui.TextColored(Dim, problem);
                 continue;
             }
@@ -274,6 +277,11 @@ internal sealed class MainWindow : Window
             ImGui.TextColored(tint, $"{row.Runs}");
             if (row.Idle && ImGui.IsItemHovered())
                 ImGui.SetTooltip("The shared inputs pay more on another row, or your gil will not cover a run.");
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(row.HeldCovers > 0 ? Good : Dim, $"{row.HeldCovers}");
+            if (row.HeldCovers > 0 && ImGui.IsItemHovered())
+                ImGui.SetTooltip("Runs your own stock already covers, retainers included. Not deducted from the outlay: what you hold is still worth what the board would pay for it.");
 
             ImGui.TableNextColumn();
             ImGui.TextColored(tint, $"{row.Outlay:N0}");
@@ -363,13 +371,23 @@ internal sealed class MainWindow : Window
     {
         var single = ConversionEvaluator.Evaluate(conversion, 1, market.Lookup, tax);
 
+        // Runs your own stock already covers, counting retainers. Deliberately reported beside
+        // the outlay rather than subtracted from it: materials you happen to own are not free,
+        // they are worth what the board would pay for them, and pricing them at nothing would
+        // flatter every row that touched something in a retainer.
+        var covers = conversion.Inputs
+            .Where(input => input.Resource.Kind == ResourceKind.Item)
+            .Select(input => balances.Held(input.Resource) / input.Quantity)
+            .DefaultIfEmpty(0)
+            .Min();
+
         if (!single.IsExecutable)
         {
             var problem = single.Unsourced.Count > 0
                 ? $"short {string.Join(", ", single.Unsourced)}"
                 : $"no price for {string.Join(", ", single.Unpriced)}";
 
-            return new FlipRow(conversion.Name, 0, 0, 0, null, null, true, problem);
+            return new FlipRow(conversion.Name, 0, covers, 0, 0, null, null, true, problem);
         }
 
         var allocation = allocated.GetValueOrDefault(conversion.Id);
@@ -380,10 +398,10 @@ internal sealed class MainWindow : Window
 
         return idle
             ? new FlipRow(
-                conversion.Name, 0, single.GilOutlay, single.Profit, single.ReturnOnOutlay,
+                conversion.Name, 0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay,
                 single.DaysToAbsorb, true, null)
             : new FlipRow(
-                conversion.Name, allocation!.Runs, allocation.GilOutlay, allocation.Profit,
+                conversion.Name, allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit,
                 allocation.ReturnOnOutlay, Multiply(single.DaysToAbsorb, allocation.Runs), false, null);
     }
 
@@ -450,6 +468,7 @@ internal sealed class MainWindow : Window
     private sealed record FlipRow(
         string Trade,
         int Runs,
+        long HeldCovers,
         long Outlay,
         long Profit,
         double? Roi,

@@ -32,7 +32,8 @@ public sealed class Plugin : IDalamudPlugin
         config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         var catalog = LoadCatalog();
-        var balances = new Balances(Objects, Log);
+        var allaganTools = new AllaganToolsIpc(PluginInterface, Log);
+        var balances = new Balances(Objects, allaganTools, Log);
         var scope = new PricingScope(config, balances);
 
         // Universalis asks callers to identify themselves, which costs nothing and makes
