@@ -13,6 +13,9 @@ internal static class Fixtures
     public const string RroneekHorn = "light-43598.json";
     public const string BarreltenderWhistle = "light-44502.json";
 
+    /// <summary>The aggregated endpoint's answer for a bench, a wardrobe and a Mount Token.</summary>
+    public const string Aggregated = "light-aggregated.json";
+
     /// <summary>
     /// A listing recorded at 48,795 gil for three units, carrying a tax of 7,319. Used to
     /// pin how the board rounds its cut.

@@ -51,6 +51,56 @@ public static class UniversalisJson
         return books;
     }
 
+    /// <summary>
+    /// Parses the aggregated endpoint, which summarises many items cheaply.
+    /// </summary>
+    /// <remarks>
+    /// The shape nests every figure under a scope: a data-centre answer and a region-wide one. Only
+    /// the data centre is read, because the region includes worlds you cannot list on, and a floor
+    /// from one of those would look like an opportunity that does not exist.
+    /// </remarks>
+    public static IReadOnlyDictionary<uint, MarketSummary> ParseSurvey(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        var summaries = new Dictionary<uint, MarketSummary>();
+
+        if (!document.RootElement.TryGetProperty("results", out var results))
+            return summaries;
+
+        foreach (var result in results.EnumerateArray())
+        {
+            if (!result.TryGetProperty("itemId", out var id))
+                continue;
+
+            var itemId = id.GetUInt32();
+            var quality = result.TryGetProperty("nq", out var nq) ? nq : default;
+
+            summaries[itemId] = new MarketSummary(
+                itemId,
+                DataCentre(quality, "minListing", "price") is { } floor ? (long)floor : null,
+                DataCentre(quality, "dailySaleVelocity", "quantity") ?? 0d);
+        }
+
+        return summaries;
+    }
+
+    /// <summary>Reads one figure out of the data-centre branch of a summary section.</summary>
+    private static double? DataCentre(JsonElement quality, string section, string field)
+    {
+        if (quality.ValueKind != JsonValueKind.Object
+            || !quality.TryGetProperty(section, out var scoped)
+            || !scoped.TryGetProperty("dc", out var dc)
+            || dc.ValueKind != JsonValueKind.Object
+            || !dc.TryGetProperty(field, out var value)
+            || value.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return value.GetDouble();
+    }
+
     private static OrderBook ReadItem(JsonElement item)
     {
         var itemId = item.TryGetProperty("itemID", out var id) ? id.GetUInt32() : 0u;

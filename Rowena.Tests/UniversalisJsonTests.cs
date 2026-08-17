@@ -48,6 +48,53 @@ public class UniversalisJsonTests
     }
 
     [Fact]
+    public void ParsesASurveyOfSeveralItems()
+    {
+        var survey = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated));
+
+        Assert.Equal(3, survey.Count);
+        Assert.Equal(18_500, survey[6524u].Floor);
+        Assert.Equal(25_000, survey[6549u].Floor);
+        Assert.Equal(48_795, survey[41807u].Floor);
+        Assert.All(survey.Values, summary => Assert.True(summary.SaleVelocityPerDay > 0));
+    }
+
+    [Fact]
+    public void ASurveyKnowsWhatTurnsOverAndWhatDoesNot()
+    {
+        var survey = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated));
+
+        // Revenue potential is the whole point of a survey: it is the ceiling on what anyone can
+        // earn from an item in a day, so it decides what is worth the cost of a full book.
+        Assert.All(survey.Values, summary => Assert.True(summary.Trades));
+        Assert.True(survey[41807u].DailyRevenue > survey[6524u].DailyRevenue);
+    }
+
+    [Fact]
+    public void ASurveyOmitsWhatItWasNotAsked()
+    {
+        Assert.False(UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated)).ContainsKey(1u));
+    }
+
+    [Fact]
+    public void ASurveyOfNothingIsEmptyRatherThanAFailure()
+    {
+        Assert.Empty(UniversalisJson.ParseSurvey("{ \"results\": [], \"failedItems\": [] }"));
+        Assert.Empty(UniversalisJson.ParseSurvey("{}"));
+    }
+
+    [Fact]
+    public void TheTwoEndpointsDisagreeAboutHowFastThingsSell()
+    {
+        // Recorded, not hypothetical. Whichever is right, mixing them would mean shortlisting an
+        // item on one number and ranking it on another, so one has to be imposed on both.
+        var fromListings = Fixtures.Book(Fixtures.MountToken).SaleVelocityPerDay;
+        var fromSurvey = UniversalisJson.ParseSurvey(Fixtures.Read(Fixtures.Aggregated))[41807u].SaleVelocityPerDay;
+
+        Assert.True(Math.Abs(fromListings - fromSurvey) > 1d, "the two sources are expected to differ");
+    }
+
+    [Fact]
     public void ParsesTheMountAsWell()
     {
         var book = Fixtures.Book(Fixtures.RroneekHorn);

@@ -79,14 +79,14 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
-    public void Start(string? scope, int chunkSize, int shortlistSize, TimeSpan maxAge)
+    public void Start(string? scope, int chunkSize, int surveyBatch, int shortlistSize, TimeSpan maxAge)
     {
         if (Running || string.IsNullOrWhiteSpace(scope))
             return;
 
         State = Phase.Products;
         Detail = "reading the sheets";
-        _ = Task.Run(() => Run(scope, chunkSize, shortlistSize, maxAge));
+        _ = Task.Run(() => Run(scope, chunkSize, surveyBatch, shortlistSize, maxAge));
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
             : null;
 
-    private async Task Run(string scope, int chunkSize, int shortlistSize, TimeSpan maxAge)
+    private async Task Run(string scope, int chunkSize, int surveyBatch, int shortlistSize, TimeSpan maxAge)
     {
         try
         {
@@ -171,17 +171,20 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 .Distinct()
                 .ToArray();
 
-            // Only what is missing or stale. This is what makes Re-sweep resume rather than start
-            // again: a run that lost a hundred products to timeouts asks for those hundred next
-            // time, not for all nine hundred.
-            var wanted = products.Where(id => market.IsStale(id, maxAge)).ToArray();
+            // Surveyed, not priced. Nine hundred items with their listings is a hundred and fifteen
+            // requests that mostly time out; nine hundred summarised is nine requests that do not.
+            // Depth is only needed for what survives the shortlist.
+            //
+            // Only what is missing or stale, which is what makes Re-sweep resume rather than start
+            // again: a run that lost a hundred products asks for those hundred next time.
+            var wanted = products.Where(id => market.SummaryIsStale(id, maxAge)).ToArray();
 
             State = Phase.Products;
-            await Price(scope, wanted, chunkSize, "products").ConfigureAwait(false);
+            await Survey(scope, wanted, surveyBatch).ConfigureAwait(false);
 
-            // Counted from the cache rather than from the fetch, so prices carried over from an
-            // earlier run count exactly as much as ones just fetched.
-            var gaps = products.Count(id => market.Book(id) is null);
+            // Counted from the cache rather than from the fetch, so data carried over from an
+            // earlier run counts exactly as much as what was just fetched.
+            var gaps = products.Count(id => market.Summary(id) is null);
 
             State = Phase.Shortlisting;
             Detail = "picking what is worth costing";
@@ -197,8 +200,8 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 if (gaps > 0)
                 {
                     State = Phase.Partial;
-                    Detail = $"no prices for {gaps} of {products.Length} furnishings, so nothing could "
-                        + "be ranked. Re-sweep asks only for the gaps.";
+                    Detail = $"no market data for {gaps} of {products.Length} furnishings, so nothing "
+                        + "could be ranked. Re-sweep asks only for the gaps.";
                 }
                 else
                 {
@@ -209,16 +212,19 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 return;
             }
 
-            var ingredients = shortlist
-                .SelectMany(conversion => conversion.Inputs)
-                .Where(input => input.Resource.Kind == ResourceKind.Item)
-                .Select(input => input.Resource.Id)
+            // Full books now, and for the products too: a summary carries no depth, and the profit
+            // on a craft is the difference between what the materials really cost and what the
+            // product really fetches.
+            var needDepth = shortlist
+                .SelectMany(conversion => conversion.Inputs.Concat(conversion.Outputs))
+                .Where(amount => amount.Resource.Kind == ResourceKind.Item)
+                .Select(amount => amount.Resource.Id)
                 .Distinct()
                 .Where(id => market.IsStale(id, maxAge))
                 .ToArray();
 
             State = Phase.Ingredients;
-            var materials = await Price(scope, ingredients, chunkSize, "materials").ConfigureAwait(false);
+            var materials = await Price(scope, needDepth, chunkSize, "materials").ConfigureAwait(false);
 
             Shortlist = shortlist;
             Blockers = Blocking(shortlist);
@@ -242,6 +248,21 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             Detail = error.Message;
             log.Error(error, "Furnishing sweep failed.");
         }
+    }
+
+    private async Task<MarketCache.PricingResult> Survey(string scope, uint[] ids, int batchSize)
+    {
+        if (ids.Length == 0)
+            return new MarketCache.PricingResult(0, 0, 0);
+
+        while (market.Busy)
+            await Task.Delay(250).ConfigureAwait(false);
+
+        Detail = $"surveying {ids.Length} furnishings";
+
+        return await market
+            .SurveyAsync(scope, ids, batchSize, (done, total) => Detail = $"surveying: {done} of {total}")
+            .ConfigureAwait(false);
     }
 
     private async Task<MarketCache.PricingResult> Price(string scope, uint[] ids, int chunkSize, string what)
@@ -305,10 +326,8 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
         foreach (var output in conversion.Outputs)
         {
-            if (market.Book(output.Resource.Id) is not { } book || book.Floor is not { } floor)
-                continue;
-
-            total += floor * book.SaleVelocityPerDay * output.Quantity;
+            if (market.Summary(output.Resource.Id) is { } summary)
+                total += summary.DailyRevenue * output.Quantity;
         }
 
         return total;

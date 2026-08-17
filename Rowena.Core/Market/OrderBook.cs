@@ -56,6 +56,18 @@ public sealed class OrderBook
     /// <summary>An empty book, which is different from an absent one: nothing is for sale.</summary>
     public static OrderBook Empty(uint itemId) => Create(itemId, []);
 
+    /// <summary>
+    /// The same listings, with the sale rate replaced.
+    /// </summary>
+    /// <remarks>
+    /// Universalis reports two different sale velocities, one alongside the listings and one from
+    /// its summary endpoint, and they disagree: for one furnishing they differ by more than three
+    /// times. Whichever is right, using both would mean shortlisting an item on one number and
+    /// ranking it on another. This exists so a single source can be imposed on everything.
+    /// </remarks>
+    public OrderBook WithVelocity(double saleVelocityPerDay) =>
+        new(ItemId, Listings, saleVelocityPerDay, Retrieved);
+
     /// <summary>Total units listed.</summary>
     public int UnitsListed => Listings.Sum(listing => listing.Quantity);
 

@@ -158,7 +158,7 @@ internal sealed class MainWindow : Window
         }
 
         if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
-            sweep.Start(where, config.PriceBatchSize, config.FurnishingShortlist, SweepMaxAge);
+            sweep.Start(where, config.PriceBatchSize, config.SurveyBatchSize, config.FurnishingShortlist, SweepMaxAge);
 
         ImGui.SameLine();
 

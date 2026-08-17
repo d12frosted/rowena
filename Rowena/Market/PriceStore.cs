@@ -14,7 +14,15 @@ internal sealed record StoredBook(uint I, long T, double V, long[][] L);
 
 internal sealed record StoredSweep(long At, int Candidates, string[] Shortlist);
 
-internal sealed record StoredPrices(int Version, string Scope, StoredBook[] Books, StoredSweep? Sweep);
+/// <summary>One item's cheap summary as it goes to disk.</summary>
+internal sealed record StoredSummary(uint I, long T, long F, double V);
+
+internal sealed record StoredPrices(
+    int Version,
+    string Scope,
+    StoredBook[] Books,
+    StoredSummary[] Summaries,
+    StoredSweep? Sweep);
 
 /// <summary>
 /// Keeps the swept prices across a reload.
@@ -32,13 +40,14 @@ internal sealed record StoredPrices(int Version, string Scope, StoredBook[] Book
 /// </remarks>
 internal sealed class PriceStore(string path, IPluginLog log)
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
     public void Save(
         string scope,
         IEnumerable<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> books,
+        IEnumerable<(MarketSummary Summary, DateTimeOffset Fetched)> summaries,
         StoredSweep? sweep)
     {
         try
@@ -53,6 +62,13 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         entry.Book.SaleVelocityPerDay,
                         [.. entry.Book.Listings.Select(listing => new[] { listing.UnitPrice, listing.Quantity })])),
                 ],
+                [
+                    .. summaries.Select(entry => new StoredSummary(
+                        entry.Summary.ItemId,
+                        entry.Fetched.ToUnixTimeMilliseconds(),
+                        entry.Summary.Floor ?? -1,
+                        entry.Summary.SaleVelocityPerDay)),
+                ],
                 sweep);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -61,7 +77,9 @@ internal sealed class PriceStore(string path, IPluginLog log)
             using var gzip = new GZipStream(file, CompressionLevel.Optimal);
             JsonSerializer.Serialize(gzip, stored, Options);
 
-            log.Information($"Saved {stored.Books.Length} order books to {Path.GetFileName(path)}.");
+            log.Information(
+                $"Saved {stored.Books.Length} books and {stored.Summaries.Length} summaries "
+                + $"to {Path.GetFileName(path)}.");
         }
         catch (Exception error)
         {
@@ -75,9 +93,10 @@ internal sealed class PriceStore(string path, IPluginLog log)
     /// </summary>
     /// <param name="scope">Only data saved under this scope is returned.</param>
     /// <param name="maxAge">Books older than this are dropped as they are read.</param>
-    public (List<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> Books, StoredSweep? Sweep)? Load(
-        string scope,
-        TimeSpan maxAge)
+    public (
+        List<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> Books,
+        List<(MarketSummary Summary, DateTimeOffset Fetched)> Summaries,
+        StoredSweep? Sweep)? Load(string scope, TimeSpan maxAge)
     {
         try
         {
@@ -122,8 +141,23 @@ internal sealed class PriceStore(string path, IPluginLog log)
                     fetched));
             }
 
-            log.Information($"Restored {books.Count} order books for {scope}.");
-            return (books, stored.Sweep);
+            var summaries = new List<(MarketSummary, DateTimeOffset)>();
+
+            foreach (var summary in stored.Summaries ?? [])
+            {
+                var fetched = DateTimeOffset.FromUnixTimeMilliseconds(summary.T);
+                if (fetched < cutoff)
+                    continue;
+
+                // A floor of -1 is how "nothing listed" survives a round trip, since the field is
+                // nullable in memory and a number on disk.
+                summaries.Add((
+                    new MarketSummary(summary.I, summary.F < 0 ? null : summary.F, summary.V),
+                    fetched));
+            }
+
+            log.Information($"Restored {books.Count} books and {summaries.Count} summaries for {scope}.");
+            return (books, summaries, stored.Sweep);
         }
         catch (Exception error)
         {

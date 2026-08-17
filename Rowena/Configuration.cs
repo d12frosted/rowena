@@ -39,11 +39,22 @@ public sealed class Configuration : IPluginConfiguration
     /// How many item ids go into one Universalis request.
     /// </summary>
     /// <remarks>
-    /// Twenty, measured rather than chosen. Against Light, twenty answers reliably while fifty
-    /// and a hundred both time out with a 504 on every attempt. Raising this does not make a
+    /// Eight, measured rather than chosen, and revised downward once. Universalis times out at ten
+    /// seconds and its response time grows with the id count: ten ids reliably 504, and an earlier
+    /// reading of twenty only passed because it landed at 8.4 seconds. Raising this does not make a
     /// sweep faster, it makes it fail.
     /// </remarks>
-    public int PriceBatchSize { get; set; } = 20;
+    public int PriceBatchSize { get; set; } = 8;
+
+    /// <summary>
+    /// How many item ids go into one summary request.
+    /// </summary>
+    /// <remarks>
+    /// A hundred, and comfortably so: a hundred summarised comes back in under two seconds where ten
+    /// with their listings times out. The summary carries no depth, which is why the first pass of a
+    /// sweep can be this wide and the second cannot.
+    /// </remarks>
+    public int SurveyBatchSize { get; set; } = 100;
 
     /// <summary>
     /// How many furnishings to cost, after ranking them all on revenue potential.

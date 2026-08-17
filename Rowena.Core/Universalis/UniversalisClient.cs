@@ -17,6 +17,18 @@ public interface IMarketDataSource
         string scope,
         IReadOnlyCollection<uint> itemIds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Prices and sale rates only, for many items at once.
+    /// </summary>
+    /// <remarks>
+    /// Far cheaper than <see cref="FetchAsync"/> and the right first pass over anything large. It
+    /// carries no depth, so nothing can be costed from it.
+    /// </remarks>
+    Task<IReadOnlyDictionary<uint, MarketSummary>> SurveyAsync(
+        string scope,
+        IReadOnlyCollection<uint> itemIds,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Fetches order books from Universalis.</summary>
@@ -49,5 +61,23 @@ public sealed class UniversalisClient(HttpClient http, int listings = 40) : IMar
 
         var json = await http.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
         return UniversalisJson.ParseItems(json);
+    }
+
+    public async Task<IReadOnlyDictionary<uint, MarketSummary>> SurveyAsync(
+        string scope,
+        IReadOnlyCollection<uint> itemIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+            throw new ArgumentException("No world or data centre to price against.", nameof(scope));
+
+        if (itemIds.Count == 0)
+            return new Dictionary<uint, MarketSummary>();
+
+        var ids = string.Join(',', itemIds);
+        var url = $"https://universalis.app/api/v2/aggregated/{Uri.EscapeDataString(scope)}/{ids}";
+
+        var json = await http.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
+        return UniversalisJson.ParseSurvey(json);
     }
 }
