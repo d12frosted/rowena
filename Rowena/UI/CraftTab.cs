@@ -178,37 +178,61 @@ internal sealed class CraftTab
         if (sweep.Running)
         {
             ImGui.TextColored(Palette.Dim, $"  {sweep.Detail}");
-            return;
+
+            // The ranking below is the previous one, and stays up rather than being replaced by an
+            // empty screen for the several minutes a run takes. Said out loud, because a table that
+            // quietly refers to a different fetch than the line above it is the worse failure.
+            if (sweep.ReadyAt is { } previous)
+            {
+                ImGui.TextColored(
+                    Palette.Dim,
+                    $"    still the ranking from {Phrases.Ago(DateTimeOffset.UtcNow - previous)} ago, "
+                    + "improving as prices arrive");
+            }
         }
-
-        if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
-            sweep.Start(
-                buying, selling, config.PriceBatchSize, config.SurveyBatchSize,
-                config.FurnishingShortlist, config.SweepAge());
-
-        ImGui.SameLine();
-
-        if (sweep.State == FurnishingSweep.Phase.Failed)
+        else
         {
-            ImGui.TextColored(Palette.Bad, sweep.Detail);
-            return;
+            if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
+                sweep.Start(
+                    buying, selling, config.PriceBatchSize, config.SurveyBatchSize,
+                    config.FurnishingShortlist, config.SweepAge());
+
+            ImGui.SameLine();
+
+            if (sweep.State == FurnishingSweep.Phase.Failed)
+                ImGui.TextColored(Palette.Bad, sweep.Detail);
+            else if (sweep.ReadyAt is null)
+                // Said plainly, because it is minutes of small polite requests and should not start
+                // itself the first time the window happens to open.
+                ImGui.TextColored(
+                    Palette.Dim, "  not swept yet. Eight ids a request, so this takes a few minutes.");
+            else
+                DrawFinished();
         }
 
-        if (sweep.ReadyAt is null)
+        // Which materials are doing the blocking. This is the evidence for whether following
+        // recipes down to raw materials is worth building, so it belongs on screen and not
+        // only in the log.
+        if (sweep.Blockers.Count > 0)
         {
-            // Said plainly, because it is minutes of small polite requests and should not start
-            // itself the first time the window happens to open.
-            ImGui.TextColored(
-                Palette.Dim,
-                "  not swept yet. Eight ids a request, so this takes a few minutes.");
-            return;
-        }
+            var worst = string.Join(
+                ", ",
+                sweep.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
 
+            ImGui.TextColored(Palette.Dim, $"    blocked mostly by: {worst}");
+        }
+    }
+
+    /// <summary>What the last completed run found, and how long ago it found it.</summary>
+    /// <remarks>
+    /// Never a silent cap: the table is trimmed for legibility and says by how much. The age is shown
+    /// because a restored sweep can be hours old, and that is fine for choosing what to make but
+    /// should not be mistaken for live depth.
+    /// </remarks>
+    private void DrawFinished()
+    {
         var current = model.Current;
 
-        // Never a silent cap: the table is trimmed for legibility and says by how much. The age is
-        // shown because a restored sweep can be hours old, and that is fine for choosing what to
-        // make but should not be mistaken for live depth.
         var age = sweep.ReadyAt is { } at ? $"swept {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
 
         var incomplete = sweep.State == FurnishingSweep.Phase.Partial;
@@ -222,18 +246,6 @@ internal sealed class CraftTab
                 ? $", showing {current.Crafts.Length} of {current.Ranked}"
                   + (current.Discarded > 0 ? $", {current.Discarded} unpriceable" : "")
                 : ""));
-
-        // Which materials are doing the blocking. This is the evidence for whether following
-        // recipes down to raw materials is worth building, so it belongs on screen and not
-        // only in the log.
-        if (sweep.Blockers.Count > 0)
-        {
-            var worst = string.Join(
-                ", ",
-                sweep.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
-
-            ImGui.TextColored(Palette.Dim, $"    blocked mostly by: {worst}");
-        }
     }
 
     private void DrawTable()
@@ -302,7 +314,7 @@ internal sealed class CraftTab
     /// </remarks>
     private Model Build()
     {
-        if (!sweep.HasResults || sweep.Shortlist.Count == 0)
+        if (!sweep.HasResults)
             return new Model([], 0, 0);
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;

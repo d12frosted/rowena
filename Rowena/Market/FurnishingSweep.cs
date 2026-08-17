@@ -73,8 +73,17 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
 
     public bool Running => State is Phase.Products or Phase.Shortlisting or Phase.Ingredients;
 
-    /// <summary>There is a shortlist worth showing, complete or not.</summary>
-    public bool HasResults => State is Phase.Ready or Phase.Partial;
+    /// <summary>
+    /// There is a shortlist worth showing, complete or not.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the shortlist rather than of the phase, so a run in progress does not count as having
+    /// nothing. This used to mean "finished", which made Re-sweep destroy the ranking you pressed it
+    /// while reading and give you an empty screen for the several minutes it took to build another.
+    /// A shortlist stays valid until a run replaces it, and the prices under it only improve as the
+    /// run proceeds.
+    /// </remarks>
+    public bool HasResults => Shortlist.Count > 0;
 
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
