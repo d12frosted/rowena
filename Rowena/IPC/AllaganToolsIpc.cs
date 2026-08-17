@@ -38,6 +38,9 @@ internal sealed class AllaganToolsIpc(IDalamudPluginInterface plugin, IPluginLog
     private readonly ICallGateSubscriber<uint, ulong, int, uint> itemCount =
         plugin.GetIpcSubscriber<uint, ulong, int, uint>($"{Prefix}.ItemCount");
 
+    private readonly ICallGateSubscriber<string, Dictionary<uint, uint>, string> addCraftList =
+        plugin.GetIpcSubscriber<string, Dictionary<uint, uint>, string>($"{Prefix}.AddNewCraftList");
+
     private ulong[] cachedOwners = [];
     private DateTime ownersCachedAt = DateTime.MinValue;
 
@@ -86,6 +89,28 @@ internal sealed class AllaganToolsIpc(IDalamudPluginInterface plugin, IPluginLog
         }
 
         return answered ? total : null;
+    }
+
+    /// <summary>
+    /// Creates a craft list. Returns its name or id, or null if it could not be made.
+    /// </summary>
+    /// <remarks>
+    /// This is the handoff GatherBuddyReborn had no gate for. AllaganTools owns lists and already
+    /// knows what you hold, so it can work out what is still to be bought or gathered, which is
+    /// exactly the part worth not doing by hand.
+    /// </remarks>
+    public string? AddCraftList(string name, IReadOnlyDictionary<uint, uint> items)
+    {
+        if (!Available || items.Count == 0)
+            return null;
+
+        var payload = items.ToDictionary(entry => entry.Key, entry => entry.Value);
+        var result = Try<string?>(() => addCraftList.InvokeFunc(name, payload), null);
+
+        if (result is not null)
+            log.Information($"Created AllaganTools craft list '{name}' with {items.Count} items.");
+
+        return result;
     }
 
     private ulong[] Owners()

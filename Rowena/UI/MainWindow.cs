@@ -44,6 +44,8 @@ internal sealed class MainWindow : Window
     private readonly PricingScope scope;
     private readonly GatherBuddyIpc gatherBuddy;
     private readonly FurnishingSweep sweep;
+    private readonly Furnishings furnishings;
+    private readonly ItemCells cells;
     private readonly Configuration config;
     private readonly Action save;
 
@@ -61,6 +63,8 @@ internal sealed class MainWindow : Window
         PricingScope scope,
         GatherBuddyIpc gatherBuddy,
         FurnishingSweep sweep,
+        Furnishings furnishings,
+        ItemCells cells,
         Configuration config,
         Action save)
         : base("Rowena###rowena-main")
@@ -71,6 +75,8 @@ internal sealed class MainWindow : Window
         this.scope = scope;
         this.gatherBuddy = gatherBuddy;
         this.sweep = sweep;
+        this.furnishings = furnishings;
+        this.cells = cells;
         this.config = config;
         this.save = save;
 
@@ -203,7 +209,7 @@ internal sealed class MainWindow : Window
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(row.Item);
+            cells.Draw(row.Item, row.ItemId, row.RecipeId, row.Breakdown);
 
             ImGui.TableNextColumn();
             ImGui.TextColored(Dim, row.Job);
@@ -298,7 +304,10 @@ internal sealed class MainWindow : Window
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(row.Trade);
+                if (row.ItemId is { } sinkItem)
+                    cells.Draw(row.Trade, sinkItem);
+                else
+                    ImGui.TextUnformatted(row.Trade);
 
                 // An unpriced row has nothing to say, and saying 0.00 would be a confident
                 // answer where there is no data at all.
@@ -369,7 +378,10 @@ internal sealed class MainWindow : Window
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(row.Trade);
+            if (row.ItemId is { } flipItem)
+                cells.Draw(row.Trade, flipItem);
+            else
+                ImGui.TextUnformatted(row.Trade);
 
             if (row.Problem is { } problem)
             {
@@ -467,18 +479,53 @@ internal sealed class MainWindow : Window
 
         var rows = priceable
             .Take(CraftsInTable)
-            .Select(earnings => new CraftRow(
-                earnings.Conversion.Name,
-                earnings.Conversion.Venue,
-                earnings.Quote.GilOutlay,
-                earnings.Quote.Profit,
-                earnings.Quote.ReturnOnOutlay,
-                earnings.RunsPerDay,
-                earnings.GilPerDay))
+            .Select(earnings =>
+            {
+                var made = furnishings.Behind(earnings.Conversion.Id);
+
+                return new CraftRow(
+                    earnings.Conversion.Name,
+                    made?.ItemId ?? 0,
+                    made?.RecipeId,
+                    earnings.Conversion.Venue,
+                    earnings.Quote.GilOutlay,
+                    earnings.Quote.Profit,
+                    earnings.Quote.ReturnOnOutlay,
+                    earnings.RunsPerDay,
+                    earnings.GilPerDay,
+                    Breakdown(earnings.Conversion));
+            })
             .ToArray();
 
         return (rows, priceable.Length, ranked.Count - priceable.Length);
     }
+
+    /// <summary>
+    /// The tradable thing a conversion ends up with, when there is exactly one worth showing.
+    /// </summary>
+    private static uint? Produced(Conversion conversion) =>
+        conversion.Outputs
+            .Where(output => output.Resource.Kind == ResourceKind.Item)
+            .Select(output => (uint?)output.Resource.Id)
+            .FirstOrDefault();
+
+    /// <summary>What each material costs, for the tooltip.</summary>
+    private ItemCells.MaterialLine[] Breakdown(Conversion conversion) =>
+    [
+        .. conversion.Inputs
+            .Where(input => input.Resource.Kind == ResourceKind.Item)
+            .Select(input =>
+            {
+                var quote = market.Book(input.Resource.Id)?.CostToBuy(input.Quantity);
+
+                return new ItemCells.MaterialLine(
+                    input.Resource.Id,
+                    input.Resource.Name,
+                    input.Quantity,
+                    quote?.Total ?? 0,
+                    quote is { IsComplete: true });
+            }),
+    ];
 
     private SinkGroup BuildSinkGroup(Resource currency, MarketTax tax)
     {
@@ -493,6 +540,7 @@ internal sealed class MainWindow : Window
 
                 return new SinkRow(
                     conversion.Name,
+                    Produced(conversion),
                     quote.IsExecutable ? quote.GilPer(currency) : null,
                     quote.Profit,
                     perRun == 0 ? null : held / perRun,
@@ -535,7 +583,7 @@ internal sealed class MainWindow : Window
                 ? $"short {string.Join(", ", single.Unsourced)}"
                 : $"no price for {string.Join(", ", single.Unpriced)}";
 
-            return new FlipRow(conversion.Name, 0, covers, 0, 0, null, null, true, problem);
+            return new FlipRow(conversion.Name, Produced(conversion), 0, covers, 0, 0, null, null, true, problem);
         }
 
         var allocation = allocated.GetValueOrDefault(conversion.Id);
@@ -546,10 +594,10 @@ internal sealed class MainWindow : Window
 
         return idle
             ? new FlipRow(
-                conversion.Name, 0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay,
+                conversion.Name, Produced(conversion), 0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay,
                 single.DaysToAbsorb, true, null)
             : new FlipRow(
-                conversion.Name, allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit,
+                conversion.Name, Produced(conversion), allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit,
                 allocation.ReturnOnOutlay, Multiply(single.DaysToAbsorb, allocation.Runs), false, null);
     }
 
@@ -604,6 +652,7 @@ internal sealed class MainWindow : Window
 
     private sealed record SinkRow(
         string Trade,
+        uint? ItemId,
         double? Rate,
         long Profit,
         long? Covers,
@@ -615,6 +664,7 @@ internal sealed class MainWindow : Window
 
     private sealed record FlipRow(
         string Trade,
+        uint? ItemId,
         int Runs,
         long HeldCovers,
         long Outlay,
@@ -626,12 +676,15 @@ internal sealed class MainWindow : Window
 
     private sealed record CraftRow(
         string Item,
+        uint ItemId,
+        uint? RecipeId,
         string Job,
         long Materials,
         long Profit,
         double? Roi,
         double SalesPerDay,
-        long GilPerDay);
+        long GilPerDay,
+        ItemCells.MaterialLine[] Breakdown);
 
     private sealed record Model(
         long Gil,

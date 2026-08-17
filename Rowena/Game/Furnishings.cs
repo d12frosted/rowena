@@ -25,9 +25,22 @@ namespace Rowena.Game;
 internal sealed class Furnishings(IDataManager data, IPluginLog log)
 {
     private IReadOnlyList<Conversion>? cached;
+    private readonly Dictionary<string, Made> made = new(StringComparer.Ordinal);
+
+    /// <summary>What a conversion actually is in the game's terms.</summary>
+    /// <remarks>
+    /// Kept beside the conversions rather than inside them. A recipe id is what the crafting log
+    /// and Artisan want, and neither is any business of a project that does not reference the
+    /// game.
+    /// </remarks>
+    internal readonly record struct Made(uint RecipeId, uint ItemId);
 
     /// <summary>Built once. The sheets do not change while the game is running.</summary>
     public IReadOnlyList<Conversion> Craftable() => cached ??= Build();
+
+    /// <summary>The recipe and product behind a conversion, if it came from here.</summary>
+    public Made? Behind(string conversionId) =>
+        made.TryGetValue(conversionId, out var found) ? found : null;
 
     private IReadOnlyList<Conversion> Build()
     {
@@ -64,6 +77,7 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
                 continue;
 
             var name = product.Name.ExtractText();
+            made[$"craft-{recipe.RowId}"] = new Made(recipe.RowId, resultId);
 
             conversions.Add(new Conversion(
                 $"craft-{recipe.RowId}",
