@@ -19,7 +19,7 @@ namespace Rowena.Game;
 /// Kept in the configuration rather than the price cache. A basket is something you meant, not
 /// something that was fetched, so it should survive a reload for the same reason a setting does.
 /// </remarks>
-internal sealed class CraftBasket(Configuration config, Action save, IPluginLog log)
+internal sealed class CraftBasket(Configuration config, Recipes recipes, Action save, IPluginLog log)
 {
     public IReadOnlyList<Configuration.BasketItem> Items => config.ArtisanBasket;
 
@@ -103,11 +103,22 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
     }
 
     /// <summary>
-    /// Puts the list on the clipboard in Artisan's own import format.
+    /// Everything to craft, sub-crafts included, deepest first.
     /// </summary>
     /// <remarks>
-    /// One paste, against five steps for the Teamcraft route, which is why both exist. It carries no
-    /// sub-crafts, since Artisan's list format lists what you asked for and nothing beneath it.
+    /// Artisan's list format holds what you asked for and nothing beneath it, so the tree is walked
+    /// here. Teamcraft does its own, which is why only this side needs it.
+    /// </remarks>
+    public IReadOnlyList<CraftStep> Steps() =>
+        RecipeTree.Expand(
+            config.ArtisanBasket.Select(item => new CraftStep(item.RecipeId, item.ItemId, item.Quantity, 0)),
+            recipes.ByItem);
+
+    /// <summary>
+    /// Puts the list on the clipboard in Artisan's own import format, sub-crafts and all.
+    /// </summary>
+    /// <remarks>
+    /// One paste, against five steps for the Teamcraft route, which is why both exist.
     /// </remarks>
     public bool CopyForArtisan()
     {
@@ -116,12 +127,18 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
 
         try
         {
+            var steps = Steps();
+            if (steps.Count == 0)
+                return false;
+
             var json = ArtisanList.Build(
                 config.ArtisanListName,
-                config.ArtisanBasket.Select(item => new ArtisanEntry(item.RecipeId, item.Quantity)));
+                steps.Select(step => new ArtisanEntry(step.RecipeId, step.Crafts)));
 
             ImGui.SetClipboardText(json);
-            log.Information($"Copied {config.ArtisanBasket.Count} recipes in Artisan's list format.");
+            log.Information(
+                $"Copied {steps.Count} recipes in Artisan's list format, expanded from "
+                + $"{config.ArtisanBasket.Count}.");
             return true;
         }
         catch (Exception error)

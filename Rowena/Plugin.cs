@@ -63,7 +63,7 @@ public sealed class Plugin : IDalamudPlugin
         var furnishings = new Furnishings(DataManager, Log);
         sweep = new FurnishingSweep(furnishings, market, Log);
 
-        var basket = new CraftBasket(config, Save, Log);
+        var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, config, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market);

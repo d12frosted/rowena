@@ -161,7 +161,17 @@ internal sealed class MainWindow : Window
         if (basket.Count == 0)
             return;
 
-        ImGui.TextUnformatted($"List: {basket.Count} items, {basket.TotalCrafts} crafts");
+        // The expanded total, because "3 items" and "41 crafts" are very different pieces of news
+        // and the second is the one that decides whether you want to start.
+        var steps = basket.Steps();
+        var subCrafts = steps.Count(step => step.Depth > 0);
+
+        ImGui.TextUnformatted(
+            subCrafts == 0
+                ? $"List: {basket.Count} items, {basket.TotalCrafts} crafts"
+                : $"List: {basket.Count} items, {steps.Sum(step => step.Crafts)} crafts "
+                  + $"including {subCrafts} sub-crafts");
+
         ImGui.SameLine();
 
         // Two routes because they cost very different amounts of effort and only one is portable.
@@ -171,14 +181,12 @@ internal sealed class MainWindow : Window
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                "One paste, straight into the plugin that crafts.\n"
+                "One paste, straight into the plugin that crafts. Sub-crafts included,\n"
+                + "in order, so the list works from the top down.\n"
                 + "\n"
                 + "1. Press this.\n"
                 + "2. Open Artisan, Crafting Lists tab.\n"
-                + "3. Press \"Import List From Clipboard (Artisan Export)\".\n"
-                + "\n"
-                + "Sub-crafts are not included: Artisan's format lists what you asked for\n"
-                + "and nothing beneath it. Use Teamcraft when the intermediates matter.");
+                + "3. Press \"Import List From Clipboard (Artisan Export)\".");
         }
 
         ImGui.SameLine();
@@ -212,7 +220,7 @@ internal sealed class MainWindow : Window
         if (ImGui.Button("Clear"))
             basket.Clear();
 
-        ImGui.TextColored(Dim, "    Artisan is one paste; Teamcraft is five steps but expands sub-crafts.");
+        ImGui.TextColored(Dim, "    Artisan is one paste. Teamcraft is five steps but reaches any tool.");
 
         uint? removing = null;
 
