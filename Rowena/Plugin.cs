@@ -19,7 +19,6 @@ public sealed class Plugin : IDalamudPlugin
 
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
     [PluginService] internal static IObjectTable Objects { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
@@ -34,27 +33,26 @@ public sealed class Plugin : IDalamudPlugin
 
         var catalog = LoadCatalog();
         var balances = new Balances(Objects, Log);
+        var scope = new PricingScope(config, balances);
 
         // Universalis asks callers to identify themselves, which costs nothing and makes
         // it possible for them to tell a badly behaved client from a busy one.
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Rowena/0.0.1 (+https://github.com/d12frosted/rowena)");
 
-        var source = new UniversalisClient(http, config.Scope, config.ListingDepth);
+        // Handed a way to ask rather than an answer. A reloaded plugin sees no login event,
+        // so anything captured here would be captured wrong for the rest of the session.
+        var source = new UniversalisClient(http, () => scope.Current, config.ListingDepth);
+
         var market = new MarketCache(source, Log)
         {
             Ttl = TimeSpan.FromMinutes(Math.Max(1, config.PriceTtlMinutes)),
         };
 
-        var gatherBuddy = new GatherBuddyIpc(PluginInterface, CommandManager, Log);
+        var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
 
-        mainWindow = new MainWindow(catalog, market, balances, gatherBuddy, config, Save);
+        mainWindow = new MainWindow(catalog, market, balances, scope, gatherBuddy, config, Save);
         windows.AddWindow(mainWindow);
-
-        // The scope is only knowable once a character is loaded, and it can change between
-        // logins, so it is resolved per fetch rather than fixed at construction.
-        ClientState.Login += () => source.Scope = ResolveScope(balances);
-        source.Scope = ResolveScope(balances);
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -65,9 +63,6 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Open Rowena. What you are holding, and what it is worth turning into.",
         });
     }
-
-    private string ResolveScope(Balances balances) =>
-        string.IsNullOrWhiteSpace(config.Scope) ? balances.DataCentre ?? "" : config.Scope;
 
     /// <summary>
     /// Loads the catalogue, preferring an editable copy beside the configuration.

@@ -152,25 +152,46 @@ Once registered, installing again works with the game running; Dalamud reloads t
 itself. Only a registration change has to wait for the game to close, because Dalamud writes
 its whole config out on exit and will discard anything edited underneath it.
 
-## Handing off the legwork
+## Trades that compete are sized together
 
-Rowena works out that a chain wants 100,000 scrips. It does not gather them.
+Sizing each trade on its own overstates all of them, and does it in a way that reads as
+opportunity rather than as a warning. Rroneek Horn and Barreltender Whistle both want a
+hundred Mount Tokens, and against a book holding 323 they each reported that three runs were
+available. Six hundred tokens out of three hundred and twenty-three.
 
-With GatherBuddyReborn installed, the window shows its auto-gather state and hands work over:
-a sink whose catalogue entry says how its currency is earned gets a button that starts the
-collectable routine, and an input the board could not supply gets an offer to go and gather
-it. That second one asks GatherBuddyReborn to identify the item first, because without the
-check it would cheerfully offer to gather a Mount Token.
+`ConversionAllocation` divides the book instead, committing whichever single run pays most
+against whatever is left, repeatedly. Buying deeper only ever costs more, so marginal profit
+never rises and greedy is exact rather than approximate. On that same snapshot the answer is
+not a split:
 
-How the inputs are earned is catalogue data, a `handoff` string on a conversion, and a chain
-inherits it from its first step since that is where the earning happens. The core never
-interprets it. It is a string the catalogue sets and an integration recognises, which keeps
-Dalamud out of the one project that has no game dependency.
+| | runs | outlay | profit |
+|---|---|---|---|
+| Mount Tokens to Barreltender Whistle | 3 | 15,192,842 | 6,182,116 |
+| Mount Tokens to Rroneek Horn | 0 | 0 | 0 |
 
-Its IPC is narrow: a version, an item identifier, and the auto-gather switch with its status.
-There is nothing for handing it a list, so queueing goes through its chat commands, and that
-is a looser contract worth knowing about. `/gatherbuddy collect` in particular reports nothing
-back, so Rowena can start it and stop it but cannot tell you whether it is running.
+Every token is worth more through Barreltender, so every token goes there. Rows that get
+nothing still show what one run would have paid, dimmed, so the comparison is visible rather
+than merely absent.
+
+## GatherBuddyReborn is read, not driven
+
+Rowena works out that a chain wants 100,000 scrips. It does not gather them, and it does not
+try to start anything either.
+
+There were buttons here for its auto-gather and its collectable routine. They were not worth
+having: the list and its settings live in GatherBuddyReborn, so anyone about to gather is
+already in that window and will start it there. GBR also handles the scrip cap on its own,
+turning collectables in and buying from a configured purchase list, so there was nothing left
+for Rowena to usefully drive. Duplicating a control with strictly less capability is worse
+than not offering it.
+
+What is read is its state, on one line. That is worth having for a reason the buttons were
+not: an earning rate is only meaningful measured over time actually spent gathering, and this
+is what distinguishes a working hour from an hour at a menu.
+
+How a currency is earned stays as catalogue data, a `handoff` string on a conversion, which a
+chain inherits from its first step since that is where the earning happens. The core never
+interprets it. It is the link an activity will need in order to know what it produces.
 
 ## Not here yet
 

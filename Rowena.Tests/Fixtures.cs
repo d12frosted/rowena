@@ -11,6 +11,7 @@ internal static class Fixtures
 {
     public const string MountToken = "light-41807.json";
     public const string RroneekHorn = "light-43598.json";
+    public const string BarreltenderWhistle = "light-44502.json";
 
     /// <summary>
     /// A listing recorded at 48,795 gil for three units, carrying a tax of 7,319. Used to

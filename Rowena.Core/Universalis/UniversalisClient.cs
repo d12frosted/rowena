@@ -21,17 +21,21 @@ public interface IMarketDataSource
 /// generous by default because a shallow book is exactly what this library refuses to
 /// reason from, and asking for ten listings would quietly reintroduce the problem.
 /// </remarks>
-public sealed class UniversalisClient(HttpClient http, string scope, int listings = 40) : IMarketDataSource
+/// <param name="scope">
+/// Asked again on every fetch, never captured.
+/// </param>
+public sealed class UniversalisClient(HttpClient http, Func<string?> scope, int listings = 40) : IMarketDataSource
 {
     /// <summary>
     /// A world, data centre or region name, e.g. "Shiva", "Light", "Europe".
     /// </summary>
     /// <remarks>
-    /// Settable because the interesting question is sometimes about a neighbouring data
-    /// centre. You can carry items home from one even though you cannot list there, so
-    /// pricing a board you are not standing on is a real thing to want.
+    /// Resolved per call rather than held, and that is not a style preference. Holding it meant
+    /// a plugin reloaded mid-session never learned where it was, because the login it was
+    /// waiting on had already happened, and every request went to a URL with an empty path
+    /// segment and came back 404. One live answer, asked for when needed.
     /// </remarks>
-    public string Scope { get; set; } = scope;
+    public string? Scope => scope();
 
     public async Task<IReadOnlyDictionary<uint, OrderBook>> FetchAsync(
         IReadOnlyCollection<uint> itemIds,
@@ -40,8 +44,17 @@ public sealed class UniversalisClient(HttpClient http, string scope, int listing
         if (itemIds.Count == 0)
             return new Dictionary<uint, OrderBook>();
 
+        var where = Scope;
+        if (string.IsNullOrWhiteSpace(where))
+        {
+            // Said plainly, because the alternative is a 404 with a stack trace for what is
+            // really just "I do not know which board you mean yet".
+            throw new InvalidOperationException(
+                "No world or data centre to price against yet. Log in, or set one explicitly.");
+        }
+
         var ids = string.Join(',', itemIds);
-        var url = $"https://universalis.app/api/v2/{Uri.EscapeDataString(Scope)}/{ids}?listings={listings}";
+        var url = $"https://universalis.app/api/v2/{Uri.EscapeDataString(where)}/{ids}?listings={listings}";
 
         var json = await http.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
         return UniversalisJson.ParseItems(json);

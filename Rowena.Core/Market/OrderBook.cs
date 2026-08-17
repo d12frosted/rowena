@@ -90,6 +90,44 @@ public sealed class OrderBook
     }
 
     /// <summary>
+    /// The book with the cheapest <paramref name="units"/> taken off it.
+    /// </summary>
+    /// <remarks>
+    /// For working out what a second buyer faces once a first one has been served, which is
+    /// the whole of <see cref="Conversions.ConversionAllocation"/>. Partially consumed
+    /// listings survive with the remainder of their quantity, since a listing of ten with
+    /// three taken is a listing of seven and not nothing.
+    /// </remarks>
+    public OrderBook WithoutCheapest(int units)
+    {
+        if (units <= 0)
+            return this;
+
+        var remaining = new List<Listing>();
+        var toDrop = units;
+
+        foreach (var listing in Listings)
+        {
+            if (toDrop <= 0)
+            {
+                remaining.Add(listing);
+                continue;
+            }
+
+            if (listing.Quantity <= toDrop)
+            {
+                toDrop -= listing.Quantity;
+                continue;
+            }
+
+            remaining.Add(listing with { Quantity = listing.Quantity - toDrop });
+            toDrop = 0;
+        }
+
+        return Create(ItemId, remaining, SaleVelocityPerDay, Retrieved);
+    }
+
+    /// <summary>
     /// How many units can be had without paying more than <paramref name="unitPrice"/>
     /// for any one of them. The answer to "how much of this is cheap right now".
     /// </summary>

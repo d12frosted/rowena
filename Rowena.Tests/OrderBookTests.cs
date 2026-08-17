@@ -99,6 +99,46 @@ public class OrderBookTests
     }
 
     [Fact]
+    public void WithoutCheapestTakesFromTheBottom()
+    {
+        var book = Book((100, 3), (250, 5)).WithoutCheapest(4);
+
+        Assert.Equal(4, book.UnitsListed);
+        Assert.Equal(250, book.Floor);
+    }
+
+    [Fact]
+    public void WithoutCheapestKeepsThePartOfAListingItDidNotTake()
+    {
+        // Ten with three taken is seven, not nothing.
+        var book = Book((100, 10)).WithoutCheapest(3);
+
+        Assert.Equal(7, book.UnitsListed);
+        Assert.Equal(100, book.Floor);
+    }
+
+    [Fact]
+    public void WithoutCheapestCanEmptyTheBook()
+    {
+        Assert.Null(Book((100, 2)).WithoutCheapest(5).Floor);
+    }
+
+    [Fact]
+    public void WithoutNothingChangesNothing()
+    {
+        Assert.Equal(2, Book((100, 2)).WithoutCheapest(0).UnitsListed);
+        Assert.Equal(2, Book((100, 2)).WithoutCheapest(-1).UnitsListed);
+    }
+
+    [Fact]
+    public void WithoutCheapestKeepsTheVelocity()
+    {
+        var book = OrderBook.Create(1, [new Listing(100, 5, "Phoenix")], saleVelocityPerDay: 4d);
+
+        Assert.Equal(4d, book.WithoutCheapest(2).SaleVelocityPerDay);
+    }
+
+    [Fact]
     public void BuyingAHundredMountTokensCostsMoreThanTheFloorImplies()
     {
         // The finding this whole library exists for. The floor advertises one price; a

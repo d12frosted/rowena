@@ -4,18 +4,21 @@ using Dalamud.Plugin.Services;
 
 namespace Rowena.IPC;
 
-/// <summary>Gathering, delegated to GatherBuddyReborn.</summary>
+/// <summary>Whether GatherBuddyReborn is currently working, and what it says it is doing.</summary>
 /// <remarks>
-/// Its IPC is narrow on purpose: a version, an item identifier, and the auto-gather switch
-/// with its status. There is nothing for handing it a shopping list, so queueing work goes
-/// through its chat commands instead. That is a looser contract than IPC and it is called out
-/// where it happens, because a renamed command fails silently in a way a missing IPC gate
-/// does not.
+/// A sensor, not a remote control. There were buttons here to start its auto-gather and its
+/// collectable routine, and they were not worth having: the list and its settings live in
+/// GatherBuddyReborn, so anyone about to gather is already in that window and will start it
+/// there. Duplicating a control with strictly less capability is worse than not offering it.
+///
+/// What is worth having is the state, because an earning rate is only meaningful when it is
+/// measured over time that was actually spent gathering. This is what tells the difference
+/// between a quiet hour and an hour at a menu.
 ///
 /// Every call is guarded. GatherBuddyReborn may not be installed, may be an older build, or
 /// may be mid-teardown, and none of those should throw into a draw call.
 /// </remarks>
-internal sealed class GatherBuddyIpc(IDalamudPluginInterface plugin, ICommandManager commands, IPluginLog log)
+internal sealed class GatherBuddyIpc(IDalamudPluginInterface plugin, IPluginLog log)
 {
     /// <summary>The IPC prefix is GatherBuddyReborn's internal name, not "GatherBuddy".</summary>
     private const string Prefix = "GatherBuddyReborn";
@@ -26,24 +29,14 @@ internal sealed class GatherBuddyIpc(IDalamudPluginInterface plugin, ICommandMan
     private readonly ICallGateSubscriber<int> version =
         plugin.GetIpcSubscriber<int>($"{Prefix}.Version");
 
-    private readonly ICallGateSubscriber<string, uint> identify =
-        plugin.GetIpcSubscriber<string, uint>($"{Prefix}.Identify");
-
     private readonly ICallGateSubscriber<bool> autoGatherEnabled =
         plugin.GetIpcSubscriber<bool>($"{Prefix}.IsAutoGatherEnabled");
-
-    private readonly ICallGateSubscriber<bool, object> setAutoGatherEnabled =
-        plugin.GetIpcSubscriber<bool, object>($"{Prefix}.SetAutoGatherEnabled");
 
     private readonly ICallGateSubscriber<bool> autoGatherWaiting =
         plugin.GetIpcSubscriber<bool>($"{Prefix}.IsAutoGatherWaiting");
 
     private readonly ICallGateSubscriber<string> statusText =
         plugin.GetIpcSubscriber<string>($"{Prefix}.GetAutoGatherStatusText");
-
-    // Identify is a round trip through another plugin, and the window would otherwise ask
-    // the same question of the same item every frame. Gatherability does not change.
-    private readonly Dictionary<string, bool> gatherable = new(StringComparer.OrdinalIgnoreCase);
 
     private bool complainedAboutVersion;
 
@@ -87,75 +80,16 @@ internal sealed class GatherBuddyIpc(IDalamudPluginInterface plugin, ICommandMan
         }
     }
 
+    /// <summary>
+    /// Auto-gather is switched on. The clock for any measured rate should run while this holds
+    /// and stop when it does not.
+    /// </summary>
     public bool AutoGathering => Try(() => autoGatherEnabled.InvokeFunc(), false);
 
     /// <summary>Enabled, but parked: no node is up, or it is between windows.</summary>
     public bool Waiting => Try(() => autoGatherWaiting.InvokeFunc(), false);
 
     public string Status => Try(() => statusText.InvokeFunc(), "") ?? "";
-
-    public void SetAutoGathering(bool enabled) =>
-        Try(() =>
-        {
-            setAutoGatherEnabled.InvokeAction(enabled);
-            return true;
-        }, false);
-
-    /// <summary>
-    /// Whether GatherBuddyReborn recognises this as something it can go and get.
-    /// </summary>
-    /// <remarks>
-    /// Its identifier answers 0 for anything that is not a gatherable or a fish, which is
-    /// exactly the check needed before offering to gather something. Without it the window
-    /// would cheerfully offer to go and gather a Mount Token.
-    /// </remarks>
-    public bool IsGatherable(string itemName)
-    {
-        if (string.IsNullOrWhiteSpace(itemName))
-            return false;
-
-        if (gatherable.TryGetValue(itemName, out var known))
-            return known;
-
-        var answer = Try(() => identify.InvokeFunc(itemName), 0u) != 0u;
-
-        // Only remembered once it has actually answered. Caching a false from a plugin that
-        // was not loaded yet would keep the button hidden for the rest of the session.
-        if (Responding)
-            gatherable[itemName] = answer;
-
-        return answer;
-    }
-
-    /// <summary>Sends it after an item by name.</summary>
-    public void Gather(string itemName) => Command($"/gather {itemName}");
-
-    /// <summary>
-    /// Starts its collectable routine, which is how scrips are actually earned.
-    /// </summary>
-    public void StartCollectables() => Command("/gatherbuddy collect");
-
-    public void StopCollectables() => Command("/gatherbuddy collectstop");
-
-    /// <summary>
-    /// Runs one of its chat commands.
-    /// </summary>
-    /// <remarks>
-    /// Not IPC, so nothing reports back and a renamed command simply does nothing. Logged at
-    /// information level so it is possible to tell "I asked and it ignored me" apart from
-    /// "I never asked".
-    /// </remarks>
-    private void Command(string command)
-    {
-        if (!Responding)
-        {
-            log.Warning($"Not sending '{command}': GatherBuddyReborn is not responding.");
-            return;
-        }
-
-        log.Information($"Handing off to GatherBuddyReborn: {command}");
-        commands.ProcessCommand(command);
-    }
 
     private T Try<T>(Func<T> call, T fallback)
     {
