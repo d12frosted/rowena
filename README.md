@@ -107,7 +107,9 @@ away. Under it, a tab per question:
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
   since the crafting itself happens in somebody else's window and a half-built list is easy
-  to forget.
+  to forget. Any column sorts, and the sort happens before the table is trimmed to
+  twenty-five rows, so "by profit" means the best of all of them rather than the best of the
+  ones that happened to survive the default ranking.
 - **Settings.** The knobs, with a line under each saying what it does to the plugin rather
   than restating its name. The two that decide whether any other number is right, which
   boards to price against, used to be file-only, and Dalamud's settings gear used to open the

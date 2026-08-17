@@ -41,4 +41,14 @@ internal sealed class Rebuilt<T>(Func<T> build, TimeSpan? every = null)
             return value;
         }
     }
+
+    /// <summary>
+    /// Throws the snapshot away, for a change the clock cannot see.
+    /// </summary>
+    /// <remarks>
+    /// The clock exists to stop the same answer being recomputed pointlessly, not to make a different
+    /// question wait for it. Pressing something and watching nothing happen for half a second reads as
+    /// a control that does not work.
+    /// </remarks>
+    public void Invalidate() => value = null;
 }

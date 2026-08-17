@@ -48,6 +48,9 @@ internal sealed class CraftTab
 
     private readonly Rebuilt<Model> model;
 
+    private Column sortColumn = Column.GilPerDay;
+    private bool sortDescending = true;
+
     public CraftTab(
         FurnishingSweep sweep,
         Furnishings furnishings,
@@ -274,17 +277,31 @@ internal sealed class CraftTab
         if (current.Crafts.Length == 0)
             return;
 
-        if (!ImGui.BeginTable("crafts", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        // Money columns want their first click to sort downwards. Nobody opens a profit column to
+        // find the worst one.
+        const ImGuiTableColumnFlags NumberColumn =
+            ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.PreferSortDescending;
+
+        if (!ImGui.BeginTable(
+                "crafts",
+                7,
+                ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Sortable))
             return;
 
         ImGui.TableSetupColumn("Furnishing", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 62);
-        ImGui.TableSetupColumn("materials", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
-        ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 75);
-        ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 100);
+
+        // Nothing to learn from ordering by job, and the alternative reading of a click on it,
+        // "show me only mine", is a filter rather than a sort.
+        ImGui.TableSetupColumn(
+            "job", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 62);
+
+        ImGui.TableSetupColumn("materials", NumberColumn, 100);
+        ImGui.TableSetupColumn("profit", NumberColumn, 100);
+        ImGui.TableSetupColumn("return", NumberColumn, 70);
+        ImGui.TableSetupColumn("sales/day", NumberColumn, 75);
+        ImGui.TableSetupColumn("gil/day", NumberColumn | ImGuiTableColumnFlags.DefaultSort, 100);
         Cell.Headers(Help);
+        ReadSort();
 
         foreach (var row in current.Crafts)
         {
@@ -324,6 +341,59 @@ internal sealed class CraftTab
         ImGui.EndTable();
     }
 
+    /// <summary>
+    /// Takes the order from the table's own header clicks.
+    /// </summary>
+    /// <remarks>
+    /// The chosen column is remembered rather than applied here, because the ranking is trimmed to the
+    /// rows worth showing and the order has to be decided before the trim. Sorting the visible
+    /// twenty-five by profit would answer a different question, "the best gil per day, in profit
+    /// order", while looking exactly like an answer to this one.
+    /// </remarks>
+    private void ReadSort()
+    {
+        var specs = ImGui.TableGetSortSpecs();
+
+        if (!specs.SpecsDirty)
+            return;
+
+        // A count of zero is a table someone has sorted by nothing, which keeps the last order rather
+        // than falling back to an arbitrary one.
+        if (specs.SpecsCount > 0)
+        {
+            var first = specs.Specs[0];
+            sortColumn = (Column)first.ColumnIndex;
+            sortDescending = first.SortDirection == ImGuiSortDirection.Descending;
+        }
+
+        specs.SpecsDirty = false;
+        model.Invalidate();
+    }
+
+    /// <summary>The shortlist in the order the headers asked for.</summary>
+    private IEnumerable<ExpectedEarnings> Ordered(ExpectedEarnings[] priceable)
+    {
+        if (sortColumn == Column.Furnishing)
+        {
+            return sortDescending
+                ? priceable.OrderByDescending(earnings => earnings.Conversion.Name, StringComparer.OrdinalIgnoreCase)
+                : priceable.OrderBy(earnings => earnings.Conversion.Name, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // An unpriceable return sorts as the worst there is rather than as zero, which would place it
+        // above every genuine loss.
+        Func<ExpectedEarnings, double> key = sortColumn switch
+        {
+            Column.Materials => earnings => earnings.Quote.GilOutlay,
+            Column.Profit => earnings => earnings.Quote.Profit,
+            Column.Return => earnings => earnings.Quote.ReturnOnOutlay ?? double.MinValue,
+            Column.SalesPerDay => earnings => earnings.RunsPerDay,
+            _ => earnings => earnings.GilPerDay,
+        };
+
+        return sortDescending ? priceable.OrderByDescending(key) : priceable.OrderBy(key);
+    }
+
     /// <summary>Ranks the swept furnishings, trims the table, and counts what could not be priced.</summary>
     /// <remarks>
     /// The discard count is not decoration. It is the measurement that decides whether following
@@ -342,7 +412,7 @@ internal sealed class CraftTab
 
         var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
 
-        var rows = priceable
+        var rows = Ordered(priceable)
             .Take(CraftsInTable)
             .Select(earnings =>
             {
@@ -383,6 +453,24 @@ internal sealed class CraftTab
                     quote is { IsComplete: true });
             }),
     ];
+
+    /// <summary>
+    /// The columns, by the index the table reports a sort on.
+    /// </summary>
+    /// <remarks>
+    /// Written out so the numbers stay tied to the order the columns are declared in. Reading a bare
+    /// index out of a sort spec and switching on it works right up until somebody inserts a column.
+    /// </remarks>
+    private enum Column
+    {
+        Furnishing = 0,
+        Job = 1,
+        Materials = 2,
+        Profit = 3,
+        Return = 4,
+        SalesPerDay = 5,
+        GilPerDay = 6,
+    }
 
     private sealed record CraftRow(
         string Item,
