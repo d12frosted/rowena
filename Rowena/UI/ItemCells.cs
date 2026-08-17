@@ -159,7 +159,11 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
 
         ImGui.Separator();
 
-        if (actions.CanCraft)
+        if (!actions.CanCraft)
+        {
+            ImGui.TextColored(Dim, "   Artisan not found");
+        }
+        else
         {
             // A busy Artisan would be interrupted, so the entries are shown and disabled rather
             // than hidden, which would read as "this cannot be crafted".
@@ -171,12 +175,17 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
             if (busy)
                 ImGui.BeginDisabled();
 
-            // "Now" because this really does start crafting, rather than queueing anything. Artisan
-            // has no gate for building a list, so there is nothing here that could add to one.
-            foreach (var quantity in (int[])[1, 5, 10])
+            // Quantities live in a submenu, so every flat entry in this menu does exactly one
+            // thing. "Now" because this really does start crafting rather than queueing anything.
+            if (ImGui.BeginMenu("Craft now with Artisan"))
             {
-                if (ImGui.MenuItem($"Craft {quantity} now with Artisan"))
-                    actions.Craft(craftable, quantity);
+                foreach (var quantity in (int[])[1, 5, 10])
+                {
+                    if (ImGui.MenuItem($"{quantity}"))
+                        actions.Craft(craftable, quantity);
+                }
+
+                ImGui.EndMenu();
             }
 
             if (busy)
@@ -184,26 +193,16 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
                 ImGui.EndDisabled();
                 ImGui.TextColored(Dim, "   Artisan is busy");
             }
-        }
-        else
-        {
-            ImGui.TextColored(Dim, "   Artisan not found");
-        }
 
-        if (actions.CanCraft)
-        {
-            ImGui.Separator();
+            // Adds one. The amount is adjusted in the basket, where the whole list is in view,
+            // rather than guessed at from a menu.
+            if (ImGui.MenuItem("Add to Artisan basket"))
+                actions.Basket.Add(craftable, itemId, label, 1);
 
-            // Accumulated rather than exported one at a time, because Artisan's importer always
-            // creates a new list and there is no way to add to one.
-            foreach (var quantity in (int[])[1, 5, 10])
-            {
-                if (ImGui.MenuItem($"Add {quantity} to the Artisan basket"))
-                    actions.Basket.Add(craftable, itemId, label, quantity);
-            }
-
+            // "Run", not "start an existing list", which read as though it might add to one.
+            // Artisan lets another plugin run a list it already has, and nothing else.
             var lists = actions.ArtisanLists();
-            if (lists.Count > 0 && ImGui.BeginMenu("Start an existing Artisan list"))
+            if (lists.Count > 0 && ImGui.BeginMenu("Run an Artisan list"))
             {
                 foreach (var (id, name) in lists)
                 {
@@ -219,8 +218,8 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
 
         if (actions.CanMakeLists)
         {
-            if (ImGui.MenuItem("Make an AllaganTools list of 5"))
-                actions.AddToCraftList(label, itemId, 5);
+            if (ImGui.MenuItem("Add to AllaganTools list"))
+                actions.AddToCraftList(label, itemId, 1);
         }
         else
         {

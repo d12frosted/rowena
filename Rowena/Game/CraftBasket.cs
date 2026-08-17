@@ -52,6 +52,23 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
         save();
     }
 
+    /// <summary>
+    /// Nudges a quantity, never below one.
+    /// </summary>
+    /// <remarks>
+    /// Quantity is edited here rather than chosen when adding. One menu entry that adds a single
+    /// craft, and the number adjusted afterwards where the list is visible, beats three entries
+    /// offering amounts you cannot see the consequences of.
+    /// </remarks>
+    public void Adjust(uint recipeId, int delta)
+    {
+        if (config.ArtisanBasket.FirstOrDefault(item => item.RecipeId == recipeId) is not { } item)
+            return;
+
+        item.Quantity = Math.Max(1, item.Quantity + delta);
+        save();
+    }
+
     public void Remove(uint recipeId)
     {
         config.ArtisanBasket.RemoveAll(item => item.RecipeId == recipeId);

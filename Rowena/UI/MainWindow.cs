@@ -187,12 +187,21 @@ internal sealed class MainWindow : Window
         {
             ImGui.PushID((int)item.RecipeId);
 
+            if (ImGui.SmallButton("-"))
+                basket.Adjust(item.RecipeId, -1);
+
+            ImGui.SameLine(0f, 2f);
+
+            if (ImGui.SmallButton("+"))
+                basket.Adjust(item.RecipeId, 1);
+
+            ImGui.SameLine(0f, 6f);
             cells.Icon(item.ItemId, 16f);
             ImGui.SameLine(0f, 4f);
             ImGui.TextColored(Dim, $"{item.Quantity}x {item.Name}");
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("x"))
+            if (ImGui.SmallButton("remove"))
                 removing = item.RecipeId;
 
             ImGui.PopID();
@@ -371,7 +380,7 @@ internal sealed class MainWindow : Window
                 continue;
 
             ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn($"gil/{group.Unit}", ImGuiTableColumnFlags.WidthFixed, 80);
+            ImGui.TableSetupColumn($"per {group.Unit}", ImGuiTableColumnFlags.WidthFixed, 95);
             ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
@@ -408,13 +417,20 @@ internal sealed class MainWindow : Window
                 ImGui.TableNextColumn();
                 var leader = group.Best is { } best && Math.Abs(row.Rate!.Value - best) < 0.001d;
                 // Only the leader is coloured. Marking everything defeats the point.
-                ImGui.TextColored(leader ? Good : Plain, $"{row.Rate!.Value:F2}");
+                // The unit is printed in the cell, not only in the header. Two decimals beside a
+                // column of millions reads as millions, and this number really is under a hundred.
+                ImGui.TextColored(leader ? Good : Plain, $"{row.Rate!.Value:F2} gil");
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip(
-                        $"{row.Rate.Value:F2} gil for every single {group.Unit} you spend.\n"
-                        + $"One run takes {row.PerRun:N0} {group.Unit} and nets {row.Profit:N0} gil.\n"
-                        + $"Your {group.Held:N0} held are worth about {(long)(group.Held * row.Rate.Value):N0} gil.");
+                        $"Seventy-one-ish gil, not thousands: {row.Rate.Value:F2} gil buys nothing on "
+                        + $"its own.\n"
+                        + $"It is what one {group.Unit} is worth, and a run takes {row.PerRun:N0} of "
+                        + $"them.\n"
+                        + $"{row.PerRun:N0} x {row.Rate.Value:F2} = {row.Profit:N0} gil, which is the "
+                        + $"next column.\n"
+                        + $"Your {group.Held:N0} held are worth about "
+                        + $"{(long)(group.Held * row.Rate.Value):N0} gil.");
                 }
 
                 ImGui.TableNextColumn();
