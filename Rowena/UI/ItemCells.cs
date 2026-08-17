@@ -194,19 +194,27 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
                 ImGui.TextColored(Dim, "   Artisan is busy");
             }
 
-            // No plugin named here any more. It collects into a Teamcraft link, which Artisan,
-            // Vulcan and the site itself all read, so naming one of them would be arbitrary.
-            var waiting = actions.Basket.Count;
-            var collect = waiting == 0 ? "Add to list" : $"Add to list ({waiting} so far)";
-
-            if (ImGui.MenuItem(collect))
-                actions.Basket.Add(craftable, itemId, label, 1);
         }
 
         ImGui.Separator();
 
-        // AllaganTools is where the list features live, because it is the only one of the three that
-        // can add to a list that already exists. Artisan exposes no such gate at all.
+        // Every entry below names where the item ends up. Leaving one of them unnamed made it the
+        // hardest to understand of the three, which was the opposite of the intent.
+        if (recipeId is not null)
+        {
+            var waiting = actions.Basket.Count;
+
+            if (ImGui.MenuItem(waiting == 0 ? "Add to Teamcraft list" : $"Add to Teamcraft list ({waiting} so far)"))
+                actions.Basket.Add(craftable, itemId, label, 1);
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Collects here first, then opens as one Teamcraft list.\n"
+                    + "Teamcraft works out the sub-crafts and exports to Artisan or Vulcan.");
+            }
+        }
+
         if (!actions.CanMakeLists)
         {
             ImGui.TextColored(Dim, "   AllaganTools not found");
