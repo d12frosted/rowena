@@ -47,6 +47,16 @@ internal sealed class CraftTab
         model = new Rebuilt<Model>(Build);
     }
 
+    /// <summary>
+    /// The tab's own label, carrying the size of the list you are building.
+    /// </summary>
+    /// <remarks>
+    /// A list left half-built is the one thing in here you can forget about, since the crafting
+    /// happens in another plugin's window. The count says so from outside the tab; the id after ###
+    /// keeps the tab the same tab as it changes.
+    /// </remarks>
+    public string Label => basket.Count == 0 ? "Craft###craft" : $"Craft ({basket.Count})###craft";
+
     public void Draw(string buying, string selling)
     {
         DrawBasket();

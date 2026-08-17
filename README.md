@@ -96,6 +96,22 @@ the picture, your balances and the depth of the board, because either alone is a
 covered by something else. Sinks are ranked by gil per scrip; flips show outlay, profit,
 return and how many runs the book will actually bear.
 
+A strip across the top says which boards you are pricing against, what is in your pockets
+and how old the prices are. Every number below is read against it, so it does not scroll
+away. Under it, a tab per question:
+
+- **Convert.** Sinks and flips. Two questions about one wallet, priced off one fetch, and
+  worth comparing: whether to spend scrips or gil is one decision.
+- **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
+  because it runs on its own clock, hours rather than minutes, and because it is the only
+  thing here that is a workspace rather than a report. The tab counts what is in the list,
+  since the crafting itself happens in somebody else's window and a half-built list is easy
+  to forget.
+
+Tabs rather than one long screen. The furnishing table is twenty-five rows and was pushing
+the scrip tables off the top, and nobody has ever needed both in view at once. It also means
+the numbers behind a tab you are not looking at are never computed.
+
 Balances are the reason this is a plugin at all rather than a script. Whether the answer is
 "buy" or "go gather" depends on how many scrips you are sitting on and how close that is to
 the cap, and nothing outside the game knows that.

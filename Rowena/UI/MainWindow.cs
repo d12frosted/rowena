@@ -15,25 +15,25 @@ namespace Rowena.UI;
 /// questions it answers are the ones that need both halves of the picture, your balances and
 /// the depth of the board, because either one alone is already covered by something else.
 ///
-/// Everything shown is built into a <see cref="Model"/> a few times a second and then merely
-/// rendered. Reading currencies, asking another plugin over IPC and allocating a shared order
-/// book are all far too expensive to do per frame, and doing them per frame earned a hitch
-/// warning from Dalamud.
+/// A shell, and nothing else: the strip that never scrolls away, a tab per question, and the
+/// business of picking up where the last session left off. The questions themselves are asked one
+/// tab at a time, which is also what makes the hidden ones free.
+///
+/// Tabbed rather than stacked because the questions run on different clocks and the tall one was
+/// pushing the short ones off the screen. Nobody has ever needed the scrip table and the furnishing
+/// ranking in view at once.
 /// </remarks>
 internal sealed class MainWindow : Window
 {
     private readonly Trades trades;
     private readonly MarketCache market;
-    private readonly Balances balances;
     private readonly PricingScope scope;
-    private readonly GatherBuddyIpc gatherBuddy;
     private readonly FurnishingSweep sweep;
+    private readonly StatusStrip strip;
     private readonly ConvertTab convert;
     private readonly CraftTab crafts;
     private readonly Configuration config;
     private readonly Action save;
-
-    private readonly Rebuilt<Wallet> model;
 
     private bool restoreAttempted;
     private long persistedSweepAt;
@@ -53,9 +53,7 @@ internal sealed class MainWindow : Window
     {
         this.trades = trades;
         this.market = market;
-        this.balances = balances;
         this.scope = scope;
-        this.gatherBuddy = gatherBuddy;
         this.sweep = sweep;
         this.convert = convert;
         this.crafts = crafts;
@@ -68,7 +66,12 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        model = new Rebuilt<Wallet>(Build);
+        strip = new StatusStrip(
+            market,
+            balances,
+            trades,
+            gatherBuddy,
+            () => RefreshCatalogue(scope.Buying, scope.Selling, force: true));
     }
 
     public override void Draw()
@@ -76,70 +79,56 @@ internal sealed class MainWindow : Window
         var buying = scope.Buying;
         var selling = scope.Selling;
 
-        DrawHeader(buying, selling);
+        strip.Draw(buying, selling);
         ImGui.Separator();
 
-        if (buying is null || selling is null)
+        if (buying is not null && selling is not null)
         {
-            ImGui.TextColored(Palette.Bad, "Not logged in. Prices cannot be fetched.");
+            // Prices saved by a previous session, as soon as there is a board to compare them against.
+            market.RestoreOnce(config.SweepAge());
+            RestoreSweepOnce(buying, selling);
+            PersistFinishedSweep();
+        }
+
+        if (!ImGui.BeginTabBar("rowena-tabs"))
             return;
-        }
 
-        // Prices saved by a previous session, as soon as there is a board to compare them against.
-        market.RestoreOnce(config.SweepAge());
-        RestoreSweepOnce(buying, selling);
-        PersistFinishedSweep();
-
-        var current = model.Current;
-
-        DrawWhatYouHold(current);
-        ImGui.Separator();
-        convert.Draw();
-        ImGui.Spacing();
-        crafts.Draw(buying, selling);
-    }
-
-    private void DrawHeader(string? buying, string? selling)
-    {
-        // Both boards named, because they are different and the difference is the point.
-        ImGui.TextUnformatted($"Buying on {buying ?? "nowhere"}, selling on {selling ?? "nowhere"}");
-        ImGui.SameLine();
-
-        if (ImGui.Button("Refresh"))
-            RefreshCatalogue(buying, selling, force: true);
-
-        ImGui.SameLine();
-
-        if (market.Busy)
-            ImGui.TextColored(Palette.Dim, "fetching...");
-        else if (market.LastError is { } error)
-            ImGui.TextColored(Palette.Bad, error);
-        else if (market.LastRefresh is { } at)
-            ImGui.TextColored(Palette.Dim, $"prices {Phrases.Ago(DateTimeOffset.UtcNow - at)} old");
-        else
-            ImGui.TextColored(Palette.Dim, "no prices yet");
-    }
-
-    private void DrawWhatYouHold(Wallet current)
-    {
-        ImGui.TextUnformatted($"Gil {current.Gil:N0}");
-
-        foreach (var (currency, held) in current.Currencies)
+        // The label carries the tab's identity in ImGui unless it is told otherwise, so every one of
+        // these pins its own id after ###. Without that, a label that counts something would hand the
+        // tab a new identity each time the count changed, and reset the selection along with it.
+        if (ImGui.BeginTabItem("Convert###convert"))
         {
-            ImGui.SameLine();
-            ImGui.TextColored(Palette.Dim, $"   {currency} {held:N0}");
+            if (buying is null || selling is null)
+                NoBoard();
+            else
+                convert.Draw();
+
+            ImGui.EndTabItem();
         }
 
-        if (current.Gathering is { } gathering)
-            ImGui.TextColored(Palette.Dim, gathering);
+        if (ImGui.BeginTabItem(crafts.Label))
+        {
+            if (buying is { } craftBuying && selling is { } craftSelling)
+                crafts.Draw(craftBuying, craftSelling);
+            else
+                NoBoard();
+
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
     }
 
-    /// <summary>What is in your pockets, and what you are doing about it.</summary>
-    private Wallet Build() =>
-        new(
-            balances.Gil,
-            [.. trades.Currencies.Select(currency => (currency.Name, balances.Held(currency)))],
-            GatheringLine());
+    /// <summary>
+    /// Said by a tab that cannot answer anything without a board to price against.
+    /// </summary>
+    /// <remarks>
+    /// Inside the tab rather than in place of the tabs, so that a tab which does still work while
+    /// logged out stays reachable. Typing a world in by hand is exactly what you would be doing here
+    /// if the game were not running.
+    /// </remarks>
+    private static void NoBoard() =>
+        ImGui.TextColored(Palette.Bad, "Not logged in, so there is no board to price against.");
 
     /// <summary>
     /// Rebuilds the last sweep's shortlist from what came back off disk.
@@ -186,39 +175,9 @@ internal sealed class MainWindow : Window
         _ = Task.Run(() => market.Persist(snapshot));
     }
 
-    /// <summary>
-    /// What GatherBuddyReborn is up to, reported and not driven.
-    /// </summary>
-    /// <remarks>
-    /// Starting it from here would duplicate its own window with less capability, since that is
-    /// where the list lives. This is read because it is the clock any measured earning rate
-    /// will have to run against.
-    /// </remarks>
-    private string? GatheringLine()
-    {
-        if (!gatherBuddy.Responding)
-            return null;
-
-        if (gatherBuddy.TooOld)
-            return "GatherBuddyReborn is older than this was written against.";
-
-        if (!gatherBuddy.AutoGathering)
-            return "GatherBuddyReborn idle";
-
-        var status = gatherBuddy.Status;
-
-        return string.IsNullOrWhiteSpace(status)
-            ? "GatherBuddyReborn gathering"
-            : gatherBuddy.Waiting
-                ? $"GatherBuddyReborn waiting: {status}"
-                : $"GatherBuddyReborn: {status}";
-    }
-
     /// <summary>Called on open so a stale window fills itself in without being asked.</summary>
     public override void OnOpen() => RefreshCatalogue(scope.Buying, scope.Selling);
 
     public override void OnClose() => save();
 
-    /// <param name="Currencies">Each spendable currency and how much of it you are holding.</param>
-    private sealed record Wallet(long Gil, (string Name, long Held)[] Currencies, string? Gathering);
 }
