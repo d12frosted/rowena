@@ -16,6 +16,10 @@ namespace Rowena.Game;
 ///
 /// Kept deliberately small. Everything here is version-sensitive game memory, so when a
 /// patch moves something this is the one file to look at.
+///
+/// Every read here has to happen on the framework thread. The object table throws outright
+/// off it, and the raw pointers are only merely unsafe rather than loudly so, which is worse.
+/// Anything wanting these values on a background task must be handed them, not the object.
 /// </remarks>
 internal sealed class Balances(IObjectTable objects, IPluginLog log)
 {

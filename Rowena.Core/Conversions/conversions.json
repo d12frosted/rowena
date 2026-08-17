@@ -5,12 +5,15 @@
     "",
     "Resource keys are local to this file. Ids are Item sheet row ids.",
     "Chains name their steps and the linking resource is inferred, so a composed rate is",
-    "always derived from the published ones and cannot drift away from them."
+    "always derived from the published ones and cannot drift away from them.",
+    "",
+    "Mount Token is sold for Orange Gatherers' Scrip only. Crafters' scrip does not buy it,",
+    "checked at the counter, so crafted collectables need a sink of their own before they can",
+    "be compared against gathered ones."
   ],
 
   "resources": {
     "orange-gatherers-scrip": { "kind": "currency", "id": 41785, "name": "Orange Gatherers' Scrip" },
-    "orange-crafters-scrip":  { "kind": "currency", "id": 41784, "name": "Orange Crafters' Scrip" },
     "mount-token":            { "kind": "item",     "id": 41807, "name": "Mount Token" },
     "rroneek-horn":           { "kind": "item",     "id": 43598, "name": "Rroneek Horn" },
     "barreltender-whistle":   { "kind": "item",     "id": 44502, "name": "Barreltender Whistle" }

@@ -39,10 +39,21 @@ internal sealed class MarketCache(IMarketDataSource source, IPluginLog log)
     /// Fetches anything missing or past its shelf life. Returns immediately; the window
     /// keeps drawing whatever it already had.
     /// </summary>
-    public void RefreshInBackground(IReadOnlyCollection<uint> itemIds, bool force = false)
+    /// <param name="scope">
+    /// Where to price against, resolved by the caller. It has to arrive already answered: this
+    /// starts a background task, and working it out in there would mean reading game state off
+    /// the framework thread, which throws.
+    /// </param>
+    public void RefreshInBackground(string? scope, IReadOnlyCollection<uint> itemIds, bool force = false)
     {
         if (Refreshing)
             return;
+
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            LastError = "Not logged in, and no data centre set.";
+            return;
+        }
 
         var wanted = force ? itemIds : [.. itemIds.Where(IsStale)];
         if (wanted.Count == 0)
@@ -53,7 +64,7 @@ internal sealed class MarketCache(IMarketDataSource source, IPluginLog log)
         {
             try
             {
-                var fetched = await source.FetchAsync(wanted).ConfigureAwait(false);
+                var fetched = await source.FetchAsync(scope, wanted).ConfigureAwait(false);
                 var now = DateTimeOffset.UtcNow;
 
                 foreach (var (itemId, book) in fetched)

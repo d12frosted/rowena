@@ -40,9 +40,9 @@ public sealed class Plugin : IDalamudPlugin
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Rowena/0.0.1 (+https://github.com/d12frosted/rowena)");
 
-        // Handed a way to ask rather than an answer. A reloaded plugin sees no login event,
-        // so anything captured here would be captured wrong for the rest of the session.
-        var source = new UniversalisClient(http, () => scope.Current, config.ListingDepth);
+        // The scope is not the client's business. It is resolved by the window, on the thread
+        // where the game will answer, and passed down with each fetch.
+        var source = new UniversalisClient(http, config.ListingDepth);
 
         var market = new MarketCache(source, Log)
         {

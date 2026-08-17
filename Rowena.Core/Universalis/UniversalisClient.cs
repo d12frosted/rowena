@@ -9,7 +9,12 @@ namespace Rowena.Core.Universalis;
 /// </remarks>
 public interface IMarketDataSource
 {
+    /// <param name="scope">
+    /// A world, data centre or region name, e.g. "Shiva", "Light", "Europe". Passed in rather
+    /// than held, so that whoever knows the answer resolves it before the fetch starts.
+    /// </param>
     Task<IReadOnlyDictionary<uint, OrderBook>> FetchAsync(
+        string scope,
         IReadOnlyCollection<uint> itemIds,
         CancellationToken cancellationToken = default);
 }
@@ -20,41 +25,27 @@ public interface IMarketDataSource
 /// ids into one request rather than looping, and cache. The listing limit is deliberately
 /// generous by default because a shallow book is exactly what this library refuses to
 /// reason from, and asking for ten listings would quietly reintroduce the problem.
+///
+/// The scope is a parameter and not state, and that has been got wrong twice. Held on the
+/// client, a plugin reloaded mid-session never learned where it was and every request 404'd.
+/// Resolved lazily by the client, the lookup ran on the fetch thread, where reading the game's
+/// object table throws. A parameter puts the question where it can actually be answered.
 /// </remarks>
-/// <param name="scope">
-/// Asked again on every fetch, never captured.
-/// </param>
-public sealed class UniversalisClient(HttpClient http, Func<string?> scope, int listings = 40) : IMarketDataSource
+public sealed class UniversalisClient(HttpClient http, int listings = 40) : IMarketDataSource
 {
-    /// <summary>
-    /// A world, data centre or region name, e.g. "Shiva", "Light", "Europe".
-    /// </summary>
-    /// <remarks>
-    /// Resolved per call rather than held, and that is not a style preference. Holding it meant
-    /// a plugin reloaded mid-session never learned where it was, because the login it was
-    /// waiting on had already happened, and every request went to a URL with an empty path
-    /// segment and came back 404. One live answer, asked for when needed.
-    /// </remarks>
-    public string? Scope => scope();
-
     public async Task<IReadOnlyDictionary<uint, OrderBook>> FetchAsync(
+        string scope,
         IReadOnlyCollection<uint> itemIds,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(scope))
+            throw new ArgumentException("No world or data centre to price against.", nameof(scope));
+
         if (itemIds.Count == 0)
             return new Dictionary<uint, OrderBook>();
 
-        var where = Scope;
-        if (string.IsNullOrWhiteSpace(where))
-        {
-            // Said plainly, because the alternative is a 404 with a stack trace for what is
-            // really just "I do not know which board you mean yet".
-            throw new InvalidOperationException(
-                "No world or data centre to price against yet. Log in, or set one explicitly.");
-        }
-
         var ids = string.Join(',', itemIds);
-        var url = $"https://universalis.app/api/v2/{Uri.EscapeDataString(where)}/{ids}?listings={listings}";
+        var url = $"https://universalis.app/api/v2/{Uri.EscapeDataString(scope)}/{ids}?listings={listings}";
 
         var json = await http.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
         return UniversalisJson.ParseItems(json);
