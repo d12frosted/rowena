@@ -91,7 +91,10 @@ public static class ConversionChain
             $"{first.Name} then {second.Name}",
             inputs,
             outputs,
-            $"{first.Venue} then {second.Venue}");
+            $"{first.Venue} then {second.Venue}",
+            // The first step is where the inputs are earned, so its handoff is the chain's.
+            // Later steps only spend what the first one produced.
+            first.Handoff);
     }
 
     private static IReadOnlyList<ResourceAmount> Merge(IEnumerable<ResourceAmount> amounts) =>

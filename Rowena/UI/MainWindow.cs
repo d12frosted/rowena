@@ -4,12 +4,14 @@ using Dalamud.Interface.Windowing;
 using Rowena.Core.Conversions;
 using Rowena.Core.Market;
 using Rowena.Game;
+using Rowena.IPC;
 using Rowena.Market;
 
 namespace Rowena.UI;
 
 /// <summary>
-/// One window: what you are holding, and what it is worth turning into.
+/// One window: what you are holding, what it is worth turning into, and who to hand the
+/// legwork to.
 /// </summary>
 /// <remarks>
 /// Deliberately not a market browser. The only questions it answers are the ones that need
@@ -18,6 +20,9 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class MainWindow : Window
 {
+    /// <summary>Handoff hints this window knows how to act on. Anything else is ignored.</summary>
+    private const string GatherCollectables = "gather-collectables";
+
     private static readonly Vector4 Dim = new(0.60f, 0.60f, 0.62f, 1f);
     private static readonly Vector4 Good = new(0.40f, 0.80f, 0.45f, 1f);
     private static readonly Vector4 Bad = new(0.85f, 0.45f, 0.40f, 1f);
@@ -25,16 +30,19 @@ internal sealed class MainWindow : Window
     private readonly ConversionCatalog catalog;
     private readonly MarketCache market;
     private readonly Balances balances;
+    private readonly GatherBuddyIpc gatherBuddy;
     private readonly Configuration config;
     private readonly Action save;
 
     private readonly uint[] pricedItems;
     private readonly Resource[] spendableCurrencies;
+    private readonly bool anythingToHandOff;
 
     public MainWindow(
         ConversionCatalog catalog,
         MarketCache market,
         Balances balances,
+        GatherBuddyIpc gatherBuddy,
         Configuration config,
         Action save)
         : base("Rowena###rowena-main")
@@ -42,12 +50,13 @@ internal sealed class MainWindow : Window
         this.catalog = catalog;
         this.market = market;
         this.balances = balances;
+        this.gatherBuddy = gatherBuddy;
         this.config = config;
         this.save = save;
 
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(760, 300),
+            MinimumSize = new Vector2(820, 320),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
@@ -71,6 +80,8 @@ internal sealed class MainWindow : Window
                 .Where(resource => resource.Kind == ResourceKind.Currency)
                 .Distinct(),
         ];
+
+        anythingToHandOff = catalog.Conversions.Any(conversion => conversion.Handoff is not null);
     }
 
     /// <summary>Where prices are read from: what you set, or wherever you are logged in.</summary>
@@ -89,6 +100,7 @@ internal sealed class MainWindow : Window
         }
 
         DrawWhatYouHold();
+        DrawGathering();
         ImGui.Separator();
         DrawSinks();
         ImGui.Spacing();
@@ -126,6 +138,40 @@ internal sealed class MainWindow : Window
         }
     }
 
+    private void DrawGathering()
+    {
+        // Nothing in the catalogue wants gathering, so do not mention gathering.
+        if (!anythingToHandOff)
+            return;
+
+        if (!gatherBuddy.Responding)
+        {
+            ImGui.TextColored(Dim, "GatherBuddyReborn not found, so there is nothing to hand the gathering to.");
+            return;
+        }
+
+        if (gatherBuddy.TooOld)
+            ImGui.TextColored(Bad, "GatherBuddyReborn is older than this was written against; some of it may not work.");
+
+        var running = gatherBuddy.AutoGathering;
+
+        if (ImGui.Button(running ? "Stop auto-gather" : "Start auto-gather"))
+            gatherBuddy.SetAutoGathering(!running);
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Stop collecting"))
+            gatherBuddy.StopCollectables();
+
+        ImGui.SameLine();
+
+        var status = gatherBuddy.Status;
+        if (!string.IsNullOrWhiteSpace(status))
+            ImGui.TextColored(Dim, gatherBuddy.Waiting ? $"waiting: {status}" : status);
+        else
+            ImGui.TextColored(Dim, running ? "auto-gather on" : "auto-gather off");
+    }
+
     private void DrawSinks()
     {
         ImGui.TextUnformatted("Sinks: what a bound currency is worth once converted and sold");
@@ -152,7 +198,7 @@ internal sealed class MainWindow : Window
             ImGui.Spacing();
             ImGui.TextColored(Dim, $"{currency.Name} ({held:N0} held)");
 
-            if (!ImGui.BeginTable($"sinks-{currency.Id}", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+            if (!ImGui.BeginTable($"sinks-{currency.Id}", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
                 continue;
 
             ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
@@ -160,7 +206,8 @@ internal sealed class MainWindow : Window
             ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 80);
-            ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 200);
+            ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 190);
+            ImGui.TableSetupColumn("earn it", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableHeadersRow();
 
             var best = rows[0].Rate!.Value;
@@ -193,10 +240,36 @@ internal sealed class MainWindow : Window
 
                 ImGui.TableNextColumn();
                 ImGui.TextColored(Dim, row.Conversion.Venue);
+
+                ImGui.TableNextColumn();
+                DrawEarnIt(row.Conversion, cannotRunYet: held < perRun);
             }
 
             ImGui.EndTable();
         }
+    }
+
+    /// <summary>
+    /// The handoff button, when the catalogue says how this currency is earned and something
+    /// is installed that can go and earn it.
+    /// </summary>
+    private void DrawEarnIt(Conversion conversion, bool cannotRunYet)
+    {
+        if (conversion.Handoff != GatherCollectables || !gatherBuddy.Responding)
+        {
+            ImGui.TextColored(Dim, "-");
+            return;
+        }
+
+        // Offered whatever your balance, since topping up early is reasonable, but only
+        // emphasised when you actually cannot run the trade yet.
+        ImGui.PushID(conversion.Id);
+        if (ImGui.Button(cannotRunYet ? "Collect" : "collect"))
+            gatherBuddy.StartCollectables();
+        ImGui.PopID();
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Runs /gatherbuddy collect. It reports nothing back, so stop it from the button above.");
     }
 
     private void DrawFlips()
@@ -211,7 +284,7 @@ internal sealed class MainWindow : Window
 
         ImGui.TextUnformatted("Flips: buy the inputs, convert, sell the output");
 
-        if (!ImGui.BeginTable("flips", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("flips", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
@@ -220,6 +293,7 @@ internal sealed class MainWindow : Window
         ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 80);
+        ImGui.TableSetupColumn("or gather", ImGuiTableColumnFlags.WidthFixed, 140);
         ImGui.TableHeadersRow();
 
         foreach (var conversion in flips)
@@ -238,6 +312,13 @@ internal sealed class MainWindow : Window
                     ? $"short {string.Join(", ", quote.Unsourced)}"
                     : $"no price for {string.Join(", ", quote.Unpriced)}";
                 ImGui.TextColored(Dim, why);
+
+                // Skip to the last column so the gather offer still lands under its header.
+                for (var column = 0; column < 4; column++)
+                    ImGui.TableNextColumn();
+
+                ImGui.TableNextColumn();
+                DrawGatherShortfall(conversion, quote);
                 continue;
             }
 
@@ -258,9 +339,45 @@ internal sealed class MainWindow : Window
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(Absorb(quote.DaysToAbsorb));
+
+            ImGui.TableNextColumn();
+            DrawGatherShortfall(conversion, quote);
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// Offers to gather an input the board could not supply, when it is something that can
+    /// be gathered at all.
+    /// </summary>
+    /// <remarks>
+    /// The gatherable check matters. Without asking GatherBuddyReborn to identify the item
+    /// first, this would cheerfully offer to go and gather a Mount Token.
+    /// </remarks>
+    private void DrawGatherShortfall(Conversion conversion, ConversionQuote quote)
+    {
+        if (!gatherBuddy.Responding)
+        {
+            ImGui.TextColored(Dim, "-");
+            return;
+        }
+
+        var candidate = quote.Unsourced
+            .Select(amount => amount.Resource)
+            .FirstOrDefault(resource =>
+                resource.Kind == ResourceKind.Item && gatherBuddy.IsGatherable(resource.Name));
+
+        if (candidate.Id == 0)
+        {
+            ImGui.TextColored(Dim, "-");
+            return;
+        }
+
+        ImGui.PushID($"{conversion.Id}-gather");
+        if (ImGui.Button($"Gather {candidate.Name}"))
+            gatherBuddy.Gather(candidate.Name);
+        ImGui.PopID();
     }
 
     /// <summary>Called on open so a stale window fills itself in without being asked.</summary>

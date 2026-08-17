@@ -21,6 +21,7 @@
       "id": "scrip-to-token",
       "name": "Orange gatherers' scrip to Mount Token",
       "venue": "Scrip Exchange",
+      "handoff": "gather-collectables",
       "inputs":  [ { "resource": "orange-gatherers-scrip", "quantity": 1000 } ],
       "outputs": [ { "resource": "mount-token", "quantity": 1 } ]
     },

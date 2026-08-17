@@ -110,6 +110,22 @@ public class ConversionChainTests
     }
 
     [Fact]
+    public void TheChainInheritsTheFirstStepsHandoff()
+    {
+        var mint = new Conversion(
+            "mint",
+            "mint",
+            [new ResourceAmount(Scrip, 10)],
+            [new ResourceAmount(Token, 1)],
+            "somewhere",
+            "gather-collectables");
+        var redeem = Trade("redeem", new ResourceAmount(Token, 5), new ResourceAmount(Mount, 1));
+
+        Assert.Equal("gather-collectables", ConversionChain.Compose(mint, redeem).Handoff);
+        Assert.Null(ConversionChain.Compose(redeem, Trade("resell", new ResourceAmount(Mount, 1), new ResourceAmount(Bonus, 1))).Handoff);
+    }
+
+    [Fact]
     public void ResourceIdentityIgnoresTheDisplayName()
     {
         // Otherwise the same item spelled two ways in two catalogue entries would fail to

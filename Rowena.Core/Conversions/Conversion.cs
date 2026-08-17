@@ -12,12 +12,23 @@ namespace Rowena.Core.Conversions;
 /// Nothing here knows about crafting. A recipe is expressible as a conversion if it ever
 /// needs to be, but the reason this type exists is the trades that are not recipes.
 /// </remarks>
+/// <param name="Handoff">
+/// An opaque hint naming how the inputs are come by, for whatever can act on it.
+/// </param>
+/// <remarks>
+/// The core deliberately does not interpret <paramref name="Handoff"/>. Knowing that scrips
+/// are earned by gathering collectables is useful, but knowing which plugin to ask about it
+/// is not the core's business, and putting that knowledge here would drag a Dalamud concern
+/// into the one project that has no game dependency. It is a string the catalogue sets and
+/// an integration recognises, or ignores.
+/// </remarks>
 public sealed record Conversion(
     string Id,
     string Name,
     IReadOnlyList<ResourceAmount> Inputs,
     IReadOnlyList<ResourceAmount> Outputs,
-    string Venue)
+    string Venue,
+    string? Handoff = null)
 {
     /// <summary>The same trade taken <paramref name="runs"/> times.</summary>
     public Conversion Scaled(int runs)

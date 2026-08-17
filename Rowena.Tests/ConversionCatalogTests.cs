@@ -117,6 +117,39 @@ public class ConversionCatalogTests
         Assert.Equal(100, catalog["tokens-to-barreltender"].Consumes(catalog.ResourceFor("mount-token")));
     }
 
+    private static string WithHandoff => Minimal.Replace(
+        "\"venue\": \"Scrip Exchange\",",
+        "\"venue\": \"Scrip Exchange\", \"handoff\": \"gather-collectables\",");
+
+    [Fact]
+    public void AHandoffHintIsReadAndIsOptional()
+    {
+        var catalog = ConversionCatalog.Load(WithHandoff);
+
+        Assert.Equal("gather-collectables", catalog["mint"].Handoff);
+        Assert.Null(catalog["redeem"].Handoff);
+    }
+
+    [Fact]
+    public void AChainTakesItsHandoffFromTheFirstStep()
+    {
+        // A chain's inputs are earned by its first step, so that is where the hint belongs.
+        // Later steps only spend what the first one produced.
+        Assert.Equal("gather-collectables", ConversionCatalog.Load(WithHandoff)["all-the-way"].Handoff);
+    }
+
+    [Fact]
+    public void TheShippedCatalogueSaysHowScripsAreEarned()
+    {
+        var catalog = ConversionCatalog.Default;
+
+        Assert.Equal("gather-collectables", catalog["scrip-to-token"].Handoff);
+        Assert.Equal("gather-collectables", catalog["scrip-to-rroneek"].Handoff);
+
+        // Buying tokens off the board is not something anyone can be sent to gather.
+        Assert.Null(catalog["tokens-to-rroneek"].Handoff);
+    }
+
     [Fact]
     public void AskingForSomethingAbsentSaysSo()
     {

@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using Rowena.Core.Conversions;
 using Rowena.Core.Universalis;
 using Rowena.Game;
+using Rowena.IPC;
 using Rowena.Market;
 using Rowena.UI;
 
@@ -45,7 +46,9 @@ public sealed class Plugin : IDalamudPlugin
             Ttl = TimeSpan.FromMinutes(Math.Max(1, config.PriceTtlMinutes)),
         };
 
-        mainWindow = new MainWindow(catalog, market, balances, config, Save);
+        var gatherBuddy = new GatherBuddyIpc(PluginInterface, CommandManager, Log);
+
+        mainWindow = new MainWindow(catalog, market, balances, gatherBuddy, config, Save);
         windows.AddWindow(mainWindow);
 
         // The scope is only knowable once a character is loaded, and it can change between

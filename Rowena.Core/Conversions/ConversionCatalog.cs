@@ -130,7 +130,8 @@ public sealed class ConversionCatalog
                 entry.Name ?? id,
                 ReadAmounts(entry.Inputs, resources, id, "input"),
                 ReadAmounts(entry.Outputs, resources, id, "output"),
-                entry.Venue ?? "");
+                entry.Venue ?? "",
+                entry.Handoff);
         }
 
         return conversions;
@@ -227,6 +228,7 @@ public sealed class ConversionCatalog
         string? Id,
         string? Name,
         string? Venue,
+        string? Handoff,
         List<AmountEntry>? Inputs,
         List<AmountEntry>? Outputs);
 

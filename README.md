@@ -129,10 +129,52 @@ dotnet build Rowena/Rowena.csproj    # plugin, needs Dalamud dev assemblies
 The plugin build finds Dalamud via `DALAMUD_HOME`, or the usual XIVLauncher and XIV on Mac
 locations. Only the plugin project needs it; the core and its tests build without.
 
+## Installing
+
+Rowena is not in any plugin repository, so it installs as a Dalamud dev plugin.
+
+```bash
+./scripts/install.sh
+```
+
+That builds, copies the output next to the game's own data, and registers the copied
+assembly as a dev plugin location. `--status` shows what is built and what is installed,
+`--dry-run` changes nothing, `--uninstall` undoes it.
+
+Three things about the registration are easy to get wrong and all three fail the same way,
+with Dalamud reporting a path that does not exist:
+
+- the path has to name the assembly, not the folder holding it
+- DevMode has to be on, or dev plugin locations are never scanned
+- the game runs under wine, where `/` is `Z:`, so the path is the Windows-shaped one
+
+Once registered, installing again works with the game running; Dalamud reloads the assembly
+itself. Only a registration change has to wait for the game to close, because Dalamud writes
+its whole config out on exit and will discard anything edited underneath it.
+
+## Handing off the legwork
+
+Rowena works out that a chain wants 100,000 scrips. It does not gather them.
+
+With GatherBuddyReborn installed, the window shows its auto-gather state and hands work over:
+a sink whose catalogue entry says how its currency is earned gets a button that starts the
+collectable routine, and an input the board could not supply gets an offer to go and gather
+it. That second one asks GatherBuddyReborn to identify the item first, because without the
+check it would cheerfully offer to gather a Mount Token.
+
+How the inputs are earned is catalogue data, a `handoff` string on a conversion, and a chain
+inherits it from its first step since that is where the earning happens. The core never
+interprets it. It is a string the catalogue sets and an integration recognises, which keeps
+Dalamud out of the one project that has no game dependency.
+
+Its IPC is narrow: a version, an item identifier, and the auto-gather switch with its status.
+There is nothing for handing it a list, so queueing goes through its chat commands, and that
+is a looser contract worth knowing about. `/gatherbuddy collect` in particular reports nothing
+back, so Rowena can start it and stop it but cannot tell you whether it is running.
+
 ## Not here yet
 
-- **Handing work off.** GatherBuddyReborn for the gathering that feeds a chain, Artisan for
-  anything that turns out to want crafting.
+- **Artisan.** For a chain that turns out to want crafting rather than gathering.
 - **Alerts.** A fill under some price is a live event and currently you have to go looking.
 - **Undercut watching.** Covered well enough by Marketbuddy and Dagobert; no reason to
   rebuild it.

@@ -10,6 +10,13 @@
     <!-- Required to build a windows-targeted assembly from macOS or Linux. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!--
+      Pinned because MSBuild otherwise inserts the platform when it is not AnyCPU,
+      so building the project directly and building it through the solution landed
+      the same output in bin/Debug and bin/x64/Debug. The install script needs one
+      answer to "where is the assembly".
+    -->
+    <OutputPath>bin\$(Configuration)\</OutputPath>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
