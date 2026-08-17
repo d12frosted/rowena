@@ -26,13 +26,16 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
 
     private const float IconSize = 20f;
 
-    /// <summary>Draws the icon for an item, or a matching gap when there is none.</summary>
-    public void Icon(uint itemId, float size = IconSize)
-    {
-        var entry = items.Get(itemId);
+    private const uint JobIconBase = 62000;
 
-        if (entry.HasIcon
-            && textures.GetFromGameIcon(new GameIconLookup(entry.Icon)).GetWrapOrDefault() is { } texture)
+    /// <summary>Draws the icon for an item, or a matching gap when there is none.</summary>
+    public void Icon(uint itemId, float size = IconSize) => RawIcon(items.Get(itemId).Icon, size);
+
+    /// <summary>Draws a game icon by its own id, or a matching gap.</summary>
+    public void RawIcon(uint iconId, float size = IconSize)
+    {
+        if (iconId != 0
+            && textures.GetFromGameIcon(new GameIconLookup(iconId)).GetWrapOrDefault() is { } texture)
         {
             ImGui.Image(texture.Handle, new Vector2(size, size));
             return;
@@ -40,6 +43,22 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
 
         // A gap the size of an icon, so rows without one still line up.
         ImGui.Dummy(new Vector2(size, size));
+    }
+
+    /// <summary>
+    /// A crafting job as its icon and three letters.
+    /// </summary>
+    /// <remarks>
+    /// The full names do not fit and were being cut to "Woodwo" and "Clothcra", which is worse than
+    /// an abbreviation because it looks like a mistake. The icon carries the recognition and the
+    /// abbreviation carries the certainty.
+    /// </remarks>
+    public void Job(uint classJobId, string abbreviation)
+    {
+        // The class and job icon set runs from 62000, offset by the ClassJob row.
+        RawIcon(classJobId == 0 ? 0 : JobIconBase + classJobId, 16f);
+        ImGui.SameLine(0f, 4f);
+        ImGui.TextColored(Dim, abbreviation);
     }
 
     /// <summary>
@@ -144,16 +163,27 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
         {
             // A busy Artisan would be interrupted, so the entries are shown and disabled rather
             // than hidden, which would read as "this cannot be crafted".
+            //
+            // Disabled by wrapping, not by the second argument of MenuItem: that argument is
+            // "selected", so passing an enabled flag there drew a tick beside every entry.
             var busy = actions.CraftingBusy;
 
+            if (busy)
+                ImGui.BeginDisabled();
+
+            // "Now" because this really does start crafting, rather than queueing anything. Artisan
+            // has no gate for building a list, so there is nothing here that could add to one.
             foreach (var quantity in (int[])[1, 5, 10])
             {
-                if (ImGui.MenuItem($"Craft {quantity} with Artisan", !busy))
+                if (ImGui.MenuItem($"Craft {quantity} now with Artisan"))
                     actions.Craft(craftable, quantity);
             }
 
             if (busy)
+            {
+                ImGui.EndDisabled();
                 ImGui.TextColored(Dim, "   Artisan is busy");
+            }
         }
         else
         {
@@ -162,7 +192,7 @@ internal sealed class ItemCells(Items items, ITextureProvider textures, ItemActi
 
         if (actions.CanMakeLists)
         {
-            if (ImGui.MenuItem("Add 5 to an AllaganTools list"))
+            if (ImGui.MenuItem("Make an AllaganTools list of 5"))
                 actions.AddToCraftList(label, itemId, 5);
         }
         else

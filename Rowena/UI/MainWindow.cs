@@ -214,7 +214,7 @@ internal sealed class MainWindow : Window
             return;
 
         ImGui.TableSetupColumn("Furnishing", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 45);
+        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 62);
         ImGui.TableSetupColumn("materials", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
@@ -230,7 +230,7 @@ internal sealed class MainWindow : Window
             cells.Draw(row.Item, row.ItemId, row.RecipeId, row.Breakdown);
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Dim, row.Job);
+            cells.Job(row.JobId, row.Job);
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{row.Materials:N0}");
@@ -539,7 +539,8 @@ internal sealed class MainWindow : Window
                     earnings.Conversion.Name,
                     made?.ItemId ?? 0,
                     made?.RecipeId,
-                    earnings.Conversion.Venue,
+                    made?.JobId ?? 0,
+                    made?.Job ?? "",
                     earnings.Quote.GilOutlay,
                     earnings.Quote.Profit,
                     earnings.Quote.ReturnOnOutlay,
@@ -730,6 +731,7 @@ internal sealed class MainWindow : Window
         string Item,
         uint ItemId,
         uint? RecipeId,
+        uint JobId,
         string Job,
         long Materials,
         long Profit,

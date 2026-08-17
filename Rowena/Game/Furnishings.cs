@@ -33,7 +33,17 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
     /// and Artisan want, and neither is any business of a project that does not reference the
     /// game.
     /// </remarks>
-    internal readonly record struct Made(uint RecipeId, uint ItemId);
+    /// <param name="JobId">The ClassJob row, for its icon and abbreviation.</param>
+    internal readonly record struct Made(uint RecipeId, uint ItemId, uint JobId, string Job);
+
+    /// <summary>
+    /// CraftType 0 is Carpenter, which is ClassJob 8, and the eight run in step from there.
+    /// </summary>
+    /// <remarks>
+    /// Added rather than looked up because CraftType carries no reference to ClassJob. The offset is
+    /// the whole of the relationship.
+    /// </remarks>
+    private const uint FirstCrafterClassJob = 8;
 
     /// <summary>Built once. The sheets do not change while the game is running.</summary>
     public IReadOnlyList<Conversion> Craftable() => cached ??= Build();
@@ -77,7 +87,13 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
                 continue;
 
             var name = product.Name.ExtractText();
-            made[$"craft-{recipe.RowId}"] = new Made(recipe.RowId, resultId);
+            var jobId = recipe.CraftType.RowId + FirstCrafterClassJob;
+
+            made[$"craft-{recipe.RowId}"] = new Made(
+                recipe.RowId,
+                resultId,
+                jobId,
+                data.GetExcelSheet<ClassJob>().GetRowOrDefault(jobId)?.Abbreviation.ExtractText() ?? "");
 
             conversions.Add(new Conversion(
                 $"craft-{recipe.RowId}",
