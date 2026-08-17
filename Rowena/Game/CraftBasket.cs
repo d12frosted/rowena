@@ -6,7 +6,7 @@ using Rowena.Core.Lists;
 namespace Rowena.Game;
 
 /// <summary>
-/// Things you have decided to craft, held until there are enough of them to be worth a list.
+/// A plan of what to make, held until there is enough of it to be worth a list.
 /// </summary>
 /// <remarks>
 /// Gathered here and sent as one Teamcraft link, rather than exported per click, which would leave a
@@ -16,8 +16,13 @@ namespace Rowena.Game;
 /// Artisan imports and exports it, GatherBuddyReborn's Vulcan window has a tab for it, and the site
 /// itself resolves the sub-crafts, which no plugin-specific export here would have done.
 ///
-/// Kept in the configuration rather than the price cache. A basket is something you meant, not
+/// Kept in the configuration rather than the price cache. A plan is something you meant, not
 /// something that was fetched, so it should survive a reload for the same reason a setting does.
+///
+/// Nothing here is filtered by what you already own, and that is deliberate. A list says what you
+/// intend to make; Artisan decides at craft time what actually needs doing, and it already skips
+/// what is in stock. Subtracting inventory here would bake a snapshot of your bags into a document
+/// that outlives it, and would be wrong by the time you ran it.
 /// </remarks>
 internal sealed class CraftBasket(Configuration config, Recipes recipes, Action save, IPluginLog log)
 {

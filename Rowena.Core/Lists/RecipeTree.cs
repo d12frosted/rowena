@@ -23,6 +23,10 @@ public readonly record struct CraftStep(uint RecipeId, uint ItemId, int Crafts, 
 /// not: it lists what you asked for and nothing beneath it, so the expansion has to happen before the
 /// list is handed over.
 ///
+/// The expansion is complete rather than trimmed to what is missing. A list is a plan of what to
+/// make, and what is already in the bags is a question for whoever runs it, not for whoever writes
+/// it down.
+///
 /// Resolved in depth order rather than by walking outward, and that matters. Walking outward
 /// computes a craft count per requirement as it arrives, so two separate calls for one steel hinge
 /// round up to two crafts where one craft of three would have covered both. Settling every consumer
