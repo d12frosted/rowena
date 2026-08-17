@@ -90,8 +90,8 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
     public string Link() =>
         TeamcraftList.Url(config.ArtisanBasket.Select(item => new TeamcraftEntry(item.ItemId, item.Quantity)));
 
-    /// <summary>Puts the link on the clipboard.</summary>
-    public bool Copy()
+    /// <summary>Puts the Teamcraft link on the clipboard.</summary>
+    public bool CopyLink()
     {
         var url = Link();
         if (url.Length == 0)
@@ -100,6 +100,35 @@ internal sealed class CraftBasket(Configuration config, Action save, IPluginLog 
         ImGui.SetClipboardText(url);
         log.Information($"Copied a Teamcraft link for {config.ArtisanBasket.Count} items.");
         return true;
+    }
+
+    /// <summary>
+    /// Puts the list on the clipboard in Artisan's own import format.
+    /// </summary>
+    /// <remarks>
+    /// One paste, against five steps for the Teamcraft route, which is why both exist. It carries no
+    /// sub-crafts, since Artisan's list format lists what you asked for and nothing beneath it.
+    /// </remarks>
+    public bool CopyForArtisan()
+    {
+        if (config.ArtisanBasket.Count == 0)
+            return false;
+
+        try
+        {
+            var json = ArtisanList.Build(
+                config.ArtisanListName,
+                config.ArtisanBasket.Select(item => new ArtisanEntry(item.RecipeId, item.Quantity)));
+
+            ImGui.SetClipboardText(json);
+            log.Information($"Copied {config.ArtisanBasket.Count} recipes in Artisan's list format.");
+            return true;
+        }
+        catch (Exception error)
+        {
+            log.Warning(error, "Could not build the Artisan list.");
+            return false;
+        }
     }
 
     /// <summary>Opens the link in a browser.</summary>

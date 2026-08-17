@@ -164,25 +164,55 @@ internal sealed class MainWindow : Window
         ImGui.TextUnformatted($"List: {basket.Count} items, {basket.TotalCrafts} crafts");
         ImGui.SameLine();
 
+        // Two routes because they cost very different amounts of effort and only one is portable.
+        if (ImGui.Button("Copy for Artisan"))
+            basket.CopyForArtisan();
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                "One paste, straight into the plugin that crafts.\n"
+                + "\n"
+                + "1. Press this.\n"
+                + "2. Open Artisan, Crafting Lists tab.\n"
+                + "3. Press \"Import List From Clipboard (Artisan Export)\".\n"
+                + "\n"
+                + "Sub-crafts are not included: Artisan's format lists what you asked for\n"
+                + "and nothing beneath it. Use Teamcraft when the intermediates matter.");
+        }
+
+        ImGui.SameLine();
+
         if (ImGui.Button("Open in Teamcraft"))
             basket.Open();
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                "Opens the list on ffxivteamcraft.com, which works out the sub-crafts.\n"
-                + "From there it exports to Artisan, Vulcan, or whatever else you use.");
+                "The long way round, but it works out the sub-crafts and reaches any tool.\n"
+                + "\n"
+                + "1. Press this; the list opens on ffxivteamcraft.com.\n"
+                + "2. In Artisan: Crafting Lists, then the Teamcraft \"Import\" button.\n"
+                + "3. On the site, find the pre-crafts section, press \"Copy as Text\",\n"
+                + "   and paste into Artisan's Pre-craft Items box.\n"
+                + "4. Do the same for the final items section.\n"
+                + "5. Name the list and press Import.");
         }
 
         ImGui.SameLine();
 
         if (ImGui.Button("Copy link"))
-            basket.Copy();
+            basket.CopyLink();
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("The same Teamcraft link, for pasting into a browser yourself.");
 
         ImGui.SameLine();
 
         if (ImGui.Button("Clear"))
             basket.Clear();
+
+        ImGui.TextColored(Dim, "    Artisan is one paste; Teamcraft is five steps but expands sub-crafts.");
 
         uint? removing = null;
 
