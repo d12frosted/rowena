@@ -1,9 +1,10 @@
-# Splendors
+# Rowena
 
 Works out what a fixed-rate trade in FFXIV is actually worth, by reading how deep the
 market board is behind the price it advertises.
 
-The name is Rowena's, since the scrip counter is where most of these trades happen.
+Named after the woman who runs every scrip exchange in the game and has never once given
+anybody a good deal.
 
 ## Why
 
@@ -21,7 +22,7 @@ A recorded snapshot of Mount Token on Light, floor 48,795:
 The blended price is 50,127 and the last unit costs 50,895. That gap turned a trade that
 looked like 21% into one that pays 17.5%. Same board, same moment, just read properly.
 
-Splendors prices an order by walking the book, not by multiplying the floor.
+Rowena prices an order by walking the book, not by multiplying the floor.
 
 ## What it models
 
@@ -40,9 +41,9 @@ obvious move and it is the worse one:
 | gather, mint tokens, sell tokens | 46.36 |
 | gather, mint tokens, redeem for a mount, sell the mount | 58.90 |
 
-27% more gil for the same gathering, from the same snapshot. `ConversionChain.Compose`
-derives the composed rate from the two published ones, so 100,000 scrips per mount is
-computed rather than typed and cannot drift away from them.
+27% more gil for the same gathering, from the same snapshot. A chain names its steps and the
+composed rate is derived from the published ones, so 100,000 scrips per mount is computed
+rather than typed and cannot drift away from them.
 
 Two things a margin needs to survive contact with reality, both carried on every quote:
 
@@ -55,35 +56,84 @@ Two things a margin needs to survive contact with reality, both carried on every
 `LargestProfitableSize` answers the question that follows from all of this: not "is this
 profitable" but "how many can I actually do before the book eats the margin".
 
+## The catalogue
+
+Trades live in `conversions.json`, because every rate in it is something a patch can change
+and adding a sink should be an edit, not a rebuild.
+
+```json
+{
+  "resources": {
+    "orange-gatherers-scrip": { "kind": "currency", "id": 41785, "name": "Orange Gatherers' Scrip" },
+    "mount-token":            { "kind": "item",     "id": 41807, "name": "Mount Token" }
+  },
+  "conversions": [
+    { "id": "scrip-to-token", "venue": "Scrip Exchange",
+      "inputs":  [ { "resource": "orange-gatherers-scrip", "quantity": 1000 } ],
+      "outputs": [ { "resource": "mount-token", "quantity": 1 } ] }
+  ],
+  "chains": [
+    { "id": "scrip-to-rroneek", "steps": [ "scrip-to-token", "tokens-to-rroneek" ] }
+  ]
+}
+```
+
+A chain names its steps and nothing else; what links them is inferred from what one produces
+and the next consumes, and only has to be named when it is genuinely ambiguous. A catalogue
+that names an unknown resource, reuses an id or will not compose fails loudly and says which,
+since one that quietly dropped half its entries would read as "nothing is worth doing".
+
+A copy ships embedded, so the library works with no configuration. The plugin writes it out
+to its config directory on first run, so there is a real file to edit rather than a schema to
+read about. Break that file and you lose your edit, not the plugin.
+
+## The plugin
+
+`/rowena` opens one window: what you are holding, and what it is worth turning into.
+
+Deliberately not a market browser. It only answers the questions that need both halves of
+the picture, your balances and the depth of the board, because either alone is already
+covered by something else. Sinks are ranked by gil per scrip; flips show outlay, profit,
+return and how many runs the book will actually bear.
+
+Balances are the reason this is a plugin at all rather than a script. Whether the answer is
+"buy" or "go gather" depends on how many scrips you are sitting on and how close that is to
+the cap, and nothing outside the game knows that.
+
+It reads and displays. It does not drive your character.
+
 ## Layout
 
 ```
-Splendors.Core/          plain .NET, no Dalamud, no game types
-  Market/                listings, order books, depth, tax
-  Conversions/           resources, conversions, chaining, evaluation, seed catalogue
-  Universalis/           parsing and fetching
-Splendors.Tests/         xunit, with recorded Universalis responses
+Rowena.Core/          plain .NET, no Dalamud, no game types
+  Market/             listings, order books, depth, tax
+  Conversions/        resources, conversions, chaining, evaluation, catalogue
+  Universalis/        parsing and fetching
+Rowena.Tests/         xunit, with recorded Universalis responses
+Rowena/               the Dalamud plugin, net10.0-windows
+  Game/               the only code that touches the client
+  Market/             price cache
+  UI/                 the window
 ```
 
-The core is deliberately free of Dalamud so it builds and runs anywhere. All of the
-arithmetic lives there, which is where the mistakes will be, so none of it should need a
-running client to test. Iterating market maths through a plugin reload loop is no way to
-live.
+All of the arithmetic is in the core, which is where the mistakes will be, so none of it
+needs a running client to test. Iterating market maths through a plugin reload loop is no way
+to live. The game-touching surface is one small file, so when a patch moves something there
+is one place to look.
 
 ```bash
-dotnet test
+dotnet test                          # core, anywhere
+dotnet build Rowena/Rowena.csproj    # plugin, needs Dalamud dev assemblies
 ```
+
+The plugin build finds Dalamud via `DALAMUD_HOME`, or the usual XIVLauncher and XIV on Mac
+locations. Only the plugin project needs it; the core and its tests build without.
 
 ## Not here yet
 
-- **The plugin.** Everything that genuinely needs the client: current scrip balances
-  against the 4,000 cap, gil, inventory, retainer stock. Knowing whether to buy or to
-  gather depends on what you are already holding, and only the client knows that.
-- **A JSON catalogue.** `ConversionCatalog` is hardcoded seed data. The whole point of the
-  conversion shape is that adding a sink should be an edit, not a build, and every rate in
-  it is something a patch can change.
 - **Handing work off.** GatherBuddyReborn for the gathering that feeds a chain, Artisan for
   anything that turns out to want crafting.
+- **Alerts.** A fill under some price is a live event and currently you have to go looking.
 - **Undercut watching.** Covered well enough by Marketbuddy and Dagobert; no reason to
   rebuild it.
 

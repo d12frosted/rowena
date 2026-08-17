@@ -1,0 +1,55 @@
+{
+  "$comment": [
+    "Fixed-rate trades worth watching. Every rate in here is something a patch can change,",
+    "which is the whole reason this is data and not code.",
+    "",
+    "Resource keys are local to this file. Ids are Item sheet row ids.",
+    "Chains name their steps and the linking resource is inferred, so a composed rate is",
+    "always derived from the published ones and cannot drift away from them."
+  ],
+
+  "resources": {
+    "orange-gatherers-scrip": { "kind": "currency", "id": 41785, "name": "Orange Gatherers' Scrip" },
+    "orange-crafters-scrip":  { "kind": "currency", "id": 41784, "name": "Orange Crafters' Scrip" },
+    "mount-token":            { "kind": "item",     "id": 41807, "name": "Mount Token" },
+    "rroneek-horn":           { "kind": "item",     "id": 43598, "name": "Rroneek Horn" },
+    "barreltender-whistle":   { "kind": "item",     "id": 44502, "name": "Barreltender Whistle" }
+  },
+
+  "conversions": [
+    {
+      "id": "scrip-to-token",
+      "name": "Orange gatherers' scrip to Mount Token",
+      "venue": "Scrip Exchange",
+      "inputs":  [ { "resource": "orange-gatherers-scrip", "quantity": 1000 } ],
+      "outputs": [ { "resource": "mount-token", "quantity": 1 } ]
+    },
+    {
+      "id": "tokens-to-rroneek",
+      "name": "Mount Tokens to Rroneek Horn",
+      "venue": "Splendors Vendor, Solution Nine",
+      "inputs":  [ { "resource": "mount-token", "quantity": 100 } ],
+      "outputs": [ { "resource": "rroneek-horn", "quantity": 1 } ]
+    },
+    {
+      "id": "tokens-to-barreltender",
+      "name": "Mount Tokens to Barreltender Whistle",
+      "venue": "Splendors Vendor, Solution Nine",
+      "inputs":  [ { "resource": "mount-token", "quantity": 100 } ],
+      "outputs": [ { "resource": "barreltender-whistle", "quantity": 1 } ]
+    }
+  ],
+
+  "chains": [
+    {
+      "id": "scrip-to-rroneek",
+      "name": "Gather through to a Rroneek",
+      "steps": [ "scrip-to-token", "tokens-to-rroneek" ]
+    },
+    {
+      "id": "scrip-to-barreltender",
+      "name": "Gather through to a Barreltender",
+      "steps": [ "scrip-to-token", "tokens-to-barreltender" ]
+    }
+  ]
+}

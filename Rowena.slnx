@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Rowena.Core/Rowena.Core.csproj" />
+  <Project Path="Rowena.Tests/Rowena.Tests.csproj" />
+  <Project Path="Rowena/Rowena.csproj">
+    <Platform Project="x64" />
+  </Project>
+</Solution>

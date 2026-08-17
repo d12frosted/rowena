@@ -1,0 +1,19 @@
+{
+  "Name": "Rowena",
+  "Author": "d12frosted",
+  "Punchline": "What a trade is actually worth, once you read how deep the board is.",
+  "Description": "Every market tool shows the cheapest listing, and the cheapest listing is a bad summary of a market. A floor with three units behind it and a floor with three hundred are completely different propositions, and only one of them supports a trade of any size.\n\nRowena prices an order by walking the book. It knows what a hundred units actually cost, what the last one costs, and how many exist at all. It reads your scrip balances against their cap, ranks the sinks by gil per scrip, and tells you how many times a trade can be run before the depth eats the margin.\n\nIt also chains trades. Scrips into a token into a mount is a better rate than stopping at the token, and the composed rate is derived from the published ones rather than typed in. Conversions live in an editable JSON file, because every rate in the game is something a patch can change.\n\nPrices come from Universalis. Nothing here drives your character.",
+  "InternalName": "Rowena",
+  "RepoUrl": "https://github.com/d12frosted/rowena",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 15,
+  "Tags": [
+    "gil",
+    "market",
+    "marketboard",
+    "universalis",
+    "scrip",
+    "crafting",
+    "gathering"
+  ]
+}
