@@ -55,6 +55,8 @@ internal sealed class MainWindow : Window
 
     private Model? model;
     private DateTime builtAt;
+    private bool restoreAttempted;
+    private long persistedSweepAt;
 
     public MainWindow(
         ConversionCatalog catalog,
@@ -128,6 +130,11 @@ internal sealed class MainWindow : Window
             return;
         }
 
+        // Prices saved by a previous session, as soon as there is a board to compare them against.
+        market.RestoreOnce(where, SweepMaxAge);
+        RestoreSweepOnce();
+        PersistFinishedSweep(where);
+
         var current = Current();
 
         DrawWhatYouHold(current);
@@ -151,7 +158,7 @@ internal sealed class MainWindow : Window
         }
 
         if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
-            sweep.Start(where, config.PriceBatchSize, config.FurnishingShortlist);
+            sweep.Start(where, config.PriceBatchSize, config.FurnishingShortlist, SweepMaxAge);
 
         ImGui.SameLine();
 
@@ -171,10 +178,14 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        // Never a silent cap: the table is trimmed for legibility and says by how much.
+        // Never a silent cap: the table is trimmed for legibility and says by how much. The age is
+        // shown because a restored sweep can be hours old, and that is fine for choosing what to
+        // make but should not be mistaken for live depth.
+        var age = sweep.ReadyAt is { } at ? $"swept {Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
+
         ImGui.TextColored(
             Dim,
-            $"  {sweep.Detail}, showing {current.Crafts.Length} of {current.CraftsRanked}"
+            $"  {age}{sweep.Detail}, showing {current.Crafts.Length} of {current.CraftsRanked}"
             + (current.CraftsDiscarded > 0 ? $", {current.CraftsDiscarded} unpriceable" : ""));
 
         // Which materials are doing the blocking. This is the evidence for whether following
@@ -420,6 +431,40 @@ internal sealed class MainWindow : Window
         }
 
         ImGui.EndTable();
+    }
+
+    private TimeSpan SweepMaxAge => TimeSpan.FromHours(Math.Max(1, config.SweepMaxAgeHours));
+
+    /// <summary>
+    /// Rebuilds the last sweep's shortlist from what came back off disk.
+    /// </summary>
+    /// <remarks>
+    /// Attempted once. A restore that finds nothing usable leaves the sweep idle, and retrying that
+    /// every frame would walk the recipe sheet forever.
+    /// </remarks>
+    private void RestoreSweepOnce()
+    {
+        if (restoreAttempted || market.RestoredSweep is not { } stored)
+            return;
+
+        restoreAttempted = true;
+        sweep.Restore(stored);
+    }
+
+    /// <summary>
+    /// Writes a finished sweep out once, rather than trusting it to survive to Dispose.
+    /// </summary>
+    /// <remarks>
+    /// On a background task: it is a few hundred kilobytes of gzip and has no business inside a
+    /// frame.
+    /// </remarks>
+    private void PersistFinishedSweep(string where)
+    {
+        if (sweep.Snapshot() is not { } snapshot || snapshot.At == persistedSweepAt)
+            return;
+
+        persistedSweepAt = snapshot.At;
+        _ = Task.Run(() => market.Persist(where, snapshot));
     }
 
     /// <summary>The current numbers, rebuilt only when they have had time to change.</summary>

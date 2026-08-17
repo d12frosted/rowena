@@ -65,17 +65,79 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
-    public void Start(string? scope, int chunkSize, int shortlistSize)
+    public void Start(string? scope, int chunkSize, int shortlistSize, TimeSpan maxAge)
     {
         if (Running || string.IsNullOrWhiteSpace(scope))
             return;
 
         State = Phase.Products;
         Detail = "reading the sheets";
-        _ = Task.Run(() => Run(scope, chunkSize, shortlistSize));
+        _ = Task.Run(() => Run(scope, chunkSize, shortlistSize, maxAge));
     }
 
-    private async Task Run(string scope, int chunkSize, int shortlistSize)
+    /// <summary>
+    /// Picks up a sweep a previous session finished, without repeating any of its requests.
+    /// </summary>
+    /// <remarks>
+    /// The prices come back from the cache on their own. What is restored here is the far cheaper
+    /// half: which furnishings were found worth costing, so the ranking can be rebuilt without
+    /// spending another few minutes discovering the same shortlist.
+    ///
+    /// The sheet walk still happens, on this thread, because a shortlist is a list of ids and the
+    /// conversions behind them are not stored.
+    /// </remarks>
+    public void Restore(StoredSweep stored)
+    {
+        if (Running || State == Phase.Ready)
+            return;
+
+        State = Phase.Shortlisting;
+        Detail = "restoring the last sweep";
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var byId = furnishings.Craftable().ToDictionary(conversion => conversion.Id, StringComparer.Ordinal);
+
+                var shortlist = stored.Shortlist
+                    .Select(id => byId.GetValueOrDefault(id))
+                    .Where(conversion => conversion is not null)
+                    .Select(conversion => conversion!)
+                    .ToArray();
+
+                if (shortlist.Length == 0)
+                {
+                    State = Phase.Idle;
+                    Detail = "";
+                    return;
+                }
+
+                Candidates = stored.Candidates;
+                Shortlist = shortlist;
+                Blockers = Blocking(shortlist);
+                ReadyAt = DateTimeOffset.FromUnixTimeMilliseconds(stored.At);
+                State = Phase.Ready;
+                Detail = $"{shortlist.Length} of {Candidates} costed";
+
+                log.Information($"Restored a sweep of {shortlist.Length} furnishings from cache.");
+            }
+            catch (Exception error)
+            {
+                State = Phase.Idle;
+                Detail = "";
+                log.Warning(error, "Could not restore the last sweep.");
+            }
+        });
+    }
+
+    /// <summary>The sweep as it goes to disk. Null until one has finished.</summary>
+    public StoredSweep? Snapshot() =>
+        State == Phase.Ready && ReadyAt is { } at
+            ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
+            : null;
+
+    private async Task Run(string scope, int chunkSize, int shortlistSize, TimeSpan maxAge)
     {
         try
         {
@@ -116,7 +178,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 .Where(input => input.Resource.Kind == ResourceKind.Item)
                 .Select(input => input.Resource.Id)
                 .Distinct()
-                .Where(market.IsStale)
+                .Where(id => market.IsStale(id, maxAge))
                 .ToArray();
 
             State = Phase.Ingredients;

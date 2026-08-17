@@ -18,7 +18,7 @@ namespace Rowena.Market;
 /// answers reliably while fifty and a hundred both time out with a 504, twice each. So a large
 /// sweep is many small requests rather than a few big ones, and it takes as long as it takes.
 /// </remarks>
-internal sealed class MarketCache(IMarketDataSource source, IPluginLog log)
+internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IPluginLog log)
 {
     /// <summary>One retry, because a 504 is usually the service and not the request.</summary>
     private const int Attempts = 2;
@@ -27,6 +27,8 @@ internal sealed class MarketCache(IMarketDataSource source, IPluginLog log)
     private static readonly TimeSpan AfterFailure = TimeSpan.FromSeconds(2);
 
     private readonly ConcurrentDictionary<uint, Snapshot> books = new();
+
+    private bool restored;
 
     public TimeSpan Ttl { get; set; } = TimeSpan.FromMinutes(10);
 
@@ -43,8 +45,56 @@ internal sealed class MarketCache(IMarketDataSource source, IPluginLog log)
     /// <summary>A lookup shaped for the evaluator.</summary>
     public Func<uint, OrderBook?> Lookup => Book;
 
-    public bool IsStale(uint itemId) =>
-        !books.TryGetValue(itemId, out var snapshot) || DateTimeOffset.UtcNow - snapshot.Fetched > Ttl;
+    public bool IsStale(uint itemId) => IsStale(itemId, Ttl);
+
+    /// <summary>
+    /// Whether an item's price is older than the caller is willing to accept.
+    /// </summary>
+    /// <remarks>
+    /// The age is the caller's business rather than one setting, because two questions here have
+    /// completely different needs. Deciding whether to spend fifteen million on tokens wants
+    /// depth from minutes ago. Deciding which of nine hundred furnishings is worth making wants a
+    /// rough map, and one from this morning is fine, which is what makes a sweep affordable at
+    /// twenty ids a request.
+    /// </remarks>
+    public bool IsStale(uint itemId, TimeSpan maxAge) =>
+        !books.TryGetValue(itemId, out var snapshot) || DateTimeOffset.UtcNow - snapshot.Fetched > maxAge;
+
+    /// <summary>Everything held, for writing to disk.</summary>
+    public IEnumerable<(uint ItemId, OrderBook Book, DateTimeOffset Fetched)> Export() =>
+        books.Select(entry => (entry.Key, entry.Value.Book, entry.Value.Fetched));
+
+    /// <summary>What a previous session swept, if it is still worth having.</summary>
+    public StoredSweep? RestoredSweep { get; private set; }
+
+    /// <summary>
+    /// Loads saved prices, once, as soon as the scope is known.
+    /// </summary>
+    /// <remarks>
+    /// Not in the constructor, because which board we are pricing against is only knowable after a
+    /// character is loaded, and prices from the wrong one are worse than none.
+    /// </remarks>
+    public void RestoreOnce(string scope, TimeSpan maxAge)
+    {
+        if (restored)
+            return;
+
+        restored = true;
+
+        if (store.Load(scope, maxAge) is not { } loaded)
+            return;
+
+        foreach (var (itemId, book, fetched) in loaded.Books)
+            books[itemId] = new Snapshot(book, fetched);
+
+        RestoredSweep = loaded.Sweep;
+    }
+
+    public void Persist(string scope, StoredSweep? sweep)
+    {
+        if (!books.IsEmpty)
+            store.Save(scope, Export(), sweep);
+    }
 
     /// <summary>
     /// Fetches anything missing or past its shelf life. Returns immediately; the window

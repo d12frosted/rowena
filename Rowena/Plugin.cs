@@ -29,6 +29,9 @@ public sealed class Plugin : IDalamudPlugin
     private readonly MainWindow mainWindow;
     private readonly HttpClient http;
     private readonly Configuration config;
+    private readonly MarketCache market;
+    private readonly PricingScope scope;
+    private readonly FurnishingSweep sweep;
 
     public Plugin()
     {
@@ -37,7 +40,7 @@ public sealed class Plugin : IDalamudPlugin
         var catalog = LoadCatalog();
         var allaganTools = new AllaganToolsIpc(PluginInterface, Log);
         var balances = new Balances(Objects, allaganTools, Log);
-        var scope = new PricingScope(config, balances);
+        scope = new PricingScope(config, balances);
 
         // Universalis asks callers to identify themselves, which costs nothing and makes
         // it possible for them to tell a badly behaved client from a busy one.
@@ -48,14 +51,17 @@ public sealed class Plugin : IDalamudPlugin
         // where the game will answer, and passed down with each fetch.
         var source = new UniversalisClient(http, config.ListingDepth);
 
-        var market = new MarketCache(source, Log)
+        var store = new PriceStore(
+            Path.Combine(PluginInterface.ConfigDirectory.FullName, "prices.json.gz"), Log);
+
+        market = new MarketCache(source, store, Log)
         {
             Ttl = TimeSpan.FromMinutes(Math.Max(1, config.PriceTtlMinutes)),
         };
 
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
-        var sweep = new FurnishingSweep(furnishings, market, Log);
+        sweep = new FurnishingSweep(furnishings, market, Log);
 
         var actions = new ItemActions(new ArtisanIpc(PluginInterface, Log), allaganTools, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market);
@@ -113,6 +119,10 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        // A sweep is minutes of requests and a reload is constant in dev mode, so it is written out
+        // on the way past rather than only when it finishes.
+        market.Persist(scope.Current ?? "", sweep.Snapshot());
+
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;

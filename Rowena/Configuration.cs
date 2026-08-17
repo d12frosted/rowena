@@ -55,6 +55,16 @@ public sealed class Configuration : IPluginConfiguration
     public int FurnishingShortlist { get; set; } = 60;
 
     /// <summary>
+    /// How old swept prices may be before a sweep is worth repeating.
+    /// </summary>
+    /// <remarks>
+    /// Hours rather than the minutes the flip tables want, and deliberately so. Choosing which of
+    /// nine hundred furnishings to make needs a rough map, not live depth, and treating the two
+    /// questions the same would mean either a stale flip or an unaffordable sweep.
+    /// </remarks>
+    public int SweepMaxAgeHours { get; set; } = 12;
+
+    /// <summary>
     /// How many crafts a day you could actually perform, or zero for "the market decides".
     /// </summary>
     /// <remarks>
