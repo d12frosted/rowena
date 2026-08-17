@@ -68,10 +68,12 @@ public sealed class Plugin : IDalamudPlugin
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, config, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
         var boards = new Boards(market, scope);
+        var trades = new Trades(catalog);
+        var convertTab = new ConvertTab(trades, boards, balances, cells, config);
         var craftTab = new CraftTab(sweep, furnishings, boards, cells, basket, config);
 
         mainWindow = new MainWindow(
-            catalog, market, balances, scope, gatherBuddy, sweep, craftTab, cells, config, Save);
+            trades, market, balances, scope, gatherBuddy, sweep, convertTab, craftTab, config, Save);
         windows.AddWindow(mainWindow);
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
