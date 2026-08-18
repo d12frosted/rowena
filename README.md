@@ -6,6 +6,11 @@ market board is behind the price it advertises.
 Named after the woman who runs every scrip exchange in the game and has never once given
 anybody a good deal.
 
+> **Highly experimental, and still being built.** Things move between commits, the catalogue
+> is small and written by hand, and nobody but me has run this. The arithmetic is tested. The
+> data under it is whatever Universalis last heard from somebody's client, so check the board
+> yourself before acting on a number here.
+
 ## Why
 
 Every market tool shows the cheapest listing. The cheapest listing is a bad summary of a
