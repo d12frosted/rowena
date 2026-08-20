@@ -26,6 +26,13 @@ internal static class Fixtures
     public const long RecordedListingTotal = 146_385;
     public const long RecordedListingTax = 7_319;
 
+    /// <summary>
+    /// A Barreltender listing whose 5% lands on exactly half a gil: 7,499,990 recorded
+    /// with a tax of 374,999. Pins that the half is dropped rather than rounded up.
+    /// </summary>
+    public const long RecordedHalfGilListingTotal = 7_499_990;
+    public const long RecordedHalfGilListingTax = 374_999;
+
     public static string Read(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
 

@@ -23,6 +23,14 @@ public class MarketTaxTests
     }
 
     [Fact]
+    public void TheHalfGilIsDroppedToo()
+    {
+        // A recorded Barreltender listing of 7,499,990 carries a tax of 374,999, and 5%
+        // of it is exactly 374,999.5. So the cut is floored, not rounded half up.
+        Assert.Equal(Fixtures.RecordedHalfGilListingTax, MarketTax.Standard.On(Fixtures.RecordedHalfGilListingTotal));
+    }
+
+    [Fact]
     public void NoTaxLeavesTheSaleAlone()
     {
         Assert.Equal(1_000, MarketTax.None.NetProceeds(1_000));

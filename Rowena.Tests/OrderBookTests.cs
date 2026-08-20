@@ -29,7 +29,7 @@ public class OrderBookTests
     [Fact]
     public void BuyingWithinOneListingPaysThatPrice()
     {
-        var quote = Book((100, 10)).CostToBuy(3);
+        var quote = Book((100, 10)).CostToBuy(3, MarketTax.None);
 
         Assert.True(quote.IsComplete);
         Assert.Equal(300, quote.Total);
@@ -40,7 +40,7 @@ public class OrderBookTests
     public void BuyingAcrossListingsClimbsTheBook()
     {
         // Three at 100 then two at 250: five units cost 800, not five times the floor.
-        var quote = Book((100, 3), (250, 5)).CostToBuy(5);
+        var quote = Book((100, 3), (250, 5)).CostToBuy(5, MarketTax.None);
 
         Assert.True(quote.IsComplete);
         Assert.Equal(800, quote.Total);
@@ -52,7 +52,7 @@ public class OrderBookTests
     [Fact]
     public void BuyingMoreThanIsListedReportsTheShortfall()
     {
-        var quote = Book((100, 2)).CostToBuy(10);
+        var quote = Book((100, 2)).CostToBuy(10, MarketTax.None);
 
         Assert.False(quote.IsComplete);
         Assert.Equal(2, quote.Filled);
@@ -63,11 +63,44 @@ public class OrderBookTests
     [Fact]
     public void BuyingNothingCostsNothing()
     {
-        var quote = Book((100, 2)).CostToBuy(0);
+        var quote = Book((100, 2)).CostToBuy(0, MarketTax.Standard);
 
         Assert.Equal(0, quote.Total);
+        Assert.Equal(0, quote.Tax);
         Assert.Equal(0, quote.Filled);
         Assert.Equal(0d, quote.AverageUnitPrice);
+    }
+
+    [Fact]
+    public void BuyingPaysTheBoardsCutOnTopOfTheSticker()
+    {
+        // The recorded Mount Token listing: three units at 48,795 carry a tax of 7,319,
+        // so the buyer actually hands over 153,704, not the 146,385 on the sticker.
+        var quote = Book((48_795, 3)).CostToBuy(3, MarketTax.Standard);
+
+        Assert.Equal(7_319, quote.Tax);
+        Assert.Equal(146_385 + 7_319, quote.Total);
+    }
+
+    [Fact]
+    public void TaxIsFlooredPerListingTheWayTheBoardCharges()
+    {
+        // Two listings at 7,499,990 each carry 374,999 (the half gil dropped per listing,
+        // as recorded on the Barreltender fixture), where 5% of the combined spend would
+        // round up to 749,999.
+        var quote = Book((7_499_990, 1), (7_499_990, 1)).CostToBuy(2, MarketTax.Standard);
+
+        Assert.Equal(749_998, quote.Tax);
+    }
+
+    [Fact]
+    public void APartialTakeIsTaxedOnWhatWasSpent()
+    {
+        // Three of a ten-unit listing: 450 spent, 22.5 of tax floored to 22.
+        var quote = Book((150, 10)).CostToBuy(3, MarketTax.Standard);
+
+        Assert.Equal(22, quote.Tax);
+        Assert.Equal(472, quote.Total);
     }
 
     [Fact]
@@ -147,9 +180,10 @@ public class OrderBookTests
         var book = Fixtures.Book(Fixtures.MountToken);
         var floor = book.Floor!.Value;
 
-        var quote = book.CostToBuy(100);
+        var quote = book.CostToBuy(100, MarketTax.Standard);
 
         Assert.True(quote.Filled > 0);
+        Assert.True(quote.Tax > 0);
         Assert.True(quote.Total > floor * quote.Filled);
         Assert.True(quote.AverageUnitPrice > floor);
         Assert.True(quote.WorstUnitPrice > floor);

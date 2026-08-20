@@ -228,11 +228,15 @@ interprets it. It is the link an activity will need in order to know what it pro
 - **Undercut watching.** Covered well enough by Marketbuddy and Dagobert; no reason to
   rebuild it.
 
-## One thing to verify
+## The board taxes both sides
 
-The 5% is modelled as coming out of the seller's proceeds, which is how gil-making
-arithmetic is normally written. Universalis reports a `tax` field on each listing, which
-hints the board may charge it buy-side instead. The rounding is pinned to real data (a
-146,385 gil listing carries 7,319 tax, so the fraction is dropped, not rounded), but which
-side pays is worth confirming in game. If it is the other way round, `MarketTax` is the only
-place that changes.
+The buyer pays a flat 5% on top of every listing, and the seller receives the listed price
+less 0 to 5% depending on the city the retainer stands in. Both cuts are in the model: the
+book walk charges the buyer's tax per listing as it goes, so an outlay is gil out of pocket
+rather than the sticker, and proceeds are netted at the maximum seller rate, which is what
+the three original city states always charge. Parking retainers in a cheaper city is a real
+1 to 5% edge the numbers deliberately do not assume.
+
+The rounding is pinned to recorded data: a 146,385 gil listing carries 7,319 tax where 5%
+is 7,319.25, and a 7,499,990 one carries 374,999 where 5% is exactly 374,999.5. Floored,
+both times, even at the half.

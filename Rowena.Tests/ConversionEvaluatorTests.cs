@@ -66,6 +66,20 @@ public class ConversionEvaluatorTests
     }
 
     [Fact]
+    public void BuyingInputsPaysTheBoardTaxAsWellAsTheSticker()
+    {
+        // The board charges the buyer 5% on top of every listing, so an outlay that
+        // stopped at the sticker would flatter every trade that buys its inputs.
+        var sticker = Tokens.CostToBuy(100, MarketTax.None).Total;
+        var taxed = Tokens.CostToBuy(100, MarketTax.Standard).Total;
+
+        var quote = Quote("tokens-to-rroneek");
+
+        Assert.Equal(taxed, quote.GilOutlay);
+        Assert.True(quote.GilOutlay > sticker);
+    }
+
+    [Fact]
     public void AbsorptionIsReportedAlongsideTheMargin()
     {
         // A margin you cannot sell into is not a margin, so the quote has to carry this.

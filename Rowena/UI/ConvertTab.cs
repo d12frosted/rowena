@@ -42,7 +42,7 @@ internal sealed class ConvertTab
         "Runs your own stock already covers, retainers included. Not deducted from the outlay:\n"
         + "what you hold is still worth what the board would pay for it.",
         "What buying the inputs costs, walked down the book rather than multiplied out from\n"
-        + "the cheapest listing.",
+        + "the cheapest listing, with the board's 5% buyer's cut included.",
         "Gil left over once the output is sold and the market has taken its cut.",
         "Profit over outlay. Worth reading next to the column beside it: a high return on a\n"
         + "trade that takes a month to sell is not a good trade.",

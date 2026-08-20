@@ -78,12 +78,19 @@ public sealed class OrderBook
     /// Walks the book from the cheapest listing up, consuming whole or partial listings
     /// until the order is filled or the board runs dry.
     /// </summary>
-    public BuyQuote CostToBuy(int quantity)
+    /// <remarks>
+    /// The buyer's tax is charged per listing and floored per listing, which is how the
+    /// board does it: a recorded listing of 146,385 carries exactly 7,319. A partial take
+    /// is taxed on what was spent on that listing, the consistent extension of a model
+    /// that already allows partial fills.
+    /// </remarks>
+    public BuyQuote CostToBuy(int quantity, MarketTax tax)
     {
         if (quantity <= 0)
-            return new BuyQuote(Math.Max(0, quantity), 0, 0, 0);
+            return new BuyQuote(Math.Max(0, quantity), 0, 0, 0, 0);
 
         long total = 0;
+        long taxed = 0;
         var filled = 0;
         long worst = 0;
 
@@ -93,12 +100,14 @@ public sealed class OrderBook
                 break;
 
             var taken = Math.Min(listing.Quantity, quantity - filled);
-            total += listing.UnitPrice * taken;
+            var spent = listing.UnitPrice * taken;
+            total += spent;
+            taxed += tax.On(spent);
             filled += taken;
             worst = listing.UnitPrice;
         }
 
-        return new BuyQuote(quantity, filled, total, worst);
+        return new BuyQuote(quantity, filled, total + taxed, worst, taxed);
     }
 
     /// <summary>

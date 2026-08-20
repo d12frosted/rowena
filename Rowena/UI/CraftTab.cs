@@ -30,7 +30,8 @@ internal sealed class CraftTab
         null,
         "The crafting job the recipe belongs to.",
         "What the direct materials cost, walked down the book rather than multiplied out from\n"
-        + "the cheapest listing. Sub-crafts are priced as bought, not as made.",
+        + "the cheapest listing, with the board's 5% buyer's cut included. Sub-crafts are\n"
+        + "priced as bought, not as made.",
         "Gil left over from one craft, once it sells and the market has taken its cut.",
         "Profit over what the materials cost.",
         "How many the board is currently selling in a day, on your world rather than the whole\n"
@@ -443,7 +444,7 @@ internal sealed class CraftTab
             .Where(input => input.Resource.Kind == ResourceKind.Item)
             .Select(input =>
             {
-                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity);
+                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, MarketTax.Standard);
 
                 return new ItemCells.MaterialLine(
                     input.Resource.Id,

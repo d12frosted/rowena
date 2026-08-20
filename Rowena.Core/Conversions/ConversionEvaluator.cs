@@ -33,7 +33,8 @@ public static class ConversionEvaluator
     /// Inputs are priced by walking the book, which is the entire reason this library
     /// exists. Buying a hundred of something is not a hundred times the floor, and the
     /// gap between those two numbers has been the difference between a trade worth doing
-    /// and one that is not.
+    /// and one that is not. The walk charges the buyer's tax as it goes, so the outlay
+    /// is gil out of pocket, not the sticker.
     ///
     /// Outputs are valued at the floor, which is mildly optimistic: to actually sell you
     /// have to match it or undercut it. It is left optimistic on purpose, so that the
@@ -73,7 +74,7 @@ public static class ConversionEvaluator
                 continue;
             }
 
-            var quote = book.CostToBuy(input.Quantity);
+            var quote = book.CostToBuy(input.Quantity, tax);
             outlay += quote.Total;
 
             if (!quote.IsComplete)
