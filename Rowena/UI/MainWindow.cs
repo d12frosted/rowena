@@ -70,13 +70,14 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        strip = new StatusStrip(
-            market,
-            balances,
-            trades,
-            gatherBuddy,
-            () => RefreshCatalogue(scope.Buying, scope.Selling, force: true));
+        strip = new StatusStrip(market, balances, trades, gatherBuddy, RefreshPrices);
     }
+
+    /// <summary>
+    /// Refetches every catalogue item. The strip's button, and the settings tab's reload,
+    /// which swaps trades in that no book has been fetched for yet.
+    /// </summary>
+    public void RefreshPrices() => RefreshCatalogue(scope.Buying, scope.Selling, force: true);
 
     public override void Draw()
     {

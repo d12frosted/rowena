@@ -37,7 +37,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        var catalog = LoadCatalog();
+        var catalogFile = new CatalogFile(
+            Path.Combine(PluginInterface.ConfigDirectory.FullName, CatalogFileName), Log);
+        var catalog = catalogFile.LoadOrDefault();
         var allaganTools = new AllaganToolsIpc(PluginInterface, Log);
         var balances = new Balances(Objects, allaganTools, Log);
         scope = new PricingScope(config, balances);
@@ -68,7 +70,11 @@ public sealed class Plugin : IDalamudPlugin
         var trades = new Trades(catalog);
         var convertTab = new ConvertTab(trades, boards, balances, cells, config);
         var craftTab = new CraftTab(sweep, furnishings, boards, cells, basket, config);
-        var settingsTab = new SettingsTab(config, market, Save);
+
+        // The refresh is the window's, reached through a lambda because the window does not
+        // exist yet: the tab lives inside it. Read at click time, when it long since does.
+        var settingsTab = new SettingsTab(
+            config, market, catalogFile, trades, () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
             trades, market, balances, scope, gatherBuddy, sweep,
@@ -85,37 +91,6 @@ public sealed class Plugin : IDalamudPlugin
                 "Open Rowena. What you are holding, and what it is worth turning into. "
                 + "Add convert, craft or settings to open on that tab.",
         });
-    }
-
-    /// <summary>
-    /// Loads the catalogue, preferring an editable copy beside the configuration.
-    /// </summary>
-    /// <remarks>
-    /// The shipped catalogue is written out on first run so there is a real file to edit
-    /// rather than a schema to read about. A copy the user has broken falls back to the
-    /// embedded one with a complaint in the log: a bad edit should cost them their edit,
-    /// not the plugin.
-    /// </remarks>
-    private static ConversionCatalog LoadCatalog()
-    {
-        var path = Path.Combine(PluginInterface.ConfigDirectory.FullName, CatalogFileName);
-
-        try
-        {
-            if (!File.Exists(path))
-            {
-                Directory.CreateDirectory(PluginInterface.ConfigDirectory.FullName);
-                File.WriteAllText(path, ConversionCatalog.EmbeddedJson());
-                Log.Information($"Wrote a starting catalogue to {path}.");
-            }
-
-            return ConversionCatalog.Load(File.ReadAllText(path));
-        }
-        catch (Exception error)
-        {
-            Log.Error(error, $"Could not use {path}; falling back to the shipped catalogue.");
-            return ConversionCatalog.Default;
-        }
     }
 
     private void Save() => PluginInterface.SavePluginConfig(config);

@@ -16,10 +16,19 @@ namespace Rowena.UI;
 /// them are measurements rather than preferences, and one of them, the request size, makes sweeps
 /// fail rather than go faster when raised, so it says so.
 /// </remarks>
-internal sealed class SettingsTab(Configuration config, MarketCache market, Action save)
+internal sealed class SettingsTab(
+    Configuration config,
+    MarketCache market,
+    CatalogFile catalogue,
+    Trades trades,
+    Action refreshPrices,
+    Action save)
 {
     private const float NumberWidth = 90f;
     private const float TextWidth = 220f;
+
+    private string? reloadReport;
+    private bool reloadFailed;
 
     public void Draw()
     {
@@ -92,14 +101,22 @@ internal sealed class SettingsTab(Configuration config, MarketCache market, Acti
 
         ImGui.TextColored(
             Palette.Dim,
-            "Which trades exist is a file, so you can add your own. It is read once, when the plugin\n"
-            + "loads; a broken edit costs you the edit and falls back to the shipped copy.");
+            "Which trades exist is a file, so you can add your own. Reload reads it again without\n"
+            + "touching the plugin; a broken edit keeps the trades you already have and says what\n"
+            + "was wrong with it.");
 
-        var path = Path.Combine(Plugin.PluginInterface.ConfigDirectory.FullName, "conversions.json");
-        ImGui.TextUnformatted(path);
+        ImGui.TextUnformatted(catalogue.Path);
 
         if (ImGui.Button("Copy path"))
-            ImGui.SetClipboardText(path);
+            ImGui.SetClipboardText(catalogue.Path);
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Reload"))
+            Reload();
+
+        if (reloadReport is { } report)
+            ImGui.TextColored(reloadFailed ? Palette.Bad : Palette.Dim, report);
 
         if (!changed)
             return;
@@ -108,6 +125,29 @@ internal sealed class SettingsTab(Configuration config, MarketCache market, Acti
         // would otherwise keep the old one until the plugin reloaded.
         market.Ttl = config.PriceTtl();
         save();
+    }
+
+    /// <summary>
+    /// Reads the file again and swaps the trades in when it parses.
+    /// </summary>
+    /// <remarks>
+    /// A successful reload also refetches prices, because new trades arrive with no books
+    /// and a table of "no prices yet" reads as a reload that did not work. A failed one
+    /// changes nothing: mid-session, falling back to the shipped copy would replace the
+    /// trades being looked at, which is worse than keeping them.
+    /// </remarks>
+    private void Reload()
+    {
+        var (catalog, report) = catalogue.TryLoad();
+
+        reloadFailed = catalog is null;
+        reloadReport = report;
+
+        if (catalog is null)
+            return;
+
+        trades.Replace(catalog);
+        refreshPrices();
     }
 
     private static void Group(string title)
