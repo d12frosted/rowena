@@ -2,6 +2,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Textures;
 using Dalamud.Plugin.Services;
+using Rowena.Core.Market;
 using Rowena.Game;
 using Rowena.Market;
 
@@ -116,6 +117,7 @@ internal sealed class ItemCells(
                 Palette.Dim,
                 $"{floor:N0} gil on {scope.Selling}, {book.UnitsListed} listed, "
                 + $"{book.SaleVelocityPerDay:F1} sold a day");
+            Depth(book);
         }
         else
         {
@@ -145,6 +147,40 @@ internal sealed class ItemCells(
             recipeId is null ? "right-click for actions" : "click to open the crafting log, right-click for more");
 
         ImGui.EndTooltip();
+    }
+
+    /// <summary>
+    /// What actually stands behind the floor, as a climb up the book.
+    /// </summary>
+    /// <remarks>
+    /// The floor with three units behind it and the floor with three hundred are completely
+    /// different propositions, and the line above this one cannot tell them apart. A few tiers
+    /// can: "3 at 48,795, 4 more by 48,799" is the shape of the market, not just its edge.
+    ///
+    /// Four tiers, because the tooltip is a glance and the far end of a deep book changes no
+    /// decision; what is above them is summed rather than dropped, so a wall hiding up there
+    /// still registers.
+    /// </remarks>
+    private static void Depth(OrderBook book)
+    {
+        var tiers = book.Tiers();
+
+        // One price on the whole board: the line above already said how many stand at it.
+        if (tiers.Count < 2)
+            return;
+
+        var shown = tiers.Take(4).ToArray();
+
+        var parts = new List<string> { $"{shown[0].CumulativeUnits} at {shown[0].UnitPrice:N0}" };
+
+        for (var i = 1; i < shown.Length; i++)
+            parts.Add($"{shown[i].CumulativeUnits - shown[i - 1].CumulativeUnits} more by {shown[i].UnitPrice:N0}");
+
+        var above = book.UnitsListed - shown[^1].CumulativeUnits;
+        if (above > 0)
+            parts.Add($"{above} dearer still");
+
+        ImGui.TextColored(Palette.Dim, string.Join(", ", parts));
     }
 
     private void Menu(string label, uint itemId, uint? recipeId)
