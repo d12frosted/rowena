@@ -120,6 +120,26 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>The same span, floored at a day.</summary>
     public int SellingHorizon() => Math.Max(1, SellingHorizonDays);
 
+    /// <summary>
+    /// The smallest vendor find worth showing, in gil.
+    /// </summary>
+    /// <remarks>
+    /// Somebody listing a stack of five at one gil under the vendor price is arithmetic, not
+    /// an opportunity, and a table full of those buries the one that is worth the trip.
+    /// </remarks>
+    public int VendorFindFloor { get; set; } = 1_000;
+
+    /// <summary>
+    /// How many of the scan's candidates get their book fetched in full.
+    /// </summary>
+    /// <remarks>
+    /// The survey says an item is worth a look; only a full book says how many units are
+    /// cheap enough and what they pay. Each one is a request, so this is the knob between a
+    /// thorough scan and a polite one. Ranked by margin per unit, which is what a summary
+    /// supports.
+    /// </remarks>
+    public int VendorCandidatesToCost { get; set; } = 120;
+
     /// <summary>Whether logging in earns one line in chat saying what is worth knowing.</summary>
     public bool BriefOnLogin { get; set; } = true;
 

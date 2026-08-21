@@ -98,6 +98,18 @@ internal sealed class SettingsTab(
             "A hundred, comfortably. A summary carries no depth, which is why the first pass of a\n"
             + "sweep can be this wide and the second cannot.");
 
+        Group("The vendor scan");
+
+        changed |= Number(
+            "Smallest find worth showing", config.VendorFindFloor, value => config.VendorFindFloor = value,
+            "A stack listed a gil under the vendor price is arithmetic, not an opportunity. Smaller\n"
+            + "finds are counted rather than dropped, so the table never hides anything silently.");
+
+        changed |= Number(
+            "Candidates to cost", config.VendorCandidatesToCost, value => config.VendorCandidatesToCost = value,
+            "How many of the scan's candidates get a full book fetched, widest margin first. The\n"
+            + "survey is cheap and wide; this is the expensive half, eight ids a request.");
+
         Group("Login and alerts");
 
         changed |= Toggle(

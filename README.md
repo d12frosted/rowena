@@ -110,7 +110,7 @@ read about. Break that file and you lose your edit, not the plugin.
 ## The plugin
 
 `/rowena` opens one window: what you are holding, and what it is worth turning into. Naming
-a tab, `/rowena flips`, opens on that one instead of toggling.
+a tab, `/rowena vendor`, opens on that one instead of toggling.
 
 Deliberately not a market browser. It only answers the questions that need both halves of
 the picture, your balances and the depth of the board, because either alone is already
@@ -132,6 +132,12 @@ away. Under it, a tab per question:
   the transaction rather than the product, says where the hand-in happens, and carries each
   input with its cost in the tooltip. Rows compete for one order book and are sized
   together.
+- **Vendor.** What is listed for less than a vendor will pay for it. Its own tab because it
+  runs on its own clock, minutes to scan and useful for hours, and because it is the only
+  table here that is not a judgement: every other one weighs a margin against how long it
+  takes to sell, and this one has no market risk in it at all. The scan finds which items
+  are worth watching; what they are worth is computed from the cache, so a row is as fresh
+  as the last fetch and a find somebody else has bought out simply stops being shown.
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
@@ -288,10 +294,22 @@ the moment it is made: "to clear" says `vendor` instead of a number of days. A b
 nets less than a vendor is a worse trade with extra steps, and the tables say so rather
 than quoting it.
 
-The same floor runs the other way. A listing priced under what a vendor pays, the buyer's
-5% included, is gil lying on the board, and the Flips tab says so when one of the items it
-already watches is listed that way. It is not a sweep of the whole market for mispriced
-stacks; it is noticing.
+The same floor runs the other way, and that one is worth going looking for. A listing
+priced under what a vendor pays, the buyer's 5% included, is gil lying on the board: buy
+it, walk to any vendor, sell it, with no market risk at all because the vendor is not a
+market. It happens when somebody dumps a stack to clear a retainer slot, and nothing in
+the game or in any other tool points at it.
+
+So the Vendor tab scans for it, in the same two passes as the furnishing sweep and for the
+same reason: sixteen thousand items cannot be fetched in full. Survey them all cheaply, a
+hundred a request, then cost only what survives. The filter is sounder than the furnishing
+one, because no listing in a book is cheaper than its floor, so a floor that already loses
+money after tax cannot hide a bargain underneath it. Nothing is discarded that could have
+paid.
+
+Two things it will tell you plainly. Most scans find nothing, which is the honest answer
+and not a failure. And the expensive half is capped: the widest margins get costed first,
+and the number left uncosted is on screen rather than quietly dropped.
 
 ## The board taxes both sides
 

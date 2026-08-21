@@ -344,16 +344,6 @@ internal sealed class ConvertTab
             "Flips: buy the inputs on the board, hand them in, sell what comes out, "
             + $"sized to what sells within {config.SellingHorizon()} days");
 
-        // Gil lying on the board: a listing under what a vendor pays, tax included. Rare, and
-        // said loudly when it happens, because it is the one trade with no market risk at all.
-        foreach (var free in current.FreeGil)
-        {
-            ImGui.TextColored(
-                Palette.Good,
-                $"    free gil: {free.Units}x {free.Name} listed under the vendor price on {free.World}, "
-                + $"+{free.Profit:N0} bought and vendored");
-        }
-
         if (current.Flips.Length == 0)
         {
             ImGui.TextColored(Palette.Dim, "Nothing in the catalogue trades items for items.");
@@ -523,7 +513,6 @@ internal sealed class ConvertTab
 
         return new FlipModel(
             MeasureReadiness(),
-            FreeGil(),
             shown,
             allocated.Values.Sum(allocation => allocation.Profit),
             ordered.Length - shown.Length,
@@ -785,39 +774,6 @@ internal sealed class ConvertTab
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
     /// <param name="Choices">Every currency the table could be about, and how much of each is held.</param>
     /// <param name="Selected">The one it is about, priced.</param>
-    private sealed record Free(uint ItemId, string Name, int Units, long Profit, string World);
-
-    /// <summary>
-    /// Listings under the vendor price, among the books already fetched.
-    /// </summary>
-    /// <remarks>
-    /// Only what the cache holds, which is the catalogue's items on the buying board: this
-    /// is not a sweep of the whole market for mispriced stacks, it is noticing when one of
-    /// the items already being watched is one. The best few, largest gain first.
-    /// </remarks>
-    private Free[] FreeGil()
-    {
-        var (bought, sold) = trades.Relevant(balances.Held);
-
-        return
-        [
-            .. bought.Concat(sold)
-                .Distinct()
-                .Select(id => (Id: id, Book: boards.Buying(id)))
-                .Where(entry => entry.Book is { Listings.Count: > 0 })
-                .Select(entry => (entry.Id, entry.Book!, Found: VendorArbitrage.Find(entry.Book!, boards.Vendor(entry.Id), MarketTax.Standard)))
-                .Where(entry => entry.Found.Units > 0)
-                .OrderByDescending(entry => entry.Found.Profit)
-                .Take(5)
-                .Select(entry => new Free(
-                    entry.Id,
-                    cells.Name(entry.Id),
-                    entry.Found.Units,
-                    entry.Found.Profit,
-                    entry.Item2.Listings[0].World)),
-        ];
-    }
-
     /// <param name="Total">Items this tab wants a book for, both boards counted.</param>
     /// <param name="Missing">Of those, how many no book has been fetched for.</param>
     private sealed record Readiness(int Total, int Missing);
@@ -835,10 +791,8 @@ internal sealed class ConvertTab
     /// </param>
     /// <param name="HiddenFlips">Rows the trim removed, all paying less than anything shown.</param>
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
-    /// <param name="FreeGil">Listings under the vendor price among the books the cache holds.</param>
     private sealed record FlipModel(
         Readiness Readiness,
-        Free[] FreeGil,
         FlipRow[] Flips,
         long TotalFlipProfit,
         int HiddenFlips,

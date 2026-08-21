@@ -31,9 +31,11 @@ internal sealed class MainWindow : Window
     private readonly Balances balances;
     private readonly PricingScope scope;
     private readonly FurnishingSweep sweep;
+    private readonly VendorSweep vendorSweep;
     private readonly StatusStrip strip;
     private readonly ConvertTab convert;
     private readonly CraftTab crafts;
+    private readonly VendorTab vendor;
     private readonly SettingsTab settings;
     private readonly Configuration config;
     private readonly Action save;
@@ -51,8 +53,10 @@ internal sealed class MainWindow : Window
         ItemCells cells,
         Places places,
         FurnishingSweep sweep,
+        VendorSweep vendorSweep,
         ConvertTab convert,
         CraftTab crafts,
+        VendorTab vendor,
         SettingsTab settings,
         Configuration config,
         Action save)
@@ -63,8 +67,10 @@ internal sealed class MainWindow : Window
         this.balances = balances;
         this.scope = scope;
         this.sweep = sweep;
+        this.vendorSweep = vendorSweep;
         this.convert = convert;
         this.crafts = crafts;
+        this.vendor = vendor;
         this.settings = settings;
         this.config = config;
         this.save = save;
@@ -119,6 +125,10 @@ internal sealed class MainWindow : Window
             // Prices saved by a previous session, as soon as there is a board to compare them against.
             market.RestoreOnce(config.SweepAge());
             RestoreSweepOnce(buying, selling);
+
+            // Free: the summaries a scan needs are already on disk with the rest of the cache,
+            // so a shortlist can be rebuilt without a single request.
+            vendorSweep.RestoreOnce(buying, config.VendorCandidatesToCost);
             PersistFinishedSweep();
         }
 
@@ -144,6 +154,16 @@ internal sealed class MainWindow : Window
                 NoBoard();
             else
                 convert.DrawFlips();
+
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem(vendor.Label, Selecting(Tab.Vendor)))
+        {
+            if (buying is { } vendorBuying)
+                vendor.Draw(vendorBuying);
+            else
+                NoBoard();
 
             ImGui.EndTabItem();
         }
@@ -187,6 +207,7 @@ internal sealed class MainWindow : Window
     {
         Sinks,
         Flips,
+        Vendor,
         Craft,
         Settings,
     }

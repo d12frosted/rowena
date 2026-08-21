@@ -93,6 +93,38 @@ public class VendorFloorTests
     }
 
     [Fact]
+    public void TheCheapFilterKeepsAnythingThatCouldPay()
+    {
+        // 90 plus 5% is 94, under the 100 a vendor pays: worth fetching in full.
+        Assert.True(VendorArbitrage.Possible(90, 100, MarketTax.Standard));
+
+        // 97 plus 5% is 101: the floor already loses, so nothing deeper can win.
+        Assert.False(VendorArbitrage.Possible(97, 100, MarketTax.Standard));
+
+        // Nothing listed, or nothing a vendor will take, is not a candidate either way.
+        Assert.False(VendorArbitrage.Possible(0, 100, MarketTax.Standard));
+        Assert.False(VendorArbitrage.Possible(50, 0, MarketTax.Standard));
+    }
+
+    [Fact]
+    public void TheCheapFilterNeverDiscardsAWinner()
+    {
+        // The filter charges tax per unit where the board charges it per listing and floors
+        // it, so it can only be too generous. Whatever Find would pay for, Possible keeps.
+        for (long price = 1; price <= 200; price++)
+        {
+            for (var quantity = 1; quantity <= 5; quantity++)
+            {
+                var book = OrderBook.Create(1, [new Listing(price, quantity, "Phoenix")]);
+                var found = VendorArbitrage.Find(book, vendorPrice: 100, MarketTax.Standard);
+
+                if (found.Units > 0)
+                    Assert.True(VendorArbitrage.Possible(price, 100, MarketTax.Standard), $"{quantity} at {price}");
+            }
+        }
+    }
+
+    [Fact]
     public void NoArbitrageWhenTheBoardIsDearer()
     {
         var book = OrderBook.Create(1, [new Listing(120, 3, "Phoenix")]);
