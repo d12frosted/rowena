@@ -75,7 +75,7 @@ public sealed class Plugin : IDalamudPlugin
         var boards = new Boards(market, scope);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
-            PluginInterface, ClientState, GameGui, Framework, new Aetherytes(DataManager, Log), Log);
+            PluginInterface, ClientState, Objects, GameGui, Framework, new Aetherytes(DataManager, Log), Log);
         var venues = new VenueCell(places);
         // The refreshes are the window's, reached through lambdas because the window does not
         // exist yet: the tabs live inside it. Read at click time, when it long since does.

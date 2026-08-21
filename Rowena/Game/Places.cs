@@ -24,7 +24,22 @@ internal sealed class Places : IDisposable
     private static readonly TimeSpan ZonePatience = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan MeshPatience = TimeSpan.FromSeconds(120);
 
+    /// <summary>
+    /// How close counts as arrived, in yalms, measured to where the NPC stands.
+    /// </summary>
+    /// <remarks>
+    /// Talking to an NPC works from a few yalms, and most vendors stand behind a counter the
+    /// mesh does not cover, so walking to their exact position either finds no path or jams
+    /// against the stall. The walk aims at the nearest point the mesh does cover and stops
+    /// the moment it is within reach, wherever the path was heading.
+    /// </remarks>
+    private const float WithinReach = 3.5f;
+
+    /// <summary>How far around the NPC to look for the mesh, when snapping the destination.</summary>
+    private const float SnapExtent = 6f;
+
     private readonly IClientState client;
+    private readonly IObjectTable objects;
     private readonly IGameGui gui;
     private readonly IFramework framework;
     private readonly Aetherytes aetherytes;
@@ -34,17 +49,20 @@ internal sealed class Places : IDisposable
     private readonly ICallGateSubscriber<Vector3, bool, bool> moveTo;
     private readonly ICallGateSubscriber<bool> pathRunning;
     private readonly ICallGateSubscriber<object> pathStop;
+    private readonly ICallGateSubscriber<Vector3, float, float, Vector3> nearestOnMesh;
     private readonly ICallGateSubscriber<uint, byte, bool> teleport;
 
     public Places(
         IDalamudPluginInterface plugins,
         IClientState client,
+        IObjectTable objects,
         IGameGui gui,
         IFramework framework,
         Aetherytes aetherytes,
         IPluginLog log)
     {
         this.client = client;
+        this.objects = objects;
         this.gui = gui;
         this.framework = framework;
         this.aetherytes = aetherytes;
@@ -54,6 +72,7 @@ internal sealed class Places : IDisposable
         moveTo = plugins.GetIpcSubscriber<Vector3, bool, bool>("vnavmesh.SimpleMove.PathfindAndMoveTo");
         pathRunning = plugins.GetIpcSubscriber<bool>("vnavmesh.Path.IsRunning");
         pathStop = plugins.GetIpcSubscriber<object>("vnavmesh.Path.Stop");
+        nearestOnMesh = plugins.GetIpcSubscriber<Vector3, float, float, Vector3>("vnavmesh.Query.Mesh.NearestPoint");
         teleport = plugins.GetIpcSubscriber<uint, byte, bool>("Lifestream.Teleport");
 
         framework.Update += Tick;
@@ -149,18 +168,35 @@ internal sealed class Places : IDisposable
     public void Cancel()
     {
         if (Current is { Phase: Phase.Walking })
-        {
-            try
-            {
-                pathStop.InvokeAction();
-            }
-            catch (IpcNotReadyError)
-            {
-                // Nothing to stop.
-            }
-        }
+            Stop();
 
         Current = null;
+    }
+
+    private void Stop()
+    {
+        try
+        {
+            pathStop.InvokeAction();
+        }
+        catch (IpcNotReadyError)
+        {
+            // Nothing to stop.
+        }
+    }
+
+    /// <summary>Whether you stand close enough to the spot to talk to whoever is there.</summary>
+    private bool WithinReachOf(Spot spot)
+    {
+        if (objects.LocalPlayer?.Position is not { } at)
+            return false;
+
+        // Flat distance: a counter is level with the floor it is on, and the NPC's recorded
+        // height can sit a little off the walkable surface.
+        var dx = at.X - spot.World.X;
+        var dz = at.Z - spot.World.Z;
+
+        return dx * dx + dz * dz <= WithinReach * WithinReach;
     }
 
     private void Tick(IFramework _)
@@ -186,14 +222,26 @@ internal sealed class Places : IDisposable
                 Current = null;
                 break;
 
+            case Phase.WaitingForMesh when WithinReachOf(journey.Target):
+                // Already standing at the counter; nothing to walk.
+                Current = null;
+                break;
+
             case Phase.WaitingForMesh when NavReady:
                 Current = Walk(journey.Target)
                     ? journey with { Phase = Phase.Walking, Deadline = DateTime.MaxValue }
                     : null;
                 break;
 
+            case Phase.Walking when WithinReachOf(journey.Target):
+                // Close enough to talk. Stop here rather than push on to the point the path
+                // was aiming at, which may be a stall away from where the NPC stands.
+                Stop();
+                Current = null;
+                break;
+
             case Phase.Walking when !Ask(pathRunning):
-                // Arrived, or vnavmesh stopped for its own reasons. Either way it is over.
+                // Stopped short, or vnavmesh gave up. Either way it is over.
                 Current = null;
                 break;
         }
@@ -203,7 +251,7 @@ internal sealed class Places : IDisposable
     {
         try
         {
-            return moveTo.InvokeFunc(spot.World, false);
+            return moveTo.InvokeFunc(Reachable(spot.World), false);
         }
         catch (IpcNotReadyError)
         {
@@ -213,6 +261,27 @@ internal sealed class Places : IDisposable
         {
             log.Warning(error, "vnavmesh refused the walk.");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// The nearest point the mesh covers, for a position that may be behind a counter.
+    /// </summary>
+    /// <remarks>
+    /// Asked of vnavmesh rather than guessed, since it knows its mesh. When it cannot say,
+    /// the original position is used and the walk takes its chances, which is no worse than
+    /// before.
+    /// </remarks>
+    private Vector3 Reachable(Vector3 position)
+    {
+        try
+        {
+            var snapped = nearestOnMesh.InvokeFunc(position, SnapExtent, SnapExtent);
+            return snapped == default ? position : snapped;
+        }
+        catch (Exception)
+        {
+            return position;
         }
     }
 
