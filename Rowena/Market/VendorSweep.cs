@@ -23,7 +23,7 @@ namespace Rowena.Market;
 /// old as the scan. Nothing of its own goes to disk: the summaries are already persisted, so
 /// a restart rebuilds the shortlist without a single request.
 /// </remarks>
-internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPluginLog log)
+internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, Diagnostics diagnostics, IPluginLog log)
 {
     public enum Phase
     {
@@ -98,6 +98,11 @@ internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPlu
                 var candidates = vendors.Sellable();
                 var possible = Possible(buying, candidates, out var surveyed, out var at);
                 var shortlist = Costliest(buying, possible, toCost);
+
+                diagnostics.Note(
+                    "scan",
+                    $"restore on {buying}: {candidates.Count} sellable, {surveyed} already surveyed, "
+                    + $"{possible.Count} worth a look, {shortlist.Count} costed");
 
                 Current = surveyed == 0
                     ? new Snapshot(Phase.Idle, "", 0, 0, 0, [], null)

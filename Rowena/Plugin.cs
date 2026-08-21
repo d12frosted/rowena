@@ -93,7 +93,7 @@ public sealed class Plugin : IDalamudPlugin
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope, boardWatcher);
         var vendorPrices = new VendorPrices(DataManager);
         var boards = new Boards(market, scope, vendorPrices, boardWatcher);
-        vendorSweep = new VendorSweep(vendorPrices, market, Log);
+        vendorSweep = new VendorSweep(vendorPrices, market, diagnostics, Log);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
             PluginInterface, ClientState, Objects, GameGui, Framework, new Aetherytes(DataManager, Log), Log);
@@ -154,7 +154,7 @@ public sealed class Plugin : IDalamudPlugin
 
         warmup = new Warmup(
             Framework,
-            [.. convertTab.Warmers, .. craftTab.Warmers, .. vendorTab.Warmers],
+            [mainWindow.RestoreAll, .. convertTab.Warmers, .. craftTab.Warmers, .. vendorTab.Warmers],
             () => scope.Ready,
             diagnostics);
 

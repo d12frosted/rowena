@@ -88,6 +88,27 @@ internal sealed class MainWindow : Window
     }
 
     /// <summary>
+    /// Picks up everything a previous session left on disk.
+    /// </summary>
+    /// <remarks>
+    /// On a clock rather than on the first draw, which is where this used to be. Restoring only
+    /// when somebody opens the window means a session that never opens it refetches what it
+    /// already had, and means anything that works without a window reports nothing rather than
+    /// what is there: the account of what is happening said the vendor scan had found nothing
+    /// while a shortlist of a hundred and twenty sat in the cache. Prices first, since both
+    /// shortlists are rebuilt by reading them.
+    /// </remarks>
+    public void RestoreAll()
+    {
+        if (scope.Buying is not { } buying || scope.Selling is not { } selling)
+            return;
+
+        market.RestoreOnce(config.SweepAge());
+        RestoreSweepOnce(buying, selling);
+        vendorSweep.RestoreOnce(buying, config.VendorCandidatesToCost);
+    }
+
+    /// <summary>
     /// Refetches every catalogue item. The strip's button, and the settings tab's reload,
     /// which swaps trades in that no book has been fetched for yet.
     /// </summary>
@@ -125,16 +146,7 @@ internal sealed class MainWindow : Window
         ImGui.Separator();
 
         if (buying is not null && selling is not null)
-        {
-            // Prices saved by a previous session, as soon as there is a board to compare them against.
-            market.RestoreOnce(config.SweepAge());
-            RestoreSweepOnce(buying, selling);
-
-            // Free: the summaries a scan needs are already on disk with the rest of the cache,
-            // so a shortlist can be rebuilt without a single request.
-            vendorSweep.RestoreOnce(buying, config.VendorCandidatesToCost);
             PersistFinishedSweep();
-        }
 
         if (!ImGui.BeginTabBar("rowena-tabs"))
             return;

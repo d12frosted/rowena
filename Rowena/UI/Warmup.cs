@@ -52,9 +52,11 @@ internal sealed class Warmup : IDisposable
         {
             warm();
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            // A model that cannot be built yet will be built again when it is drawn.
+            // A model that cannot be built yet will be built again when it is drawn, so this
+            // is survivable. It is not silent: swallowing it hid a restore that never ran.
+            diagnostics.Note("draw", $"warming threw: {error.Message}");
         }
     }
 }
