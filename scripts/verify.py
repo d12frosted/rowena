@@ -135,8 +135,55 @@ def main():
         note = " (board moved since the dump)" if short else ""
         print(f"  {'ok  ' if ok else 'FAIL'}  {row['trade']}: outlay {row['outlay']:,} vs {outlay:,}{note}")
 
+    failures += verify_vendor(config, buyer)
+
     print(f"\n{failures} disagreements")
     return 1 if failures else 0
+
+
+def verify_vendor(config, buyer_rate):
+    """The vendor tab claims free gil, which is the boldest thing here and the easiest to check.
+
+    The vendor price itself is not checked here: it comes out of the game's own item sheet,
+    which this script cannot read. Check it with the probe against Item.PriceLow.
+    """
+    path = os.path.join(config, "vendor.json")
+
+    if not os.path.exists(path):
+        return 0
+
+    with open(path) as handle:
+        dump = json.load(handle)
+
+    if not dump["finds"]:
+        print(f"\nvendor: nothing found ({dump['scan']})")
+        return 0
+
+    print(f"\nvendor ({dump['scan']})")
+    failures = 0
+
+    for find in dump["finds"]:
+        listings = board(dump["buying"], find["item"])["listings"]
+        units = profit = 0
+
+        # Whole listings only, cheapest first, while each still pays after the buyer's cut.
+        for listing in sorted(listings, key=lambda l: l["pricePerUnit"]):
+            cost = listing["pricePerUnit"] * listing["quantity"]
+            cost += int(cost * buyer_rate)
+            gain = find["vendorPays"] * listing["quantity"] - cost
+            if gain <= 0:
+                break
+            units += listing["quantity"]
+            profit += gain
+
+        ok = units == find["units"] and profit == find["profit"]
+        failures += not ok
+        print(
+            f"  {'ok  ' if ok else 'FAIL'}  {find['name']}: "
+            f"{find['units']}u/{find['profit']:,} vs {units}u/{profit:,}"
+        )
+
+    return failures
 
 
 if __name__ == "__main__":

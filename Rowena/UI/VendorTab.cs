@@ -56,6 +56,27 @@ internal sealed class VendorTab
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 
+    /// <summary>What the table is claiming, for checking it against the board and the sheets.</summary>
+    public string Dump() =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                buying = boards.Scope.Buying,
+                buyerRate = boards.Tax.BuyerRate,
+                scan = sweep.Current.Detail,
+                finds = model.Current.Finds.Select(find => new
+                {
+                    item = find.ItemId,
+                    name = find.Name,
+                    vendorPays = find.VendorPrice,
+                    cheapest = find.Cheapest,
+                    units = find.Units,
+                    profit = find.Profit,
+                    world = find.World,
+                }),
+            },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
     public void Draw(string buying)
     {
         ImGui.TextUnformatted("Listed for less than a vendor pays: buy it, walk to any vendor, sell it");
@@ -112,9 +133,11 @@ internal sealed class VendorTab
             {
                 ImGui.TextColored(
                     Palette.Dim,
-                    current.Hidden > 0
-                        ? $"    nothing over {config.VendorFindFloor:N0} gil. {current.Hidden} smaller finds are being hidden."
-                        : "    nothing is listed under its vendor price right now. This is the usual answer.");
+                    current.Uncosted > 0
+                        ? $"    {current.Uncosted} items are worth a look but have no book yet. Scan to cost them."
+                        : current.Hidden > 0
+                            ? $"    nothing over {config.VendorFindFloor:N0} gil. {current.Hidden} smaller finds are being hidden."
+                            : "    nothing is listed under its vendor price right now. This is the usual answer.");
             }
 
             return;
@@ -166,14 +189,27 @@ internal sealed class VendorTab
         var scan = sweep.Current;
 
         if (!scan.HasResults)
-            return new Model([], 0);
+            return new Model([], 0, 0);
 
         var found = new List<Find>();
         var hidden = 0;
 
+        var uncosted = 0;
+
         foreach (var id in scan.Shortlist)
         {
-            if (boards.Buying(id) is not { Listings.Count: > 0 } book)
+            // A shortlist rebuilt from a previous session's survey knows which items are worth
+            // a look and nothing about how many units are cheap: that needs the full book, and
+            // the books are only fetched by a scan. Counted rather than skipped, because
+            // "nothing is under its vendor price" and "nobody has looked yet" must not read
+            // the same.
+            if (boards.Buying(id) is not { } book)
+            {
+                uncosted++;
+                continue;
+            }
+
+            if (book.Listings.Count == 0)
                 continue;
 
             var vendorPrice = boards.Vendor(id);
@@ -198,7 +234,7 @@ internal sealed class VendorTab
                 book.Listings[0].World));
         }
 
-        return new Model([.. found.OrderByDescending(find => find.Profit)], hidden);
+        return new Model([.. found.OrderByDescending(find => find.Profit)], hidden, uncosted);
     }
 
     private sealed record Find(
@@ -211,5 +247,6 @@ internal sealed class VendorTab
         string World);
 
     /// <param name="Hidden">Finds under the floor, counted rather than dropped silently.</param>
-    private sealed record Model(Find[] Finds, int Hidden);
+    /// <param name="Uncosted">Shortlisted items with no book yet, which is not the same as no find.</param>
+    private sealed record Model(Find[] Finds, int Hidden, int Uncosted);
 }
