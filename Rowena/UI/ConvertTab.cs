@@ -50,7 +50,9 @@ internal sealed class ConvertTab
         "What to buy on the board and what it becomes. Hover for each input and its cost.",
         "The counter in the world where the hand-in happens.",
         "How many runs your gil is best spent on, once every row has competed for the same\n"
-        + "order book. A zero means the shared inputs pay more on another row.",
+        + "order book, and no run is counted that the board would not absorb within the\n"
+        + "selling horizon. A zero means the inputs pay more elsewhere or nothing would sell\n"
+        + "in time.",
         "Runs your own stock already covers, retainers included. Not deducted from the outlay:\n"
         + "what you hold is still worth what the board would pay for it.",
         "What buying the inputs costs, walked down the book rather than multiplied out from\n"
@@ -333,7 +335,9 @@ internal sealed class ConvertTab
 
     private void DrawFlips(FlipModel current)
     {
-        ImGui.TextUnformatted("Flips: buy the inputs on the board, hand them in, sell what comes out");
+        ImGui.TextUnformatted(
+            "Flips: buy the inputs on the board, hand them in, sell what comes out, "
+            + $"sized to what sells within {config.SellingHorizon()} days");
 
         if (current.Flips.Length == 0)
         {
@@ -404,7 +408,9 @@ internal sealed class ConvertTab
             ImGui.TableNextColumn();
             Cell.Right(tint, $"{row.Runs}");
             if (row.Idle && ImGui.IsItemHovered())
-                ImGui.SetTooltip("The shared inputs pay more on another row, or your gil will not cover a run.");
+                ImGui.SetTooltip(
+                    "The shared inputs pay more on another row, your gil will not cover a run, or the\n"
+                    + $"board would not absorb even one within {config.SellingHorizon()} days.");
 
             ImGui.TableNextColumn();
             Cell.Right(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
@@ -483,7 +489,9 @@ internal sealed class ConvertTab
             .ToArray();
 
         var allocated = ConversionAllocation
-            .Allocate(candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap)
+            .Allocate(
+                candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap,
+                config.SellingHorizon())
             .ToDictionary(allocation => allocation.Conversion.Id, StringComparer.Ordinal);
 
         // Working rows first, then priced-but-idle by what one run would pay, then the

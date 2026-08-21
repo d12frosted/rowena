@@ -63,10 +63,11 @@ internal sealed class SettingsTab(
             "The largest number of runs a flip is allowed to be sized at.");
 
         changed |= Number(
-            "Days of selling to judge a sink by", config.SellingHorizonDays, value => config.SellingHorizonDays = value,
-            "A sink ranks by what it would bank within this many days: runs you can afford, capped by\n"
-            + "runs the board would absorb in the time. The rate per unit is still shown; ranking on it\n"
-            + "alone put items nobody has ever bought at the top.");
+            "Days of selling to plan for", config.SellingHorizonDays, value => config.SellingHorizonDays = value,
+            "A sink ranks by what it would bank within this many days, and a flip is sized to the runs\n"
+            + "the board would absorb in them: in both, the runs you can afford capped by the runs that\n"
+            + "would sell. Prices stay at the floor; what gives is volume. Ranking on the rate alone put\n"
+            + "items nobody has ever bought at the top.");
 
         Group("The furnishing sweep");
 

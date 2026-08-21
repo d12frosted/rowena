@@ -176,6 +176,52 @@ public class ConversionAllocationTests
     }
 
     [Fact]
+    public void AHorizonCapsRunsAtWhatTheBoardWouldAbsorb()
+    {
+        // Two a day sell; in seven days that is fourteen, however deep the input book and
+        // however high the cap. The fifteenth run would still be sitting there on day eight.
+        var books = Synthetic(
+            OrderBook.Create(1, [new Listing(100, 50, "Phoenix")]),
+            Deep(9, 10_000, velocity: 2d));
+
+        var only = ConversionAllocation
+            .Allocate([Flip("a", 1, 9)], books, MarketTax.None, long.MaxValue, 50, sellingHorizonDays: 7d)
+            .Single();
+
+        Assert.Equal(14, only.Runs);
+        Assert.Equal(7d, only.DaysToAbsorb);
+    }
+
+    [Fact]
+    public void NothingSellingMeansNothingAllocatedWithinAHorizon()
+    {
+        var books = Synthetic(Deep(1, 100), Deep(9, 10_000, velocity: 0d));
+
+        var withHorizon = ConversionAllocation
+            .Allocate([Flip("a", 1, 9)], books, MarketTax.None, long.MaxValue, 3, sellingHorizonDays: 7d)
+            .Single();
+
+        var without = ConversionAllocation
+            .Allocate([Flip("a", 1, 9)], books, MarketTax.None, long.MaxValue, 3)
+            .Single();
+
+        Assert.Equal(0, withHorizon.Runs);
+        Assert.Equal(3, without.Runs);
+    }
+
+    [Fact]
+    public void TheHorizonIsSharedByTradesSellingIntoOneBook()
+    {
+        // Two a day, three days: six units the board will take, between both rows.
+        var books = Synthetic(Deep(1, 100), Deep(2, 100), Deep(9, 10_000, velocity: 2d));
+
+        var allocations = ConversionAllocation
+            .Allocate([Flip("a", 1, 9), Flip("b", 2, 9)], books, MarketTax.None, long.MaxValue, 10, sellingHorizonDays: 3d);
+
+        Assert.Equal(6, allocations.Sum(allocation => allocation.Runs));
+    }
+
+    [Fact]
     public void AllocationCostsMorePerRunAsItGoesDeeper()
     {
         // Sanity on the greedy assumption: marginal cost only ever rises, which is what makes

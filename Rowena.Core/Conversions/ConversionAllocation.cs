@@ -53,16 +53,27 @@ public static class ConversionAllocation
         Func<uint, OrderBook?> books,
         MarketTax tax,
         long gilBudget,
-        int capPerConversion) =>
-        Allocate(conversions, books, books, tax, gilBudget, capPerConversion);
+        int capPerConversion,
+        double? sellingHorizonDays = null) =>
+        Allocate(conversions, books, books, tax, gilBudget, capPerConversion, sellingHorizonDays);
 
     /// <summary>
     /// Allocates where buying and selling happen on different boards.
     /// </summary>
+    /// <param name="sellingHorizonDays">
+    /// How many days of selling a run is allowed to need. A run is only committed if the queue it
+    /// joins on the selling board, counting every allocation into the same book, would still clear
+    /// within this many days at the observed rate. Null means no limit, which is the sizing
+    /// question on its own: how many before the book eats the margin. A horizon makes it the
+    /// practical one: how many before you are sitting on stock. Nothing selling means nothing
+    /// allocated, since no number of days clears a queue that never moves.
+    /// </param>
     /// <remarks>
-    /// Only the buying side is consumed as the allocation proceeds. The selling side is not: outputs
-    /// are valued at the floor throughout, which is the same deliberate optimism as everywhere else,
-    /// with the pessimism kept in absorption instead.
+    /// The buying side is consumed as the allocation proceeds. The selling side is not repriced:
+    /// outputs are valued at the floor throughout, the same deliberate optimism as everywhere
+    /// else, with the pessimism kept in absorption, which the horizon turns from a warning into
+    /// a limit on volume. A volume limit rather than a price discount, so the price stays honest
+    /// and what gives is how much of it you get to sell.
     /// </remarks>
     public static IReadOnlyList<Allocation> Allocate(
         IReadOnlyList<Conversion> conversions,
@@ -70,7 +81,8 @@ public static class ConversionAllocation
         Func<uint, OrderBook?> selling,
         MarketTax tax,
         long gilBudget,
-        int capPerConversion)
+        int capPerConversion,
+        double? sellingHorizonDays = null)
     {
         var competing = conversions
             .Where(conversion => conversion.Inputs.Any(input => input.Resource.Kind == ResourceKind.Item))
@@ -104,6 +116,28 @@ public static class ConversionAllocation
 
         var budget = gilBudget;
 
+        // What the allocated runs will dump on the selling board, queued per item. Absorption
+        // is read against the whole queue, not each row's own contribution: the second trade
+        // into a book waits behind the first whichever order they sell in. Kept as the loop
+        // goes, because the horizon has to see the queue a run would join before it is committed.
+        var queued = new Dictionary<uint, int>();
+
+        bool ClearsInTime(Conversion conversion)
+        {
+            if (sellingHorizonDays is not { } horizon)
+                return true;
+
+            foreach (var output in ItemOutputs(conversion))
+            {
+                var after = queued.GetValueOrDefault(output.Resource.Id) + output.Quantity;
+
+                if (selling(output.Resource.Id)?.DaysToAbsorb(after) is not { } days || days > horizon)
+                    return false;
+            }
+
+            return true;
+        }
+
         while (true)
         {
             Conversion? best = null;
@@ -111,7 +145,7 @@ public static class ConversionAllocation
 
             foreach (var conversion in competing)
             {
-                if (runs[conversion.Id] >= capPerConversion)
+                if (runs[conversion.Id] >= capPerConversion || !ClearsInTime(conversion))
                     continue;
 
                 // One more run, priced against what is left rather than the whole book.
@@ -136,23 +170,13 @@ public static class ConversionAllocation
                     left[input.Resource.Id] = book.WithoutCheapest(input.Quantity);
             }
 
+            foreach (var output in ItemOutputs(best))
+                queued[output.Resource.Id] = queued.GetValueOrDefault(output.Resource.Id) + output.Quantity;
+
             runs[best.Id]++;
             outlay[best.Id] += bestQuote.GilOutlay;
             profit[best.Id] += bestQuote.Profit;
             budget -= bestQuote.GilOutlay;
-        }
-
-        // What the allocated runs will dump on the selling board, queued per item. Absorption
-        // is then read against the whole queue, not each row's own contribution: the second
-        // trade into a book waits behind the first whichever order they sell in.
-        var queued = new Dictionary<uint, int>();
-
-        foreach (var conversion in competing)
-        {
-            foreach (var output in ItemOutputs(conversion))
-                queued[output.Resource.Id] =
-                    queued.GetValueOrDefault(output.Resource.Id)
-                    + output.Quantity * runs[conversion.Id];
         }
 
         double? Absorb(Conversion conversion)

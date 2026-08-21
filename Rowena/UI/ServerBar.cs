@@ -157,7 +157,9 @@ internal sealed class ServerBar : IDisposable
             return null;
 
         return ConversionAllocation
-            .Allocate(candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap)
+            .Allocate(
+                candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap,
+                config.SellingHorizon())
             .Sum(allocation => allocation.Profit);
     }
 }
