@@ -35,6 +35,12 @@ public sealed record Conversion(
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(runs, 1);
 
+        // Identity, and worth saying so: every quote scales first, and a window pricing a
+        // catalogue of thousands several times a second would otherwise rebuild both sides of
+        // every one of them to multiply by one.
+        if (runs == 1)
+            return this;
+
         return this with
         {
             Inputs = [.. Inputs.Select(input => input.Scaled(runs))],

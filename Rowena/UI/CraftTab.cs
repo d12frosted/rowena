@@ -85,6 +85,9 @@ internal sealed class CraftTab
     /// </remarks>
     public string Label => basket.Count == 0 ? "Craft###craft" : $"Craft ({basket.Count})###craft";
 
+    /// <inheritdoc cref="ConvertTab.Warmers"/>
+    public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
+
     public void Draw(string buying, string selling)
     {
         DrawBasket();

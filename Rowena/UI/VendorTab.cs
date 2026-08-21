@@ -53,6 +53,9 @@ internal sealed class VendorTab
     public string Label =>
         model.Current.Finds.Length == 0 ? "Vendor###vendor" : $"Vendor ({model.Current.Finds.Length})###vendor";
 
+    /// <inheritdoc cref="ConvertTab.Warmers"/>
+    public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
+
     public void Draw(string buying)
     {
         ImGui.TextUnformatted("Listed for less than a vendor pays: buy it, walk to any vendor, sell it");

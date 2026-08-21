@@ -44,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly PricingScope scope;
     private readonly Diagnostics diagnostics;
     private readonly DebugChannel debug;
+    private readonly Warmup warmup;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
 
@@ -149,6 +150,12 @@ public sealed class Plugin : IDalamudPlugin
             },
             diagnosticsPanel.Report);
 
+        warmup = new Warmup(
+            Framework,
+            [.. convertTab.Warmers, .. craftTab.Warmers, .. vendorTab.Warmers],
+            () => scope.Ready,
+            diagnostics);
+
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -228,6 +235,7 @@ public sealed class Plugin : IDalamudPlugin
         // on the way past rather than only when it finishes.
         market.Persist(sweep.Snapshot());
 
+        warmup.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

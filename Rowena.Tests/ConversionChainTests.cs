@@ -3,6 +3,34 @@ using Xunit;
 
 namespace Rowena.Tests;
 
+public class ConversionScalingTests
+{
+    private static readonly Conversion Trade = new(
+        "t",
+        "t",
+        [new ResourceAmount(Resource.Item(1, "in"), 3)],
+        [new ResourceAmount(Resource.Item(9, "out"), 2)],
+        "somewhere");
+
+    [Fact]
+    public void ScalingByOneChangesNothingAndAllocatesNothing()
+    {
+        // Every quote scales before pricing, and a quote is taken for every trade in the
+        // catalogue several times a second. Scaling by one is identity, so it should hand
+        // back what it was given rather than rebuilding both sides of it.
+        Assert.Same(Trade, Trade.Scaled(1));
+    }
+
+    [Fact]
+    public void ScalingMultipliesBothSides()
+    {
+        var three = Trade.Scaled(3);
+
+        Assert.Equal(9, three.Inputs.Single().Quantity);
+        Assert.Equal(6, three.Outputs.Single().Quantity);
+    }
+}
+
 public class ConversionChainTests
 {
     private static readonly Resource Scrip = Resource.Currency(1, "Scrip");

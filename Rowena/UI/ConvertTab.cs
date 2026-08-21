@@ -103,6 +103,18 @@ internal sealed class ConvertTab
         flips = new Rebuilt<FlipModel>("flips", BuildFlips, diagnostics);
     }
 
+    /// <summary>
+    /// Builds each model once, so the first draw is not the first time this code has run.
+    /// </summary>
+    /// <remarks>
+    /// A hidden tab is otherwise free and that is deliberate, so this is the one exception and
+    /// it happens once: measured in the game, the first build of a model costs fifty to sixty
+    /// milliseconds and every one after it costs under twenty, whatever is removed from it.
+    /// That gap is the runtime compiling the code, not the work, and the only way to spend it
+    /// somewhere better is to spend it before anybody is looking.
+    /// </remarks>
+    public IReadOnlyList<Action> Warmers => [() => _ = sinks.Current, () => _ = flips.Current];
+
     /// <summary>The Sinks tab: what a bound currency in your pockets is worth spending.</summary>
     public void DrawSinks()
     {
@@ -489,16 +501,25 @@ internal sealed class ConvertTab
     {
         var tax = boards.Tax;
 
+        // Only the trades the cache actually holds a book for are worth pricing. The
+        // catalogue names thousands of exchanges and prices are only fetched for the ones
+        // that are runnable, so most of them would be quoted purely to conclude that nothing
+        // is known about them. The rest are counted, not quoted.
+        var priceable = trades.Flips
+            .Where(conversion => conversion.Inputs.All(input =>
+                input.Resource.Kind != ResourceKind.Item || boards.Buying(input.Resource.Id) is not null))
+            .ToArray();
+
         // One quote per flip, reused for the row and for the allocation prefilter. A flip
         // that loses money on its first run only loses more on its second, so the allocator
         // is never asked about it.
-        var singles = trades.Flips.ToDictionary(
+        var singles = priceable.ToDictionary(
             conversion => conversion.Id,
             conversion => ConversionEvaluator.Evaluate(
                 conversion, 1, boards.Buying, boards.Selling, tax, boards.Vendor),
             StringComparer.Ordinal);
 
-        var candidates = trades.Flips
+        var candidates = priceable
             .Where(conversion => singles[conversion.Id] is { IsExecutable: true, Profit: > 0 })
             .ToArray();
 
@@ -508,23 +529,37 @@ internal sealed class ConvertTab
                 config.SellingHorizon(), boards.Vendor)
             .ToDictionary(allocation => allocation.Conversion.Id, StringComparer.Ordinal);
 
-        // Working rows first, then priced-but-idle by what one run would pay, then the
-        // unpriceable. The trim eats from the bottom, so what disappears is what the board
-        // could not answer for anyway.
-        var ordered = trades.Flips
-            .Select(conversion => BuildFlipRow(conversion, singles[conversion.Id], allocated, tax))
-            .OrderByDescending(row => row.Runs > 0 ? 2 : row.Problem is null ? 1 : 0)
-            .ThenByDescending(row => row.Profit)
+        // Ordered on what a quote already knows, and only then built. A row carries what it
+        // costs to hold: the stock you own for it, each input priced off the book, the label.
+        // Doing that for every trade in the catalogue to show twenty-five of them was most of
+        // the cost of opening this tab, and all but twenty-five of it was thrown away.
+        var ordered = priceable
+            .Select(conversion =>
+            {
+                var single = singles[conversion.Id];
+                var allocation = allocated.GetValueOrDefault(conversion.Id);
+
+                return (
+                    Conversion: conversion,
+                    Rank: allocation is { Runs: > 0 } ? 2 : single.IsExecutable ? 1 : 0,
+                    Profit: allocation is { Runs: > 0 } ? allocation.Profit : single.Profit);
+            })
+            .OrderByDescending(entry => entry.Rank)
+            .ThenByDescending(entry => entry.Profit)
             .ToArray();
 
-        var shown = ordered.Take(FlipsInTable).ToArray();
+        var shown = ordered
+            .Take(FlipsInTable)
+            .Select(entry => BuildFlipRow(entry.Conversion, singles[entry.Conversion.Id], allocated, tax))
+            .ToArray();
 
         return new FlipModel(
             MeasureReadiness(),
             shown,
             allocated.Values.Sum(allocation => allocation.Profit),
-            ordered.Length - shown.Length,
-            ordered.Count(row => row.Problem is not null));
+            Math.Max(0, ordered.Length - shown.Length),
+            trades.Flips.Length - priceable.Length
+            + priceable.Count(conversion => !singles[conversion.Id].IsExecutable));
     }
 
     /// <summary>
