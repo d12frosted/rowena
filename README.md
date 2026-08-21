@@ -354,6 +354,29 @@ carries no world, so a view cannot be attributed to a world or a data centre, an
 cross-world listings under the wrong board would quietly corrupt the one thing this plugin
 is careful about. Universalis stays the source for depth.
 
+## Checking the numbers against the board
+
+Every row is a fetch, a walk up an order book, two taxes and a rate out of the game's
+sheets, and a wrong answer looks exactly like a right one. So the tables can be checked
+against the market by something that is not this code:
+
+```bash
+echo dump > "$ROWENA_CONFIG/commands.txt"   # diagnostics must be on
+./scripts/verify.py
+```
+
+The plugin writes what it is showing; the script fetches the same items from Universalis
+and recomputes each row in another language, then complains if the two disagree. Measured
+against a live board, they do not: outlays and net proceeds match to the gil.
+
+Two things it taught rather than confirmed. Buying three runs of a trade is not the same as
+buying three times the quantity, because the board floors its cut per listing per purchase
+and three runs are three purchases, so the script has to buy the way the plugin says you
+would. And a row whose input is wanted by another row cannot be checked on its own at all:
+the allocator gives the cheap listings to whichever pays most and prices the rest against
+what is left, so checking it in isolation disagrees by exactly the amount the allocator is
+right by. Those rows are skipped and say so.
+
 ## What the numbers do not know
 
 A fetch asks for at most so many listings, and Universalis counts `listingsCount` and

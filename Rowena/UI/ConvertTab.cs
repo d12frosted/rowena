@@ -115,6 +115,60 @@ internal sealed class ConvertTab
     /// </remarks>
     public IReadOnlyList<Action> Warmers => [() => _ = sinks.Current, () => _ = flips.Current];
 
+    /// <summary>
+    /// The numbers as they stand, in text, for checking them against the board by hand.
+    /// </summary>
+    /// <remarks>
+    /// The tables are the product and they are also the thing hardest to be sure of: every row
+    /// is a chain of a fetch, a walk up a book, two taxes and a rate out of the sheets, and a
+    /// wrong answer looks exactly like a right one. Written out, a row can be recomputed from
+    /// the raw listings by somebody who is not this code.
+    /// </remarks>
+    public string Dump()
+    {
+        var sink = sinks.Current;
+        var flip = flips.Current;
+
+        return System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                buying = boards.Scope.Buying,
+                selling = boards.Scope.Selling,
+                buyerRate = boards.Tax.BuyerRate,
+                sellerRate = boards.Tax.SellerRate,
+                currency = sink.Selected?.Currency.Name,
+                held = sink.Selected?.Held ?? 0,
+                sinks = (sink.Selected?.Rows ?? []).Where(row => row.Priced).Take(15).Select(row => new
+                {
+                    trade = row.Trade,
+                    item = row.ItemId,
+                    costs = row.PerRun,
+                    rate = row.Rate,
+                    net = row.Profit,
+                    banks = row.Banks,
+                    sellable = row.Sellable,
+                    absorb = row.Absorb,
+                }),
+                flips = flip.Flips.Where(row => row.Problem is null).Take(15).Select(row => new
+                {
+                    trade = row.Trade,
+                    item = row.ItemId,
+                    runs = row.Runs,
+                    outlay = row.Outlay,
+                    profit = row.Profit,
+                    absorb = row.Absorb,
+                    inputs = row.Inputs.Select(input => new
+                    {
+                        item = input.ItemId,
+                        quantity = input.Quantity,
+                        cost = input.Cost,
+                        sourced = input.Sourced,
+                    }),
+                }),
+            },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
     /// <summary>The Sinks tab: what a bound currency in your pockets is worth spending.</summary>
     public void DrawSinks()
     {

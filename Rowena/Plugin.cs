@@ -147,6 +147,8 @@ public sealed class Plugin : IDalamudPlugin
                 ["flips"] = () => mainWindow.Show(MainWindow.Tab.Flips),
                 ["vendor"] = () => mainWindow.Show(MainWindow.Tab.Vendor),
                 ["craft"] = () => mainWindow.Show(MainWindow.Tab.Craft),
+                ["dump"] = () => File.WriteAllText(
+                    Path.Combine(PluginInterface.ConfigDirectory.FullName, "dump.json"), convertTab.Dump()),
             },
             diagnosticsPanel.Report);
 

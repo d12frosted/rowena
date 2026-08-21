@@ -20,6 +20,9 @@ internal sealed class Boards(MarketCache market, PricingScope scope, VendorPrice
     /// <summary>Where the outputs go.</summary>
     public Func<uint, OrderBook?> Selling => market.Lookup(scope.Selling ?? "");
 
+    /// <summary>Which boards these are, for anything that has to say so.</summary>
+    public PricingScope Scope => scope;
+
     /// <summary>The floor under every sale: what a vendor pays, wherever you are.</summary>
     public Func<uint, long> Vendor => vendors.For;
 
