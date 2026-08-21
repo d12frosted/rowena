@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Rowena.UI;
 
 /// <summary>
@@ -12,9 +14,19 @@ namespace Rowena.UI;
 /// One of these per view rather than one for the window, which is what makes a hidden tab actually
 /// free: nobody asks a tab nobody is looking at for its numbers, so nobody builds them.
 /// </remarks>
-internal sealed class Rebuilt<T>(Func<T> build, TimeSpan? every = null)
+internal sealed class Rebuilt<T>(string name, Func<T> build, Diagnostics? diagnostics = null, TimeSpan? every = null)
     where T : class
 {
+    /// <summary>
+    /// A build slower than this is worth complaining about.
+    /// </summary>
+    /// <remarks>
+    /// Dalamud calls a frame over a hundred milliseconds a hitch, and one of these is only part
+    /// of a frame. Twenty is the point at which a rebuild is a meaningful share of the budget
+    /// and worth knowing about before it becomes a stutter somebody can feel.
+    /// </remarks>
+    private static readonly TimeSpan Slow = TimeSpan.FromMilliseconds(20);
+
     /// <summary>
     /// How often the numbers are recomputed.
     /// </summary>
@@ -36,8 +48,15 @@ internal sealed class Rebuilt<T>(Func<T> build, TimeSpan? every = null)
             if (value is not null && DateTime.UtcNow - builtAt < interval)
                 return value;
 
+            var started = Stopwatch.GetTimestamp();
             value = build();
             builtAt = DateTime.UtcNow;
+
+            var took = Stopwatch.GetElapsedTime(started);
+
+            if (took > Slow)
+                diagnostics?.Note("draw", $"{name} took {took.TotalMilliseconds:F0}ms to rebuild");
+
             return value;
         }
     }

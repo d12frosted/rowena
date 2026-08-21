@@ -39,6 +39,7 @@ internal sealed class StatusStrip
         ItemCells cells,
         Places places,
         LiveMarket live,
+        Diagnostics diagnostics,
         Action refresh)
     {
         this.market = market;
@@ -50,7 +51,7 @@ internal sealed class StatusStrip
         this.live = live;
         this.refresh = refresh;
 
-        wallet = new Rebuilt<Wallet>(Build);
+        wallet = new Rebuilt<Wallet>("wallet", Build, diagnostics);
     }
 
     public void Draw(string? buying, string? selling)

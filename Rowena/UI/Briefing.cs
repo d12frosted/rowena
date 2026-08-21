@@ -99,6 +99,15 @@ internal sealed class Briefing : IDisposable
 
         nextAt = DateTime.UtcNow + Every;
 
+        if (client.IsLoggedIn && boardsKnown())
+        {
+            // Whatever the last session saved, as soon as there is a board to read it against.
+            // Idempotent, and it belongs on a clock rather than in the window: everything that
+            // works without being looked at needs prices to exist, and the window may never be
+            // opened at all.
+            market.RestoreOnce(config.SweepAge());
+        }
+
         if (wanted)
             ContinueBriefing();
 

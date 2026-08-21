@@ -23,6 +23,7 @@ internal sealed class SettingsTab(
     CatalogFile catalogue,
     Trades trades,
     BoardWatcher board,
+    DiagnosticsPanel diagnostics,
     Action refreshPrices,
     Action save)
 {
@@ -171,6 +172,10 @@ internal sealed class SettingsTab(
 
         if (reloadReport is { } report)
             ImGui.TextColored(reloadFailed ? Palette.Bad : Palette.Dim, report);
+
+        Group("When something is not working");
+
+        diagnostics.Draw();
 
         if (!changed)
             return;

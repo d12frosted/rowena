@@ -87,6 +87,7 @@ internal sealed class ConvertTab
         Configuration config,
         MarketCache market,
         VenueCell venues,
+        Diagnostics diagnostics,
         Action<Conversion> refreshTrade)
     {
         this.trades = trades;
@@ -98,8 +99,8 @@ internal sealed class ConvertTab
         this.venues = venues;
         this.refreshTrade = refreshTrade;
 
-        sinks = new Rebuilt<SinkModel>(BuildSinks);
-        flips = new Rebuilt<FlipModel>(BuildFlips);
+        sinks = new Rebuilt<SinkModel>("sinks", BuildSinks, diagnostics);
+        flips = new Rebuilt<FlipModel>("flips", BuildFlips, diagnostics);
     }
 
     /// <summary>The Sinks tab: what a bound currency in your pockets is worth spending.</summary>

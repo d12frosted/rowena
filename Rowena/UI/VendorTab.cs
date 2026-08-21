@@ -39,14 +39,14 @@ internal sealed class VendorTab
         "The world holding the cheapest listing. You have to travel there to buy it.",
     ];
 
-    public VendorTab(VendorSweep sweep, Boards boards, ItemCells cells, Configuration config)
+    public VendorTab(VendorSweep sweep, Boards boards, ItemCells cells, Configuration config, Diagnostics diagnostics)
     {
         this.sweep = sweep;
         this.boards = boards;
         this.cells = cells;
         this.config = config;
 
-        model = new Rebuilt<Model>(Build);
+        model = new Rebuilt<Model>("vendor", Build, diagnostics);
     }
 
     /// <summary>The tab's label, carrying how many finds are standing.</summary>

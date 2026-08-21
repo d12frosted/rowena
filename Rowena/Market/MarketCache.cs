@@ -30,6 +30,7 @@ internal sealed class MarketCache : IDisposable
     private readonly IMarketDataSource source;
     private readonly PriceStore store;
     private readonly IPluginLog log;
+    private readonly Diagnostics diagnostics;
 
     private readonly FetchQueue queue = new();
     private readonly CancellationTokenSource stopping = new();
@@ -39,10 +40,11 @@ internal sealed class MarketCache : IDisposable
     private volatile bool inFlight;
     private int done;
 
-    public MarketCache(IMarketDataSource source, PriceStore store, IPluginLog log)
+    public MarketCache(IMarketDataSource source, PriceStore store, Diagnostics diagnostics, IPluginLog log)
     {
         this.source = source;
         this.store = store;
+        this.diagnostics = diagnostics;
         this.log = log;
 
         _ = Task.Run(() => Work(stopping.Token));
@@ -108,6 +110,9 @@ internal sealed class MarketCache : IDisposable
 
     /// <summary>How many ids are queued at each urgency, for saying what is being waited on.</summary>
     public int PendingAt(FetchPriority priority) => queue.PendingAt(priority);
+
+    /// <summary>How many books and summaries are held, for saying whether anything landed.</summary>
+    public (int Books, int Summaries) Held => (books.Count, summaries.Count);
 
     public DateTimeOffset? LastRefresh { get; private set; }
 
@@ -225,6 +230,7 @@ internal sealed class MarketCache : IDisposable
             requests.Add(request);
 
         queue.Enqueue(scope, kind, wanted, priority);
+        diagnostics.Note("fetch", $"queued {wanted.Length} {kind} on {scope} at {priority}");
 
         return request.Completion.Task;
     }
@@ -277,6 +283,12 @@ internal sealed class MarketCache : IDisposable
                 }
 
                 Interlocked.Add(ref done, batch.Ids.Length);
+
+                diagnostics.Note(
+                    "fetch",
+                    $"{(answered ? "got" : "gave up on")} {batch.Ids.Length} {batch.Kind} on {batch.Scope} "
+                    + $"({batch.Priority}), {queue.Pending} left");
+
                 Finish(batch, answered);
             }
             catch (OperationCanceledException)

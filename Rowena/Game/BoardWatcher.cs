@@ -39,14 +39,16 @@ internal readonly record struct MyListing(
 internal sealed class BoardWatcher : IDisposable
 {
     private readonly IMarketBoard board;
+    private readonly Diagnostics diagnostics;
     private readonly IPluginLog log;
 
     private readonly Dictionary<uint, List<MyListing>> mine = [];
     private readonly object gate = new();
 
-    public BoardWatcher(IMarketBoard board, IPluginLog log)
+    public BoardWatcher(IMarketBoard board, Diagnostics diagnostics, IPluginLog log)
     {
         this.board = board;
+        this.diagnostics = diagnostics;
         this.log = log;
 
         board.OfferingsReceived += OnOfferings;
@@ -125,6 +127,10 @@ internal sealed class BoardWatcher : IDisposable
 
         RatesValidUntil = new DateTimeOffset(rates.ValidUntil.ToUniversalTime(), TimeSpan.Zero);
         log.Verbose($"Market tax rates received, valid until {RatesValidUntil}.");
+
+        diagnostics.Note(
+            "board",
+            $"tax rates received, seller pays {SellerRates!.Values.Min():P0} to {SellerRates.Values.Max():P0}");
     }
 
     /// <summary>
@@ -140,8 +146,14 @@ internal sealed class BoardWatcher : IDisposable
         try
         {
             var retainers = MyRetainers();
+
             if (retainers.Count == 0)
+            {
+                diagnostics.Note(
+                    "board",
+                    $"offerings for {offerings.ItemListings.Count} listings, but no retainers are known yet");
                 return;
+            }
 
             foreach (var group in offerings.ItemListings.GroupBy(listing => listing.ItemId))
             {
@@ -163,6 +175,9 @@ internal sealed class BoardWatcher : IDisposable
                     else
                         mine.Remove(group.Key);
                 }
+
+                if (listed.Count > 0)
+                    diagnostics.Note("board", $"item {group.Key}: {listed.Count} of the listings are mine");
             }
         }
         catch (Exception error)

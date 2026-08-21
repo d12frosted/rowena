@@ -40,7 +40,17 @@ public sealed class MarketFeed : IDisposable
     private uint[] worlds = [];
     private Task? running;
 
-    public MarketFeed() => read = Decode;
+    /// <param name="note">
+    /// Told what the socket is doing, when anybody is listening. The feed lives in the core and
+    /// has no logger of its own, so saying it is the caller's business.
+    /// </param>
+    public MarketFeed(Action<string>? note = null)
+    {
+        read = Decode;
+        this.note = note ?? (_ => { });
+    }
+
+    private readonly Action<string> note;
 
     /// <summary>Raised for every change on a watched world. Off the socket's thread.</summary>
     public event Action<MarketChange>? Changed;
@@ -109,6 +119,7 @@ public sealed class MarketFeed : IDisposable
             {
                 LastError = error.Message;
                 failures++;
+                note($"disconnected: {error.Message}");
             }
             finally
             {
@@ -148,6 +159,7 @@ public sealed class MarketFeed : IDisposable
 
         Connected = true;
         LastError = null;
+        note($"connected, subscribed to {subscribed.Length} worlds x {Channels.Length} channels");
 
         var buffer = new byte[1 << 18];
 

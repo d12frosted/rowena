@@ -141,6 +141,18 @@ public sealed class Configuration : IPluginConfiguration
     public int VendorCandidatesToCost { get; set; } = 120;
 
     /// <summary>
+    /// Whether to keep an account of what the plugin is doing where nothing is drawn.
+    /// </summary>
+    /// <remarks>
+    /// On while this is experimental and I am the only one running it: the half of the plugin
+    /// that fetches, follows and listens draws nothing, so without this there is no way to tell
+    /// a quiet success from a silent failure. The fetch queue, the live feed, the game's own
+    /// market packets and any slow redraw all say what they are up to, in the settings tab and
+    /// in the Dalamud log.
+    /// </remarks>
+    public bool Diagnostics { get; set; } = true;
+
+    /// <summary>
     /// Whether to hold a websocket open to Universalis and refetch what it says has changed.
     /// </summary>
     /// <remarks>

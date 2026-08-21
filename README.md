@@ -65,7 +65,7 @@ profitable" but "how many can I actually do before the book eats the margin".
 
 Most trades are read out of the game's own shop sheets, because the game already publishes
 every exchange it operates: every scrip counter, tomestone vendor, hunt shop and seal
-quartermaster, machine-readably, updated by the patch itself. Around eleven hundred
+quartermaster, machine-readably, updated by the patch itself. Around two and a half thousand
 exchanges come out of that walk, and none of them can go stale. Only shops some NPC
 actually offers count, since the sheets also keep every shop that ever existed, and a
 retired exchange would come back as a trade priced in a currency the counter no longer

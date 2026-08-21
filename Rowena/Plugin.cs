@@ -42,6 +42,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Configuration config;
     private readonly MarketCache market;
     private readonly PricingScope scope;
+    private readonly Diagnostics diagnostics;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
 
@@ -68,15 +69,18 @@ public sealed class Plugin : IDalamudPlugin
         var store = new PriceStore(
             Path.Combine(PluginInterface.ConfigDirectory.FullName, "prices.json.gz"), Log);
 
-        market = new MarketCache(source, store, Log)
+        diagnostics = new Diagnostics(config, Log);
+        market = new MarketCache(source, store, diagnostics, Log)
         {
             Ttl = config.PriceTtl(),
             BookBatchSize = config.PriceBatchSize,
             SummaryBatchSize = config.SurveyBatchSize,
         };
 
-        boardWatcher = new BoardWatcher(MarketBoard, Log);
-        live = new LiveMarket(new MarketFeed(), market, new Worlds(DataManager, Log), config, Log);
+        boardWatcher = new BoardWatcher(MarketBoard, diagnostics, Log);
+        live = new LiveMarket(
+            new MarketFeed(message => diagnostics.Note("live", message)),
+            market, Framework, scope, new Worlds(DataManager, Log), config, diagnostics, Log);
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
         sweep = new FurnishingSweep(furnishings, market, Log);
@@ -95,17 +99,21 @@ public sealed class Plugin : IDalamudPlugin
         // The refreshes are the window's, reached through lambdas because the window does not
         // exist yet: the tabs live inside it. Read at click time, when it long since does.
         var convertTab = new ConvertTab(
-            trades, boards, balances, cells, config, market, venues,
+            trades, boards, balances, cells, config, market, venues, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
-            sweep, furnishings, boards, cells, basket, config,
+            sweep, furnishings, boards, cells, basket, config, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
-        var vendorTab = new VendorTab(vendorSweep, boards, cells, config);
+        var vendorTab = new VendorTab(vendorSweep, boards, cells, config, diagnostics);
+        var diagnosticsPanel = new DiagnosticsPanel(
+            diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
+
         var settingsTab = new SettingsTab(
-            config, market, catalogFile, trades, boardWatcher, () => mainWindow!.RefreshPrices(), Save);
+            config, market, catalogFile, trades, boardWatcher, diagnosticsPanel,
+            () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
-            trades, market, balances, scope, gatherBuddy, cells, places, live, sweep, vendorSweep,
+            trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
             convertTab, craftTab, vendorTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
@@ -118,7 +126,8 @@ public sealed class Plugin : IDalamudPlugin
 
         briefing = new Briefing(
             ClientState, Framework, ChatGui, market, sweep, headlines, config,
-            () => scope.Ready, () => mainWindow.RefreshPrices(FetchPriority.Background));
+            () => scope.Ready,
+            () => mainWindow.RefreshPrices(FetchPriority.Background));
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;

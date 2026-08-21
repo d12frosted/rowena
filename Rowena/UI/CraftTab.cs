@@ -61,6 +61,7 @@ internal sealed class CraftTab
         ItemCells cells,
         CraftBasket basket,
         Configuration config,
+        Diagnostics diagnostics,
         Action<Conversion> refreshTrade)
     {
         this.sweep = sweep;
@@ -71,7 +72,7 @@ internal sealed class CraftTab
         this.config = config;
         this.refreshTrade = refreshTrade;
 
-        model = new Rebuilt<Model>(Build);
+        model = new Rebuilt<Model>("crafts", Build, diagnostics);
     }
 
     /// <summary>
