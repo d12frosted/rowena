@@ -73,26 +73,41 @@ internal sealed class StatusStrip
 
         foreach (var (currency, held, cap) in current.Currencies)
         {
-            ImGui.SameLine();
+            // A capped currency shows its cap once the cap is within sight, because from there
+            // the distance to it is a decision: near the top, earning silently stops. Far from
+            // it, "2/65,000" is width spent on nothing. Near is coloured so it is not missed.
+            var close = cap is { } max && held >= max - max / 10;
+            var inSight = cap is { } limit && held * 2 >= limit;
+            var text = inSight ? $"   {currency} {held:N0}/{cap:N0}" : $"   {currency} {held:N0}";
 
-            // A capped currency shows its cap, because the distance to it is a decision:
-            // near the top, earning silently stops. Near is coloured so it is not missed.
-            if (cap is { } max)
-            {
-                var close = held >= max - max / 10;
-                ImGui.TextColored(close ? Palette.Bad : Palette.Dim, $"   {currency} {held:N0}/{max:N0}");
+            Flow(text);
+            ImGui.TextColored(close ? Palette.Bad : Palette.Dim, text);
 
-                if (close && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Nearly capped. Anything earned past the cap is simply lost.");
-            }
-            else
-            {
-                ImGui.TextColored(Palette.Dim, $"   {currency} {held:N0}");
-            }
+            if (close && ImGui.IsItemHovered())
+                ImGui.SetTooltip("Nearly capped. Anything earned past the cap is simply lost.");
         }
 
         if (current.Gathering is { } gathering)
             ImGui.TextColored(Palette.Dim, gathering);
+    }
+
+    /// <summary>
+    /// Continues the current line if the next piece fits, and starts a new one if it does not.
+    /// </summary>
+    /// <remarks>
+    /// The currencies were one SameLine chain, and with a dozen in your pockets it ran off the
+    /// right edge, gave the window a horizontal scroll and dragged the tables into it. ImGui
+    /// does not wrap items, only text, so the wrapping is done by hand: measure, and break the
+    /// line before the piece that would not fit.
+    /// </remarks>
+    private static void Flow(string next)
+    {
+        ImGui.SameLine();
+
+        var room = ImGui.GetWindowContentRegionMax().X - ImGui.GetCursorPosX();
+
+        if (ImGui.CalcTextSize(next).X > room)
+            ImGui.NewLine();
     }
 
     /// <summary>What is in your pockets, and what you are doing about it.</summary>
