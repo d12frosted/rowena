@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Rowena.Game;
 using Rowena.Market;
 
 namespace Rowena.UI;
@@ -21,6 +22,7 @@ internal sealed class SettingsTab(
     MarketCache market,
     CatalogFile catalogue,
     Trades trades,
+    BoardWatcher board,
     Action refreshPrices,
     Action save)
 {
@@ -137,6 +139,10 @@ internal sealed class SettingsTab(
             "Artisan list name", config.ArtisanListName, value => config.ArtisanListName = value,
             "The name the imported crafting list arrives under.");
 
+        Group("What the game has told us");
+
+        DrawTaxRates();
+
         Group("The catalogue");
 
         ImGui.TextColored(
@@ -167,6 +173,51 @@ internal sealed class SettingsTab(
         market.BookBatchSize = config.PriceBatchSize;
         market.SummaryBatchSize = config.SurveyBatchSize;
         save();
+    }
+
+    /// <summary>
+    /// The seller's cut per city, once the game has said what it is.
+    /// </summary>
+    /// <remarks>
+    /// Nought to five percent, moving daily, and every other number here has been assuming the
+    /// worst. Shown rather than merely used, because the cheapest city is worth knowing: moving
+    /// a retainer is a one-off errand that pays on every sale it ever makes.
+    /// </remarks>
+    private void DrawTaxRates()
+    {
+        if (board.SellerRates is not { Count: > 0 } rates)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                "The seller's cut is nought to five percent by city and moves daily. Open a market\n"
+                + "board once and the game says what it is today; until then the worst is assumed.");
+            return;
+        }
+
+        var cheapest = rates.OrderBy(entry => entry.Value).First();
+
+        ImGui.TextColored(
+            Palette.Dim,
+            $"Selling from {Cities.Name(cheapest.Key)} costs {cheapest.Value:P0} today, the cheapest of them. "
+            + "Rowena prices\nwith the worst of the cities you actually have retainers in.");
+
+        if (!ImGui.BeginTable("tax-rates", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+            return;
+
+        ImGui.TableSetupColumn("City", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("seller pays", ImGuiTableColumnFlags.WidthFixed, 90);
+        Cell.Headers([null, null]);
+
+        foreach (var (city, rate) in rates.OrderBy(entry => entry.Value))
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(Cities.Name(city));
+            ImGui.TableNextColumn();
+            Cell.Right(rate <= cheapest.Value ? Palette.Good : Palette.Plain, $"{rate:P0}");
+        }
+
+        ImGui.EndTable();
     }
 
     /// <summary>

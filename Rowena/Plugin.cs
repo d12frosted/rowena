@@ -29,12 +29,14 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
+    [PluginService] internal static IMarketBoard MarketBoard { get; private set; } = null!;
 
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
     private readonly ServerBar serverBar;
     private readonly Briefing briefing;
     private readonly Places places;
+    private readonly BoardWatcher boardWatcher;
     private readonly HttpClient http;
     private readonly Configuration config;
     private readonly MarketCache market;
@@ -72,6 +74,7 @@ public sealed class Plugin : IDalamudPlugin
             SummaryBatchSize = config.SurveyBatchSize,
         };
 
+        boardWatcher = new BoardWatcher(MarketBoard, Log);
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
         sweep = new FurnishingSweep(furnishings, market, Log);
@@ -79,9 +82,9 @@ public sealed class Plugin : IDalamudPlugin
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
-        var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
+        var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope, boardWatcher);
         var vendorPrices = new VendorPrices(DataManager);
-        var boards = new Boards(market, scope, vendorPrices);
+        var boards = new Boards(market, scope, vendorPrices, boardWatcher);
         vendorSweep = new VendorSweep(vendorPrices, market, Log);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
@@ -97,7 +100,7 @@ public sealed class Plugin : IDalamudPlugin
             conversion => mainWindow!.RefreshTrade(conversion));
         var vendorTab = new VendorTab(vendorSweep, boards, cells, config);
         var settingsTab = new SettingsTab(
-            config, market, catalogFile, trades, () => mainWindow!.RefreshPrices(), Save);
+            config, market, catalogFile, trades, boardWatcher, () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
             trades, market, balances, scope, gatherBuddy, cells, places, sweep, vendorSweep,
@@ -197,6 +200,7 @@ public sealed class Plugin : IDalamudPlugin
         briefing.Dispose();
         serverBar.Dispose();
         places.Dispose();
+        boardWatcher.Dispose();
         market.Dispose();
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;

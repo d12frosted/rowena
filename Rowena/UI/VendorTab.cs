@@ -174,7 +174,7 @@ internal sealed class VendorTab
                 continue;
 
             var vendorPrice = boards.Vendor(id);
-            var arbitrage = VendorArbitrage.Find(book, vendorPrice, MarketTax.Standard);
+            var arbitrage = VendorArbitrage.Find(book, vendorPrice, boards.Tax);
 
             if (arbitrage.Units == 0)
                 continue;

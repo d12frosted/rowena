@@ -28,7 +28,7 @@ public static class VendorArbitrage
     /// book that would have paid.
     /// </remarks>
     public static bool Possible(long minListing, long vendorPrice, MarketTax tax) =>
-        vendorPrice > 0 && minListing > 0 && minListing + tax.On(minListing) < vendorPrice;
+        vendorPrice > 0 && minListing > 0 && minListing + tax.OnPurchase(minListing) < vendorPrice;
 
     /// <summary>Walks the book from the bottom, taking whole listings while they still pay.</summary>
     public static Found Find(OrderBook book, long vendorPrice, MarketTax tax)
@@ -41,7 +41,7 @@ public static class VendorArbitrage
 
         foreach (var listing in book.Listings)
         {
-            var cost = listing.Total + tax.On(listing.Total);
+            var cost = listing.Total + tax.OnPurchase(listing.Total);
             var gain = vendorPrice * listing.Quantity - cost;
 
             // Listings are sorted, so the first that loses means the rest lose more.

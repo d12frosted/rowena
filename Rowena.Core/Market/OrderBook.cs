@@ -132,7 +132,7 @@ public sealed class OrderBook
             var taken = Math.Min(listing.Quantity, quantity - filled);
             var spent = listing.UnitPrice * taken;
             total += spent;
-            taxed += tax.On(spent);
+            taxed += tax.OnPurchase(spent);
             filled += taken;
             worst = listing.UnitPrice;
         }

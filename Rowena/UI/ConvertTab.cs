@@ -452,7 +452,7 @@ internal sealed class ConvertTab
 
     private SinkModel BuildSinks()
     {
-        var tax = MarketTax.Standard;
+        var tax = boards.Tax;
 
         // Only the currencies in your pockets, plus the ones the file declares an interest
         // in. The generated catalogue knows about every event token ever minted, and a sink
@@ -479,7 +479,7 @@ internal sealed class ConvertTab
 
     private FlipModel BuildFlips()
     {
-        var tax = MarketTax.Standard;
+        var tax = boards.Tax;
 
         // One quote per flip, reused for the row and for the allocation prefilter. A flip
         // that loses money on its first run only loses more on its second, so the allocator
@@ -725,7 +725,7 @@ internal sealed class ConvertTab
             .Where(input => input.Resource.Kind == ResourceKind.Item)
             .Select(input =>
             {
-                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, MarketTax.Standard);
+                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, boards.Tax);
 
                 return new ItemCells.MaterialLine(
                     input.Resource.Id,

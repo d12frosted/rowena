@@ -430,7 +430,7 @@ internal sealed class CraftTab
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
         var ranked = ConversionRanking.ByGilPerDay(
-            sweep.Shortlist, boards.Buying, boards.Selling, MarketTax.Standard, cap, boards.Vendor);
+            sweep.Shortlist, boards.Buying, boards.Selling, boards.Tax, cap, boards.Vendor);
 
         var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
 
@@ -466,7 +466,7 @@ internal sealed class CraftTab
             .Where(input => input.Resource.Kind == ResourceKind.Item)
             .Select(input =>
             {
-                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, MarketTax.Standard);
+                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, boards.Tax);
 
                 return new ItemCells.MaterialLine(
                     input.Resource.Id,

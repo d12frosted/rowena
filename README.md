@@ -311,6 +311,27 @@ Two things it will tell you plainly. Most scans find nothing, which is the hones
 and not a failure. And the expensive half is capped: the widest margins get costed first,
 and the number left uncosted is on screen rather than quietly dropped.
 
+## The game is a better source than the internet
+
+Universalis is whatever somebody else's client last uploaded. This client's own packets are
+what was actually there, at the moment it was there, and they cost nothing. Two things are
+taken from them.
+
+The seller's cut, which is nought to five percent depending on the city a retainer stands
+in and moves daily. Everything here used to assume the worst; now the game says, Rowena
+prices with the worst of the cities you actually sell from, and the settings tab shows the
+whole table so the cheapest one is visible. Moving a retainer is a one-off errand that pays
+on every sale it ever makes.
+
+My own listings, because a listing carrying one of my retainer ids is mine wherever the
+board view came from. An item's tooltip says what I have out and at what price, and says so
+in red when the board has gone under me.
+
+What is deliberately not taken from the game is the board as an order book. A listing
+carries no world, so a view cannot be attributed to a world or a data centre, and filing
+cross-world listings under the wrong board would quietly corrupt the one thing this plugin
+is careful about. Universalis stays the source for depth.
+
 ## What the numbers do not know
 
 A fetch asks for at most so many listings, and Universalis counts `listingsCount` and

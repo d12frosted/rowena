@@ -25,7 +25,8 @@ internal sealed class ItemCells(
     ITextureProvider textures,
     ItemActions actions,
     MarketCache market,
-    PricingScope scope)
+    PricingScope scope,
+    BoardWatcher board)
 {
     private const float IconSize = 20f;
 
@@ -141,6 +142,8 @@ internal sealed class ItemCells(
             ImGui.TextColored(Palette.Bad, $"nothing listed on {scope.Selling ?? "your world"}");
         }
 
+        Mine(itemId, book);
+
         if (materials is { Count: > 0 })
         {
             ImGui.Separator();
@@ -164,6 +167,35 @@ internal sealed class ItemCells(
             recipeId is null ? "right-click for actions" : "click to open the crafting log, right-click for more");
 
         ImGui.EndTooltip();
+    }
+
+    /// <summary>
+    /// What I have out for this item, as the board itself last reported it.
+    /// </summary>
+    /// <remarks>
+    /// Known only for items whose board I have opened, since this comes from the game's own
+    /// packets rather than from anywhere that can be asked. Worth saying loudly when it is
+    /// known: a row telling me to make more of something I already have three of, or that
+    /// somebody now sits under my price, is the difference between a table and an answer.
+    /// </remarks>
+    private void Mine(uint itemId, OrderBook? book)
+    {
+        if (board.Listed(itemId) is not { Count: > 0 } listed)
+            return;
+
+        var units = listed.Sum(listing => listing.Quantity);
+        var cheapest = listed.Min(listing => listing.UnitPrice);
+
+        ImGui.TextColored(Palette.Good, $"you have {units} listed, cheapest at {cheapest:N0}");
+
+        // Undercut is only worth claiming against the same board the listing stands on, and
+        // the floor here is the selling board's, which is where my retainers are.
+        if (book?.Floor is { } floor && floor < cheapest)
+        {
+            ImGui.TextColored(
+                Palette.Bad,
+                $"    undercut: the board is at {floor:N0}, {cheapest - floor:N0} under you");
+        }
     }
 
     /// <summary>

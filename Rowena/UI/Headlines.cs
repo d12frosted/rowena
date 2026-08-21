@@ -45,7 +45,7 @@ internal sealed class Headlines(Trades trades, Boards boards, Balances balances,
     /// </summary>
     public Flips? BestFlips()
     {
-        var tax = MarketTax.Standard;
+        var tax = boards.Tax;
 
         var candidates = trades.Flips
             .Where(conversion => ConversionEvaluator
