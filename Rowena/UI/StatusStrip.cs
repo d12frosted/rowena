@@ -57,7 +57,9 @@ internal sealed class StatusStrip
         ImGui.SameLine();
 
         if (market.Busy)
-            ImGui.TextColored(Palette.Dim, "fetching...");
+            ImGui.TextColored(
+                Palette.Dim,
+                market.Progress is { } progress ? $"fetching {progress.Done} of {progress.Total}" : "fetching...");
         else if (market.LastError is { } error)
             ImGui.TextColored(Palette.Bad, error);
         else if (market.LastRefresh is { } at)

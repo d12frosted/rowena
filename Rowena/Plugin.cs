@@ -87,7 +87,7 @@ public sealed class Plugin : IDalamudPlugin
         windows.AddWindow(mainWindow);
 
         serverBar = new ServerBar(
-            DtrBar, Framework, trades, boards, balances, config,
+            DtrBar, Framework, market, trades, boards, balances, config,
             () => mainWindow.Show(MainWindow.Tab.Convert));
 
         PluginInterface.UiBuilder.Draw += windows.Draw;

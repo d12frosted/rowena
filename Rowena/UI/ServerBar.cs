@@ -30,6 +30,7 @@ internal sealed class ServerBar : IDisposable
 
     private readonly IDtrBarEntry entry;
     private readonly IFramework framework;
+    private readonly MarketCache market;
     private readonly Trades trades;
     private readonly Boards boards;
     private readonly Balances balances;
@@ -40,6 +41,7 @@ internal sealed class ServerBar : IDisposable
     public ServerBar(
         IDtrBar bar,
         IFramework framework,
+        MarketCache market,
         Trades trades,
         Boards boards,
         Balances balances,
@@ -47,6 +49,7 @@ internal sealed class ServerBar : IDisposable
         Action openConvert)
     {
         this.framework = framework;
+        this.market = market;
         this.trades = trades;
         this.boards = boards;
         this.balances = balances;
@@ -70,7 +73,19 @@ internal sealed class ServerBar : IDisposable
         if (DateTime.UtcNow < nextAt)
             return;
 
-        nextAt = DateTime.UtcNow + Every;
+        // A second while fetching, so the percentage moves; the usual few seconds otherwise.
+        nextAt = DateTime.UtcNow + (market.Busy ? TimeSpan.FromSeconds(1) : Every);
+
+        // A fetch in flight outranks everything: the other headlines are read off the books it
+        // is about to replace, and a bar that says "flips pay 6M" while the numbers behind it
+        // are being refetched is confidently stale.
+        if (market.Busy && market.Progress is { Total: > 0 } progress)
+        {
+            entry.Text = $"Rowena: fetching {100 * progress.Done / progress.Total}%";
+            entry.Tooltip = $"{progress.Done} of {progress.Total} items answered. Click to watch.";
+            entry.Shown = true;
+            return;
+        }
 
         if (NearCap() is { } warning)
         {

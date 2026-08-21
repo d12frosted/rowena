@@ -47,6 +47,15 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// <summary>True while any fetch is in flight, so nothing starts a second one.</summary>
     public bool Busy { get; private set; }
 
+    /// <summary>
+    /// How far the running fetch has got, as ids answered out of ids asked. Null when idle.
+    /// </summary>
+    /// <remarks>
+    /// Set for every batch regardless of who started it, because "fetching..." with no end in
+    /// sight reads as stuck after ten seconds and a sweep can legitimately take minutes.
+    /// </remarks>
+    public (int Done, int Total)? Progress { get; private set; }
+
     public DateTimeOffset? LastRefresh { get; private set; }
 
     /// <summary>The last failure, kept so the window can say so instead of showing nothing.</summary>
@@ -171,6 +180,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             return new PricingResult(itemIds.Count, 0, 0);
 
         Busy = true;
+        Progress = (0, itemIds.Count);
         var answered = 0;
         var seen = 0;
         var failedChunks = 0;
@@ -187,6 +197,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
                     failedChunks++;
 
                 seen += chunk.Length;
+                Progress = (seen, itemIds.Count);
                 onProgress?.Invoke(seen, itemIds.Count);
 
                 if (seen < itemIds.Count)
@@ -215,6 +226,7 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
         }
         finally
         {
+            Progress = null;
             Busy = false;
         }
 
