@@ -24,8 +24,12 @@ internal sealed class VenueCell(Places places)
         }
 
         var here = spots.FirstOrDefault(places.IsHere);
-        var shown = here.TerritoryId != 0 ? here : spots[0];
         var nearby = here.TerritoryId != 0;
+
+        // A city can exist as several territories, its instanced copies, all with one name.
+        // Matching where you stand uses all of them; showing and flagging uses one per name.
+        var distinct = spots.DistinctBy(spot => (spot.Npc, spot.Zone)).ToArray();
+        var shown = nearby ? here : distinct[0];
 
         ImGui.PushID(id);
 
@@ -37,9 +41,9 @@ internal sealed class VenueCell(Places places)
 
         if (ImGui.IsItemHovered())
         {
-            var lines = spots.Select(spot => $"{spot.Npc}, {spot.Zone} ({spot.Map.X:F1}, {spot.Map.Y:F1})");
+            var lines = distinct.Select(spot => $"{spot.Npc}, {spot.Zone} ({spot.Map.X:F1}, {spot.Map.Y:F1})");
             ImGui.SetTooltip(
-                (spots.Count > 1 ? "Offered at:\n" + string.Join("\n", lines) + "\n\n" : "")
+                (distinct.Length > 1 ? "Offered at:\n" + string.Join("\n", lines) + "\n\n" : "")
                 + (nearby
                     ? "In this zone. Right-click to walk there with vnavmesh, or to flag it on the map."
                     : "Right-click to go there: Lifestream to "
@@ -86,7 +90,7 @@ internal sealed class VenueCell(Places places)
 
             ImGui.Separator();
 
-            foreach (var spot in spots)
+            foreach (var spot in distinct)
             {
                 if (ImGui.MenuItem($"Flag on the map: {spot.Zone}"))
                     places.Flag(spot);

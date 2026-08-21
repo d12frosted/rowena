@@ -1,6 +1,8 @@
 using System.Numerics;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
+using Lumina.Data.Files;
+using Lumina.Data.Parsing.Layer;
 using Lumina.Excel.Sheets;
 
 namespace Rowena.Game;
@@ -182,41 +184,94 @@ internal sealed class Vendors(IDataManager data, IPluginLog log)
                 Follow(dataRef.RowId, npc.RowId, 0);
         }
 
+        var vendorNpcs = npcsByShop.Values.SelectMany(npcs => npcs).ToHashSet();
         var territories = data.GetExcelSheet<TerritoryType>();
         var maps = data.GetExcelSheet<Map>();
 
-        foreach (var level in data.GetExcelSheet<Level>())
+        void Place(uint npcId, TerritoryType territory, uint mapId, Vector3 world)
         {
-            if (level.Type != EventNpcLevel || level.Object.RowId == 0)
-                continue;
-
-            var territory = territories.GetRowOrDefault(level.Territory.RowId);
-            if (territory is null)
-                continue;
-
-            var mapId = level.Map.RowId != 0 ? level.Map.RowId : territory.Value.Map.RowId;
             if (maps.GetRowOrDefault(mapId) is not { } map)
-                continue;
+                return;
 
-            var npcName = residents.GetRowOrDefault(level.Object.RowId)?.Singular.ExtractText();
-            var zone = territory.Value.PlaceName.ValueNullable?.Name.ExtractText();
+            if (!spotsByNpc!.TryGetValue(npcId, out var spots))
+                spotsByNpc[npcId] = spots = [];
 
-            var spot = new Spot(
+            if (spots.Any(existing => existing.TerritoryId == territory.RowId))
+                return;
+
+            var npcName = residents.GetRowOrDefault(npcId)?.Singular.ExtractText();
+            var zone = territory.PlaceName.ValueNullable?.Name.ExtractText();
+
+            spots.Add(new Spot(
                 string.IsNullOrWhiteSpace(npcName) ? "vendor" : npcName,
-                territory.Value.RowId,
-                string.IsNullOrWhiteSpace(zone) ? $"zone {territory.Value.RowId}" : zone,
+                territory.RowId,
+                string.IsNullOrWhiteSpace(zone) ? $"zone {territory.RowId}" : zone,
                 mapId,
-                new Vector3(level.X, level.Y, level.Z),
-                MapUtil.WorldToMap(new Vector2(level.X, level.Z), map));
-
-            if (!spotsByNpc.TryGetValue(level.Object.RowId, out var spots))
-                spotsByNpc[level.Object.RowId] = spots = [];
-
-            if (spots.All(existing => existing.TerritoryId != spot.TerritoryId))
-                spots.Add(spot);
+                world,
+                MapUtil.WorldToMap(new Vector2(world.X, world.Z), map)));
         }
 
-        log.Information($"Placed {spotsByNpc.Count} vendors on the map.");
+        foreach (var level in data.GetExcelSheet<Level>())
+        {
+            if (level.Type != EventNpcLevel || !vendorNpcs.Contains(level.Object.RowId))
+                continue;
+
+            if (territories.GetRowOrDefault(level.Territory.RowId) is not { } territory)
+                continue;
+
+            Place(
+                level.Object.RowId,
+                territory,
+                level.Map.RowId != 0 ? level.Map.RowId : territory.Map.RowId,
+                new Vector3(level.X, level.Y, level.Z));
+        }
+
+        var fromSheet = spotsByNpc.Count;
+
+        // The layout files, for everyone the sheet left out. Level wins where both place an
+        // NPC in the same zone, since it carries the map the NPC belongs to in a zone with
+        // several; the layout only knows the zone's default.
+        foreach (var territory in territories)
+        {
+            var bg = territory.Bg.ExtractText();
+            var cut = bg.LastIndexOf("/level/", StringComparison.Ordinal);
+            if (cut < 0)
+                continue;
+
+            LgbFile? layout;
+            try
+            {
+                layout = data.GetFile<LgbFile>($"bg/{bg[..(cut + 7)]}planevent.lgb");
+            }
+            catch (Exception error)
+            {
+                log.Debug(error, $"No readable layout for zone {territory.RowId}.");
+                continue;
+            }
+
+            if (layout is null)
+                continue;
+
+            foreach (var layer in layout.Layers)
+            {
+                foreach (var placed in layer.InstanceObjects)
+                {
+                    if (placed.AssetType != LayerEntryType.EventNPC)
+                        continue;
+
+                    var npcId = ((LayerCommon.ENPCInstanceObject)placed.Object).ParentData.ParentData.BaseId;
+                    if (!vendorNpcs.Contains(npcId))
+                        continue;
+
+                    var at = placed.Transform.Translation;
+                    Place(npcId, territory, territory.Map.RowId, new Vector3(at.X, at.Y, at.Z));
+                }
+            }
+        }
+
+        log.Information(
+            $"Placed {spotsByNpc.Count} vendors on the map, {fromSheet} from the Level sheet "
+            + $"and {spotsByNpc.Count - fromSheet} more from the zone layouts.");
     }
 
     private void Offer(uint shopId, uint npcId)
