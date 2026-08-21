@@ -31,6 +31,7 @@ internal sealed class MainWindow : Window
     private readonly MarketCache market;
     private readonly Balances balances;
     private readonly PricingScope scope;
+    private readonly LiveMarket live;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
     private readonly StatusStrip strip;
@@ -53,6 +54,7 @@ internal sealed class MainWindow : Window
         GatherBuddyIpc gatherBuddy,
         ItemCells cells,
         Places places,
+        LiveMarket live,
         FurnishingSweep sweep,
         VendorSweep vendorSweep,
         ConvertTab convert,
@@ -67,6 +69,7 @@ internal sealed class MainWindow : Window
         this.market = market;
         this.balances = balances;
         this.scope = scope;
+        this.live = live;
         this.sweep = sweep;
         this.vendorSweep = vendorSweep;
         this.convert = convert;
@@ -82,7 +85,7 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, places, () => RefreshPrices());
+        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, places, live, () => RefreshPrices());
     }
 
     /// <summary>
@@ -119,6 +122,7 @@ internal sealed class MainWindow : Window
         var buying = scope.Buying;
         var selling = scope.Selling;
 
+        live.Follow(buying, selling);
         strip.Draw(buying, selling);
         ImGui.Separator();
 

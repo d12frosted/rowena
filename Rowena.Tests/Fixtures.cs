@@ -36,5 +36,9 @@ internal static class Fixtures
     public static string Read(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
 
+    /// <summary>A frame recorded off the live websocket, which speaks BSON rather than JSON.</summary>
+    public static byte[] Bytes(string name) =>
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+
     public static OrderBook Book(string name) => UniversalisJson.ParseItem(Read(name));
 }

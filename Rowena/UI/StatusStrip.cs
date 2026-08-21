@@ -26,6 +26,7 @@ internal sealed class StatusStrip
     private readonly GatherBuddyIpc gatherBuddy;
     private readonly ItemCells cells;
     private readonly Places places;
+    private readonly LiveMarket live;
     private readonly Action refresh;
 
     private readonly Rebuilt<Wallet> wallet;
@@ -37,6 +38,7 @@ internal sealed class StatusStrip
         GatherBuddyIpc gatherBuddy,
         ItemCells cells,
         Places places,
+        LiveMarket live,
         Action refresh)
     {
         this.market = market;
@@ -45,6 +47,7 @@ internal sealed class StatusStrip
         this.gatherBuddy = gatherBuddy;
         this.cells = cells;
         this.places = places;
+        this.live = live;
         this.refresh = refresh;
 
         wallet = new Rebuilt<Wallet>(Build);
@@ -73,6 +76,20 @@ internal sealed class StatusStrip
             ImGui.TextColored(Palette.Dim, $"prices {Phrases.Ago(DateTimeOffset.UtcNow - at)} old");
         else
             ImGui.TextColored(Palette.Dim, "no prices yet");
+
+        // Said only when it is up, since the interesting state is following rather than not.
+        if (live.Connected)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(Palette.Good, "  live");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    $"Following the board as it changes. {live.Received:N0} changes seen, "
+                    + $"{live.Refetched:N0} worth refetching.");
+            }
+        }
 
         var current = wallet.Current;
 

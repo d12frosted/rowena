@@ -113,6 +113,14 @@ internal sealed class SettingsTab(
             "How many of the scan's candidates get a full book fetched, widest margin first. The\n"
             + "survey is cheap and wide; this is the expensive half, eight ids a request.");
 
+        Group("Live prices");
+
+        changed |= Toggle(
+            "Follow the board as it changes", config.LiveMarket, value => config.LiveMarket = value,
+            "Holds a socket open to Universalis, which pushes what changed as it happens. It is a\n"
+            + "signal, not prices: what it names is refetched properly, since the feed sends only what\n"
+            + "moved and a book rebuilt from those would drift. Cheaper for them than asking repeatedly.");
+
         Group("Login and alerts");
 
         changed |= Toggle(

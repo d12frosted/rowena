@@ -22,6 +22,7 @@
        in these tests stay put and the suite runs offline. -->
   <ItemGroup>
     <None Include="Fixtures/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/**/*.bson" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

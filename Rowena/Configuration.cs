@@ -140,6 +140,15 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public int VendorCandidatesToCost { get; set; } = 120;
 
+    /// <summary>
+    /// Whether to hold a websocket open to Universalis and refetch what it says has changed.
+    /// </summary>
+    /// <remarks>
+    /// Cheaper for them than polling and much fresher for us. What arrives is a signal rather
+    /// than prices: the feed sends deltas, and only a fetch is trusted for depth.
+    /// </remarks>
+    public bool LiveMarket { get; set; } = true;
+
     /// <summary>Whether logging in earns one line in chat saying what is worth knowing.</summary>
     public bool BriefOnLogin { get; set; } = true;
 

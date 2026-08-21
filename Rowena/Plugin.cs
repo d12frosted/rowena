@@ -37,6 +37,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Briefing briefing;
     private readonly Places places;
     private readonly BoardWatcher boardWatcher;
+    private readonly LiveMarket live;
     private readonly HttpClient http;
     private readonly Configuration config;
     private readonly MarketCache market;
@@ -75,6 +76,7 @@ public sealed class Plugin : IDalamudPlugin
         };
 
         boardWatcher = new BoardWatcher(MarketBoard, Log);
+        live = new LiveMarket(new MarketFeed(), market, new Worlds(DataManager, Log), config, Log);
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
         sweep = new FurnishingSweep(furnishings, market, Log);
@@ -103,7 +105,7 @@ public sealed class Plugin : IDalamudPlugin
             config, market, catalogFile, trades, boardWatcher, () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
-            trades, market, balances, scope, gatherBuddy, cells, places, sweep, vendorSweep,
+            trades, market, balances, scope, gatherBuddy, cells, places, live, sweep, vendorSweep,
             convertTab, craftTab, vendorTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
@@ -201,6 +203,7 @@ public sealed class Plugin : IDalamudPlugin
         serverBar.Dispose();
         places.Dispose();
         boardWatcher.Dispose();
+        live.Dispose();
         market.Dispose();
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;

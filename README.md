@@ -311,6 +311,28 @@ Two things it will tell you plainly. Most scans find nothing, which is the hones
 and not a failure. And the expensive half is capped: the widest margins get costed first,
 and the number left uncosted is on screen rather than quietly dropped.
 
+## The board pushes, and the cache listens
+
+Universalis has a websocket, and it is cheaper for them than being asked repeatedly. Rowena
+subscribes to every world of the board it prices against and treats what arrives as a
+signal rather than as prices.
+
+That distinction is measured rather than assumed. Against the live feed, a `listings/add`
+for one item carried a single listing where the world held thirty-seven: it sends what
+changed, not what is. A book rebuilt from those would have to replay every event without
+ever missing one, across every disconnect, and a book that quietly drifted is the one
+failure this plugin cannot afford, since depth is the whole point.
+
+So the push decides *when* and a fetch decides *what*. An item the feed names is refetched
+through the ordinary queue, at background priority, with a cooldown so a busy item does not
+cause a fetch per twitch. Only items a book is already held for are worth it: an item
+nobody has fetched is an item nobody is looking at, and the feed carries thousands of those
+an hour. One world measured at about thirty-five messages a minute, so a data centre is a
+handful a second before filtering.
+
+BSON both ways, in a page of hand-written code rather than a dependency, pinned by tests
+against frames recorded off the live feed.
+
 ## The game is a better source than the internet
 
 Universalis is whatever somebody else's client last uploaded. This client's own packets are
