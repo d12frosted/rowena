@@ -34,7 +34,8 @@ internal sealed class ConvertTab
         "How many runs the balance you are holding pays for. Under one run, how far\n"
         + "along the next one is.",
         "How long the board would take to absorb the output of one run at the rate it\n"
-        + "currently sells. A margin you cannot sell into is not a margin.",
+        + "currently sells. A margin you cannot sell into is not a margin.\n"
+        + "Green within a day, yellow within three, orange within a week, red beyond or never.",
         "The counter in the world where the trade actually happens.",
     ];
 
@@ -51,7 +52,8 @@ internal sealed class ConvertTab
         "Profit over outlay. Worth reading next to the column beside it: a high return on a\n"
         + "trade that takes a month to sell is not a good trade.",
         "How long the board would take to absorb everything these runs would produce,\n"
-        + "counting every row that sells into the same book: one market, one queue.",
+        + "counting every row that sells into the same book: one market, one queue.\n"
+        + "Green within a day, yellow within three, orange within a week, red beyond or never.",
     ];
 
     private readonly Trades trades;
@@ -235,7 +237,7 @@ internal sealed class ConvertTab
             }
 
             ImGui.TableNextColumn();
-            Cell.Right(Phrases.Absorb(row.Absorb));
+            Cell.Absorb(row.Absorb);
 
             ImGui.TableNextColumn();
             ImGui.TextColored(Palette.Dim, row.Venue);
@@ -361,7 +363,7 @@ internal sealed class ConvertTab
             Cell.Right(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");
 
             ImGui.TableNextColumn();
-            Cell.Right(tint, Phrases.Absorb(row.Absorb));
+            Cell.Absorb(row.Absorb, dim: row.Idle);
         }
 
         ImGui.EndTable();

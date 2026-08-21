@@ -31,6 +31,32 @@ internal static class Cell
     public static void Right(string text) => Right(Palette.Plain, text);
 
     /// <summary>
+    /// How long a sale takes, coloured by how much that should worry you.
+    /// </summary>
+    /// <remarks>
+    /// Within a day is fine, within three is worth knowing, within a week is a commitment, and
+    /// beyond that, or never, is the number that decides the trade. "Never" used to sit in the
+    /// column in the same white as everything else, which is the wrong colour for the strongest
+    /// thing the table can say. Dimmed rows, the ones not being acted on, stay dim: the scale is
+    /// for rows you might act on.
+    /// </remarks>
+    public static void Absorb(double? days, bool dim = false)
+    {
+        var colour = dim
+            ? Palette.Dim
+            : days switch
+            {
+                null => Palette.Bad,
+                < 1d => Palette.Good,
+                < 3d => Palette.Warm,
+                < 7d => Palette.Hot,
+                _ => Palette.Bad,
+            };
+
+        Right(colour, Phrases.Absorb(days));
+    }
+
+    /// <summary>
     /// The header row, with an explanation on the columns whose names are shorthand.
     /// </summary>
     /// <remarks>
