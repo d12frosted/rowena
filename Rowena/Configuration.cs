@@ -108,6 +108,15 @@ public sealed class Configuration : IPluginConfiguration
     public int CraftsPerDayCap { get; set; }
 
     /// <summary>
+    /// The currency the sink table was last looking at, by item id. Zero for "whichever comes first".
+    /// </summary>
+    /// <remarks>
+    /// Remembered because one table is shown at a time and the one you were reading is the one you
+    /// will want again. An id that is no longer in your pockets falls back quietly.
+    /// </remarks>
+    public uint SinkCurrency { get; set; }
+
+    /// <summary>
     /// Crafts queued up for an Artisan list that has not been exported yet.
     /// </summary>
     /// <remarks>

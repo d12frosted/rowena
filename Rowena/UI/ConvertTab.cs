@@ -94,109 +94,152 @@ internal sealed class ConvertTab
     {
         ImGui.TextUnformatted("Sinks: what a bound currency is worth once converted and sold");
 
-        foreach (var group in current.Sinks)
+        if (current.Choices.Length == 0)
         {
-            if (group.Rows.Length == 0)
-                continue;
+            ImGui.TextColored(Palette.Dim, "You hold none of the currencies anything here will take.");
+            return;
+        }
 
-            ImGui.Spacing();
-            ImGui.TextColored(Palette.Dim, $"{group.Currency.Name} ({group.Held:N0} held)");
+        DrawChooser(current);
 
-            if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
-                continue;
+        if (current.Selected is not { } group || group.Rows.Length == 0)
+            return;
 
-            ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
-            ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
-            ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
-            ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
-            ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
-            Cell.Headers(SinkHelp);
+        ImGui.Spacing();
 
-            foreach (var row in group.Rows)
+        if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+            return;
+
+        ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
+        ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
+        Cell.Headers(SinkHelp);
+
+        foreach (var row in group.Rows)
+        {
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
+            if (row.ItemId is { } sinkItem)
+                cells.Draw(row.Trade, sinkItem, refreshTrade: () => refreshTrade(row.Conversion));
+            else
+                ImGui.TextUnformatted(row.Trade);
+
+            // An unpriced row has nothing to say, and saying 0.00 would be a confident
+            // answer where there is no data at all.
+            if (!row.Priced)
             {
-                ImGui.TableNextRow();
-
                 ImGui.TableNextColumn();
-                if (row.ItemId is { } sinkItem)
-                    cells.Draw(row.Trade, sinkItem, refreshTrade: () => refreshTrade(row.Conversion));
-                else
-                    ImGui.TextUnformatted(row.Trade);
-
-                // An unpriced row has nothing to say, and saying 0.00 would be a confident
-                // answer where there is no data at all.
-                if (!row.Priced)
-                {
-                    ImGui.TableNextColumn();
-                    Cell.Right(Palette.Dim, "-");
-                    ImGui.TableNextColumn();
-                    ImGui.TextColored(Palette.Dim, "no prices yet");
-                    ImGui.TableNextColumn();
-                    Cell.Right(Palette.Dim, "-");
-                    ImGui.TableNextColumn();
-                    Cell.Right(Palette.Dim, "-");
-                    ImGui.TableNextColumn();
-                    ImGui.TextColored(Palette.Dim, row.Venue);
-                    continue;
-                }
-
+                Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
-                var leader = group.Best is { } best && Math.Abs(row.Rate!.Value - best) < 0.001d;
-                // Only the leader is coloured. Marking everything defeats the point.
-                // The unit is printed in the cell, not only in the header. Two decimals beside a
-                // column of millions reads as millions, and this number really is under a hundred.
-                Cell.Right(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
-                if (ImGui.IsItemHovered())
-                {
-                    // Said as a yield rather than a price, because the column was read as one and
-                    // the objection was fair: a scrip has no price. Nobody sells them and nobody
-                    // can buy them. This is what one turns into by being spent here.
-                    //
-                    // The whole-balance figure is floor times everything, the exact optimism the
-                    // rest of this plugin exists to correct, so it never appears without the time
-                    // the board would need to make it real. A hundred thousand scrips through a
-                    // mount that sells three times a week is a year of undercutting, not a number.
-                    ImGui.SetTooltip(
-                        $"What one {group.Unit} turns into, spent on this trade and the result sold.\n"
-                        + $"Not a price: {group.Unit} cannot be bought, only earned and spent.\n"
-                        + $"\n"
-                        + $"One run takes {row.PerRun:N0} and nets {row.Profit:N0} gil.\n"
-                        + $"{row.PerRun:N0} x {row.Rate.Value:F2} gil is where that comes from.\n"
-                        + WholeBalance(group, row));
-                }
-
+                ImGui.TextColored(Palette.Dim, "no prices yet");
                 ImGui.TableNextColumn();
-                Cell.Right($"{row.Profit:N0}");
-
+                Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
-
-                // Under one run, the useful answer is not "0 runs" but how far along the
-                // next one is: 3.9% of a mount is news a dash would have hidden.
-                if (row.Covers is { } covers && covers > 0)
-                {
-                    Cell.Right($"{covers:N0} runs");
-                }
-                else if (row.Covers is 0 && row.PerRun > 0 && group.Held > 0)
-                {
-                    Cell.Right(Palette.Dim, $"{(double)group.Held / row.PerRun:P1}");
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip($"{group.Held:N0} of the {row.PerRun:N0} one run takes.");
-                }
-                else
-                {
-                    Cell.Right(Palette.Dim, "-");
-                }
-
-                ImGui.TableNextColumn();
-                Cell.Right(Phrases.Absorb(row.Absorb));
-
+                Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
                 ImGui.TextColored(Palette.Dim, row.Venue);
+                continue;
             }
 
-            ImGui.EndTable();
+            ImGui.TableNextColumn();
+            var leader = group.Best is { } best && Math.Abs(row.Rate!.Value - best) < 0.001d;
+            // Only the leader is coloured. Marking everything defeats the point.
+            // The unit is printed in the cell, not only in the header. Two decimals beside a
+            // column of millions reads as millions, and this number really is under a hundred.
+            Cell.Right(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
+            if (ImGui.IsItemHovered())
+            {
+                // Said as a yield rather than a price, because the column was read as one and
+                // the objection was fair: a scrip has no price. Nobody sells them and nobody
+                // can buy them. This is what one turns into by being spent here.
+                //
+                // The whole-balance figure is floor times everything, the exact optimism the
+                // rest of this plugin exists to correct, so it never appears without the time
+                // the board would need to make it real. A hundred thousand scrips through a
+                // mount that sells three times a week is a year of undercutting, not a number.
+                ImGui.SetTooltip(
+                    $"What one {group.Unit} turns into, spent on this trade and the result sold.\n"
+                    + $"Not a price: {group.Unit} cannot be bought, only earned and spent.\n"
+                    + $"\n"
+                    + $"One run takes {row.PerRun:N0} and nets {row.Profit:N0} gil.\n"
+                    + $"{row.PerRun:N0} x {row.Rate.Value:F2} gil is where that comes from.\n"
+                    + WholeBalance(group, row));
+            }
+
+            ImGui.TableNextColumn();
+            Cell.Right($"{row.Profit:N0}");
+
+            ImGui.TableNextColumn();
+
+            // Under one run, the useful answer is not "0 runs" but how far along the
+            // next one is: 3.9% of a mount is news a dash would have hidden.
+            if (row.Covers is { } covers && covers > 0)
+            {
+                Cell.Right($"{covers:N0} runs");
+            }
+            else if (row.Covers is 0 && row.PerRun > 0 && group.Held > 0)
+            {
+                Cell.Right(Palette.Dim, $"{(double)group.Held / row.PerRun:P1}");
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip($"{group.Held:N0} of the {row.PerRun:N0} one run takes.");
+            }
+            else
+            {
+                Cell.Right(Palette.Dim, "-");
+            }
+
+            ImGui.TableNextColumn();
+            Cell.Right(Phrases.Absorb(row.Absorb));
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(Palette.Dim, row.Venue);
         }
+
+        ImGui.EndTable();
     }
+
+    /// <summary>
+    /// Which currency the sink table is about.
+    /// </summary>
+    /// <remarks>
+    /// One table at a time. With the generated catalogue in, every currency in your pockets has
+    /// a table, and a dozen tables stacked is a scroll, not a comparison; comparing across
+    /// currencies is not a decision anyone makes, since each one can only be spent on its own
+    /// sinks. The choice is remembered, because the one you were looking at is the one you
+    /// will want again, and a fresh rebuild does not get to forget it.
+    /// </remarks>
+    private void DrawChooser(Model current)
+    {
+        var chosen = current.Selected;
+        var label = chosen is null ? "" : Choice(chosen.Currency, chosen.Held);
+
+        ImGui.SetNextItemWidth(340f);
+
+        if (!ImGui.BeginCombo("##sink-currency", label))
+            return;
+
+        foreach (var (currency, held) in current.Choices)
+        {
+            var selected = chosen is not null && chosen.Currency.Id == currency.Id;
+
+            if (ImGui.Selectable(Choice(currency, held), selected))
+            {
+                config.SinkCurrency = currency.Id;
+                model.Invalidate();
+            }
+
+            if (selected)
+                ImGui.SetItemDefaultFocus();
+        }
+
+        ImGui.EndCombo();
+    }
+
+    private static string Choice(Resource currency, long held) => $"{currency.Name} ({held:N0} held)";
 
     private void DrawFlips(Model current)
     {
@@ -289,10 +332,22 @@ internal sealed class ConvertTab
         // Only the currencies in your pockets, plus the ones the file declares an interest
         // in. The generated catalogue knows about every event token ever minted, and a sink
         // you cannot feed is not a decision; a hand-written one is a standing question.
-        var sinks = trades.Currencies
-            .Where(currency => balances.Held(currency) > 0 || trades.IsWatched(currency))
-            .Select(currency => BuildSinkGroup(currency, tax))
+        var choices = trades.Currencies
+            .Select(currency => (Currency: currency, Held: balances.Held(currency)))
+            .Where(entry => entry.Held > 0 || trades.IsWatched(entry.Currency))
+            .OrderByDescending(entry => entry.Held > 0)
+            .ThenBy(entry => entry.Currency.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        // Only the chosen currency's table is priced. The others are a list of names until
+        // picked, which is what keeps a catalogue of a thousand trades cheap to redraw.
+        var chosen = choices
+            .Where(entry => entry.Currency.Id == config.SinkCurrency)
+            .Concat(choices)
+            .Select(entry => (Resource?)entry.Currency)
+            .FirstOrDefault();
+
+        var selected = chosen is { } currency ? BuildSinkGroup(currency, tax) : null;
 
         // One quote per flip, reused for the row and for the allocation prefilter. A flip
         // that loses money on its first run only loses more on its second, so the allocator
@@ -322,7 +377,8 @@ internal sealed class ConvertTab
         var shown = ordered.Take(FlipsInTable).ToArray();
 
         return new Model(
-            sinks,
+            choices,
+            selected,
             shown,
             allocated.Values.Sum(allocation => allocation.Profit),
             ordered.Length - shown.Length,
@@ -476,8 +532,11 @@ internal sealed class ConvertTab
     /// </param>
     /// <param name="HiddenFlips">Rows the trim removed, all paying less than anything shown.</param>
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
+    /// <param name="Choices">Every currency the table could be about, and how much of each is held.</param>
+    /// <param name="Selected">The one it is about, priced.</param>
     private sealed record Model(
-        SinkGroup[] Sinks,
+        (Resource Currency, long Held)[] Choices,
+        SinkGroup? Selected,
         FlipRow[] Flips,
         long TotalFlipProfit,
         int HiddenFlips,
