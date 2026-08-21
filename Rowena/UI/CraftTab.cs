@@ -220,9 +220,7 @@ internal sealed class CraftTab
         else
         {
             if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
-                sweep.Start(
-                    buying, selling, config.PriceBatchSize, config.SurveyBatchSize,
-                    config.FurnishingShortlist, config.SweepAge());
+                sweep.Start(buying, selling, config.FurnishingShortlist, config.SweepAge());
 
             ImGui.SameLine();
 

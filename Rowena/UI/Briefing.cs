@@ -24,9 +24,6 @@ internal sealed class Briefing : IDisposable
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan FetchPatience = TimeSpan.FromMinutes(3);
 
-    /// <summary>How long a kicked refresh gets to start before it is assumed dropped.</summary>
-    private static readonly TimeSpan StartPatience = TimeSpan.FromSeconds(15);
-
     private readonly IClientState client;
     private readonly IFramework framework;
     private readonly IChatGui chat;
@@ -42,8 +39,6 @@ internal sealed class Briefing : IDisposable
     // The login briefing in flight: asked for, refresh kicked, waiting for the fetch.
     private bool wanted;
     private bool kicked;
-    private bool sawFetching;
-    private DateTime kickedAt;
     private DateTime giveUpAt;
     private DateTimeOffset? refreshBefore;
 
@@ -88,7 +83,6 @@ internal sealed class Briefing : IDisposable
     {
         wanted = true;
         kicked = false;
-        sawFetching = false;
         giveUpAt = DateTime.UtcNow + FetchPatience;
     }
 
@@ -124,21 +118,16 @@ internal sealed class Briefing : IDisposable
             refreshBefore = market.LastRefresh;
             refreshPrices();
             kicked = true;
-            kickedAt = DateTime.UtcNow;
             return;
         }
 
-        sawFetching |= market.Busy;
-
+        // The refresh is queued rather than attempted, and it outranks a scan, so it will
+        // happen; what is unknown is when. Waiting for the whole queue to drain is the honest
+        // signal, with a patience in case something is badly wrong.
         var fetched = !market.Busy && market.LastRefresh is { } at && at != refreshBefore;
-
-        // A refresh asked while the cache was busy with something else is dropped, not
-        // queued. If nothing has started fetching in a reasonable while, it is not going to,
-        // and the briefing is better said from the cache than never.
-        var neverStarted = !sawFetching && !fetched && DateTime.UtcNow > kickedAt + StartPatience;
         var gaveUp = DateTime.UtcNow > giveUpAt;
 
-        if (!fetched && !neverStarted && !gaveUp)
+        if (!fetched && !gaveUp)
             return;
 
         wanted = false;

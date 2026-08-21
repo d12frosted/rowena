@@ -73,9 +73,7 @@ internal sealed class VendorTab
 
         if (ImGui.Button(scan.ReadyAt is null ? "Scan the board" : "Scan again"))
         {
-            sweep.Start(
-                buying, config.SurveyBatchSize, config.PriceBatchSize, config.VendorCandidatesToCost,
-                config.SweepAge());
+            sweep.Start(buying, config.VendorCandidatesToCost, config.SweepAge());
         }
 
         ImGui.SameLine();

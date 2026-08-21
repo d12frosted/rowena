@@ -2,6 +2,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 using Rowena.Game;
 using Rowena.IPC;
 using Rowena.Market;
@@ -81,14 +82,15 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, places, RefreshPrices);
+        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, places, () => RefreshPrices());
     }
 
     /// <summary>
     /// Refetches every catalogue item. The strip's button, and the settings tab's reload,
     /// which swaps trades in that no book has been fetched for yet.
     /// </summary>
-    public void RefreshPrices() => RefreshCatalogue(scope.Buying, scope.Selling, force: true);
+    public void RefreshPrices(FetchPriority priority = FetchPriority.Interactive) =>
+        RefreshCatalogue(scope.Buying, scope.Selling, force: true, priority);
 
     /// <summary>
     /// Refetches one trade's items, for checking the board before committing gil to it.
@@ -100,8 +102,8 @@ internal sealed class MainWindow : Window
     /// </remarks>
     public void RefreshTrade(Conversion conversion)
     {
-        market.RefreshInBackground(scope.Buying, ItemIds(conversion.Inputs), force: true);
-        market.RefreshInBackground(scope.Selling, ItemIds(conversion.Outputs), force: true);
+        market.RefreshInBackground(scope.Buying, ItemIds(conversion.Inputs), true, FetchPriority.Interactive);
+        market.RefreshInBackground(scope.Selling, ItemIds(conversion.Outputs), true, FetchPriority.Interactive);
     }
 
     private static uint[] ItemIds(IReadOnlyList<ResourceAmount> side) =>
@@ -247,12 +249,16 @@ internal sealed class MainWindow : Window
     /// rather than one over a merged list. Only the trades you could run are priced: the whole
     /// generated catalogue is a thousand ids, and most belong to currencies you hold none of.
     /// </remarks>
-    private void RefreshCatalogue(string? buying, string? selling, bool force = false)
+    private void RefreshCatalogue(
+        string? buying,
+        string? selling,
+        bool force = false,
+        FetchPriority priority = FetchPriority.Background)
     {
         var (bought, sold) = trades.Relevant(balances.Held);
 
-        market.RefreshInBackground(buying, bought, force);
-        market.RefreshInBackground(selling, sold, force);
+        market.RefreshInBackground(buying, bought, force, priority);
+        market.RefreshInBackground(selling, sold, force, priority);
     }
 
     /// <summary>

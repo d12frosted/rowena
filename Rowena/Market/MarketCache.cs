@@ -18,9 +18,36 @@ namespace Rowena.Market;
 /// gateway's ten-second limit. An earlier reading of twenty succeeded only because it landed at
 /// 8.4 seconds, right on the edge. So anything large is surveyed first and only the survivors are
 /// asked for in full.
+///
+/// Everything wanted goes through one queue and one worker. There is one fetcher because a plugin
+/// that opens ten connections to a free service is not being reasonable, and one fetcher means the
+/// order matters: a scan is thousands of ids that can wait, a press is two that cannot. Work used to
+/// be attempted rather than queued, and whoever asked second was dropped without a word, which is
+/// how pressing refresh during a vendor scan came to do nothing at all.
 /// </remarks>
-internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IPluginLog log)
+internal sealed class MarketCache : IDisposable
 {
+    private readonly IMarketDataSource source;
+    private readonly PriceStore store;
+    private readonly IPluginLog log;
+
+    private readonly FetchQueue queue = new();
+    private readonly CancellationTokenSource stopping = new();
+    private readonly List<Request> requests = [];
+    private readonly object waiting = new();
+
+    private volatile bool inFlight;
+    private int done;
+
+    public MarketCache(IMarketDataSource source, PriceStore store, IPluginLog log)
+    {
+        this.source = source;
+        this.store = store;
+        this.log = log;
+
+        _ = Task.Run(() => Work(stopping.Token));
+    }
+
     /// <summary>
     /// Three tries, because a 504 says the service is struggling rather than that the request was
     /// wrong, and struggling usually passes.
@@ -44,17 +71,43 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
 
     public TimeSpan Ttl { get; set; } = TimeSpan.FromMinutes(10);
 
-    /// <summary>True while any fetch is in flight, so nothing starts a second one.</summary>
-    public bool Busy { get; private set; }
+    /// <summary>Ids per request when the whole book is wanted. Small: the gateway times out.</summary>
+    public int BookBatchSize { get; set; } = 8;
+
+    /// <summary>Ids per request when only the price is wanted. Large: a summary is cheap.</summary>
+    public int SummaryBatchSize { get; set; } = 100;
+
+    /// <summary>True while anything is queued or in flight.</summary>
+    public bool Busy => inFlight || queue.Pending > 0;
 
     /// <summary>
-    /// How far the running fetch has got, as ids answered out of ids asked. Null when idle.
+    /// How far the queue has got, as ids answered out of ids asked. Null when idle.
     /// </summary>
     /// <remarks>
-    /// Set for every batch regardless of who started it, because "fetching..." with no end in
-    /// sight reads as stuck after ten seconds and a sweep can legitimately take minutes.
+    /// Counted across everything waiting rather than per caller, because that is the honest
+    /// answer to "how long until this stops": a press queued behind a sweep is waiting for the
+    /// sweep too. "Fetching..." with no end in sight reads as stuck after ten seconds, and a
+    /// scan can legitimately take minutes.
     /// </remarks>
-    public (int Done, int Total)? Progress { get; private set; }
+    public (int Done, int Total)? Progress
+    {
+        get
+        {
+            var left = queue.Pending;
+
+            if (left == 0 && !inFlight)
+                return null;
+
+            // Counted rather than remembered: the total is what has been done plus what is
+            // still queued, so it grows when more is asked for and cannot drift out of step
+            // with a queue that merges duplicates.
+            var finished = Volatile.Read(ref done);
+            return (finished, finished + left);
+        }
+    }
+
+    /// <summary>How many ids are queued at each urgency, for saying what is being waited on.</summary>
+    public int PendingAt(FetchPriority priority) => queue.PendingAt(priority);
 
     public DateTimeOffset? LastRefresh { get; private set; }
 
@@ -106,11 +159,12 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     /// starts a background task, and working it out in there would mean reading game state off the
     /// framework thread, which throws.
     /// </param>
-    public void RefreshInBackground(string? scope, IReadOnlyCollection<uint> itemIds, bool force = false)
+    public void RefreshInBackground(
+        string? scope,
+        IReadOnlyCollection<uint> itemIds,
+        bool force = false,
+        FetchPriority priority = FetchPriority.Background)
     {
-        if (Busy)
-            return;
-
         if (string.IsNullOrWhiteSpace(scope))
         {
             LastError = "Not logged in, and no data centre set.";
@@ -121,131 +175,222 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
         if (wanted.Length == 0)
             return;
 
-        _ = Task.Run(() => PriceAsync(scope, wanted, chunkSize: 8));
+        Submit(scope, FetchKind.Book, wanted, priority, null);
     }
 
-    /// <summary>Fetches full books, with their depth, in small batches.</summary>
+    /// <summary>Queues full books, with their depth, and waits for them.</summary>
     public Task<PricingResult> PriceAsync(
         string scope,
         IReadOnlyList<uint> itemIds,
-        int chunkSize,
-        Action<int, int>? onProgress = null,
-        CancellationToken cancellationToken = default) =>
-        Batched(
-            itemIds,
-            chunkSize,
-            async (chunk, token) =>
-                StoreBooks(scope, await source.FetchAsync(scope, chunk, token).ConfigureAwait(false), chunk),
-            onProgress,
-            cancellationToken);
+        FetchPriority priority = FetchPriority.Background,
+        Action<int, int>? onProgress = null) =>
+        Submit(scope, FetchKind.Book, itemIds, priority, onProgress);
 
-    /// <summary>Fetches prices and sale rates only, in large batches.</summary>
+    /// <summary>Queues prices and sale rates only, and waits for them.</summary>
     public Task<PricingResult> SurveyAsync(
         string scope,
         IReadOnlyList<uint> itemIds,
-        int chunkSize,
-        Action<int, int>? onProgress = null,
-        CancellationToken cancellationToken = default) =>
-        Batched(
-            itemIds,
-            chunkSize,
-            async (chunk, token) =>
-                StoreSummaries(scope, await source.SurveyAsync(scope, chunk, token).ConfigureAwait(false), chunk),
-            onProgress,
-            cancellationToken);
+        FetchPriority priority = FetchPriority.Background,
+        Action<int, int>? onProgress = null) =>
+        Submit(scope, FetchKind.Summary, itemIds, priority, onProgress);
 
     /// <summary>
-    /// Walks a list in batches, retrying each and easing off as failures accumulate.
+    /// Puts work on the queue and hands back something to wait on.
     /// </summary>
     /// <remarks>
-    /// A batch that fails every attempt is logged and skipped rather than failing the run. Losing
+    /// The waiting is per caller and the queue is shared, so two callers wanting the same id wait
+    /// on one fetch. A caller is finished when every id it asked for has been attempted, whoever
+    /// it was attempted for.
+    /// </remarks>
+    private Task<PricingResult> Submit(
+        string scope,
+        FetchKind kind,
+        IReadOnlyCollection<uint> itemIds,
+        FetchPriority priority,
+        Action<int, int>? onProgress)
+    {
+        var wanted = itemIds.Distinct().ToArray();
+
+        if (wanted.Length == 0)
+            return Task.FromResult(new PricingResult(0, 0, 0));
+
+        var request = new Request(
+            scope,
+            kind,
+            [.. wanted],
+            wanted.Length,
+            onProgress);
+
+        lock (waiting)
+            requests.Add(request);
+
+        queue.Enqueue(scope, kind, wanted, priority);
+
+        return request.Completion.Task;
+    }
+
+    /// <summary>
+    /// The one fetcher, taking whatever is most urgent and easing off as failures accumulate.
+    /// </summary>
+    /// <remarks>
+    /// A batch that fails every attempt is logged and skipped rather than failing anything. Losing
     /// eight prices is a gap in one table; abandoning the run loses the other nine hundred too.
     ///
     /// But skipping quietly is its own trap: a run that lost most of its batches looks exactly like
     /// one that found nothing for sale, and that is a confident wrong answer. So the count comes
-    /// back with the result and the caller is expected to care.
+    /// back to whoever was waiting and the caller is expected to care.
     ///
     /// The gap between batches stretches as failures mount. A service returning 504s is asking to be
     /// left alone for a moment, and carrying on at the same rate is how a bad minute becomes a
-    /// failed sweep.
+    /// failed sweep. It relaxes again as batches start landing, since the alternative is one bad
+    /// patch slowing the rest of the session.
     /// </remarks>
-    private async Task<PricingResult> Batched(
-        IReadOnlyList<uint> itemIds,
-        int chunkSize,
-        Func<uint[], CancellationToken, Task<bool>> fetch,
-        Action<int, int>? onProgress,
-        CancellationToken cancellationToken)
+    private async Task Work(CancellationToken cancellationToken)
     {
-        if (Busy || itemIds.Count == 0)
-            return new PricingResult(itemIds.Count, 0, 0);
+        var failures = 0;
 
-        Busy = true;
-        Progress = (0, itemIds.Count);
-        var answered = 0;
-        var seen = 0;
-        var failedChunks = 0;
-
-        try
+        while (!cancellationToken.IsCancellationRequested)
         {
-            foreach (var chunk in itemIds.Chunk(Math.Max(1, chunkSize)))
+            if (queue.Next(SizeFor) is not { } batch)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                // Nothing to do: the counters go back to zero so the next run reads from zero
+                // rather than continuing somebody else's total.
+                if (!inFlight)
+                    Interlocked.Exchange(ref done, 0);
 
-                if (await Attempt(chunk, fetch, cancellationToken).ConfigureAwait(false))
-                    answered += chunk.Length;
-                else
-                    failedChunks++;
-
-                seen += chunk.Length;
-                Progress = (seen, itemIds.Count);
-                onProgress?.Invoke(seen, itemIds.Count);
-
-                if (seen < itemIds.Count)
-                {
-                    var pause = Math.Min(
-                        SlowestBetweenChunks.TotalMilliseconds,
-                        BetweenChunks.TotalMilliseconds * (1 + failedChunks));
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(pause), cancellationToken).ConfigureAwait(false);
-                }
+                await Idle(cancellationToken).ConfigureAwait(false);
+                continue;
             }
 
-            LastRefresh = DateTimeOffset.UtcNow;
+            inFlight = true;
 
-            if (answered > 0)
-                LastError = null;
+            try
+            {
+                var answered = await Attempt(batch, cancellationToken).ConfigureAwait(false);
+
+                failures = answered ? Math.Max(0, failures - 1) : failures + 1;
+
+                if (answered)
+                {
+                    LastRefresh = DateTimeOffset.UtcNow;
+                    LastError = null;
+                }
+
+                Interlocked.Add(ref done, batch.Ids.Length);
+                Finish(batch, answered);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception error)
+            {
+                LastError = error.Message;
+                log.Error(error, "Could not fetch market data.");
+                Finish(batch, answered: false);
+            }
+            finally
+            {
+                inFlight = false;
+            }
+
+            var pause = Math.Min(
+                SlowestBetweenChunks.TotalMilliseconds,
+                BetweenChunks.TotalMilliseconds * (1 + failures));
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(pause), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private int SizeFor(FetchKind kind) =>
+        kind == FetchKind.Book ? Math.Max(1, BookBatchSize) : Math.Max(1, SummaryBatchSize);
+
+    private static async Task Idle(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(120), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            // A cancelled run is not a failure worth reporting to the user.
+            // Shutting down.
         }
-        catch (Exception error)
-        {
-            LastError = error.Message;
-            log.Error(error, "Could not fetch market data.");
-        }
-        finally
-        {
-            Progress = null;
-            Busy = false;
-        }
-
-        if (failedChunks > 0)
-            log.Warning($"Got {answered} of {itemIds.Count} ids; {failedChunks} batches were given up on.");
-
-        return new PricingResult(itemIds.Count, answered, failedChunks);
     }
 
-    private async Task<bool> Attempt(
-        uint[] chunk,
-        Func<uint[], CancellationToken, Task<bool>> fetch,
-        CancellationToken cancellationToken)
+    /// <summary>Tells everyone waiting on these ids that they have been attempted.</summary>
+    private void Finish(FetchBatch batch, bool answered)
+    {
+        List<Request> finished = [];
+
+        lock (waiting)
+        {
+            foreach (var request in requests)
+            {
+                if (request.Kind != batch.Kind || !string.Equals(request.Scope, batch.Scope, StringComparison.Ordinal))
+                    continue;
+
+                var hit = 0;
+
+                foreach (var itemId in batch.Ids)
+                {
+                    if (request.Outstanding.Remove(itemId))
+                        hit++;
+                }
+
+                if (hit == 0)
+                    continue;
+
+                if (answered)
+                    request.Answered += hit;
+                else
+                    request.FailedChunks++;
+
+                request.OnProgress?.Invoke(request.Total - request.Outstanding.Count, request.Total);
+
+                if (request.Outstanding.Count == 0)
+                    finished.Add(request);
+            }
+
+            foreach (var request in finished)
+                requests.Remove(request);
+        }
+
+        foreach (var request in finished)
+        {
+            if (request.FailedChunks > 0)
+            {
+                log.Warning(
+                    $"Got {request.Answered} of {request.Total} ids; "
+                    + $"{request.FailedChunks} batches were given up on.");
+            }
+
+            request.Completion.TrySetResult(
+                new PricingResult(request.Total, request.Answered, request.FailedChunks));
+        }
+    }
+
+    private async Task<bool> Attempt(FetchBatch batch, CancellationToken cancellationToken)
     {
         for (var attempt = 1; attempt <= Attempts; attempt++)
         {
             try
             {
-                return await fetch(chunk, cancellationToken).ConfigureAwait(false);
+                return batch.Kind == FetchKind.Book
+                    ? StoreBooks(
+                        batch.Scope,
+                        await source.FetchAsync(batch.Scope, batch.Ids, cancellationToken).ConfigureAwait(false),
+                        batch.Ids)
+                    : StoreSummaries(
+                        batch.Scope,
+                        await source.SurveyAsync(batch.Scope, batch.Ids, cancellationToken).ConfigureAwait(false),
+                        batch.Ids);
             }
             catch (OperationCanceledException)
             {
@@ -253,13 +398,13 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
             }
             catch (Exception error) when (attempt < Attempts)
             {
-                log.Verbose(error, $"Retrying a batch of {chunk.Length} (attempt {attempt}).");
+                log.Verbose(error, $"Retrying a batch of {batch.Ids.Length} (attempt {attempt}).");
                 await Task.Delay(Backoff[attempt - 1], cancellationToken).ConfigureAwait(false);
             }
             catch (Exception error)
             {
                 LastError = error.Message;
-                log.Warning(error, $"Gave up on a batch of {chunk.Length}; that data will be missing.");
+                log.Warning(error, $"Gave up on a batch of {batch.Ids.Length}; that data will be missing.");
             }
         }
 
@@ -371,6 +516,48 @@ internal sealed class MarketCache(IMarketDataSource source, PriceStore store, IP
     {
         if (!books.IsEmpty || !summaries.IsEmpty)
             store.Save(ExportBooks(), ExportSummaries(), sweep);
+    }
+
+    /// <summary>Stops the fetcher and gives up on anything still queued.</summary>
+    public void Dispose()
+    {
+        stopping.Cancel();
+        queue.Clear();
+
+        lock (waiting)
+        {
+            foreach (var request in requests)
+                request.Completion.TrySetResult(new PricingResult(request.Total, request.Answered, request.FailedChunks));
+
+            requests.Clear();
+        }
+
+        stopping.Dispose();
+    }
+
+    /// <summary>One caller's wait: the ids it asked for, and what has come back so far.</summary>
+    private sealed class Request(
+        string scope,
+        FetchKind kind,
+        HashSet<uint> outstanding,
+        int total,
+        Action<int, int>? onProgress)
+    {
+        public string Scope { get; } = scope;
+
+        public FetchKind Kind { get; } = kind;
+
+        public HashSet<uint> Outstanding { get; } = outstanding;
+
+        public int Total { get; } = total;
+
+        public Action<int, int>? OnProgress { get; } = onProgress;
+
+        public int Answered { get; set; }
+
+        public int FailedChunks { get; set; }
+
+        public TaskCompletionSource<PricingResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private readonly record struct BookSnapshot(OrderBook Book, DateTimeOffset Fetched);

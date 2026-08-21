@@ -4,6 +4,7 @@ using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 using Rowena.Core.Universalis;
 using Rowena.Game;
 using Rowena.IPC;
@@ -64,7 +65,12 @@ public sealed class Plugin : IDalamudPlugin
         var store = new PriceStore(
             Path.Combine(PluginInterface.ConfigDirectory.FullName, "prices.json.gz"), Log);
 
-        market = new MarketCache(source, store, Log) { Ttl = config.PriceTtl() };
+        market = new MarketCache(source, store, Log)
+        {
+            Ttl = config.PriceTtl(),
+            BookBatchSize = config.PriceBatchSize,
+            SummaryBatchSize = config.SurveyBatchSize,
+        };
 
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, Log);
@@ -107,7 +113,7 @@ public sealed class Plugin : IDalamudPlugin
 
         briefing = new Briefing(
             ClientState, Framework, ChatGui, market, sweep, headlines, config,
-            () => scope.Ready, mainWindow.RefreshPrices);
+            () => scope.Ready, () => mainWindow.RefreshPrices(FetchPriority.Background));
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -191,6 +197,7 @@ public sealed class Plugin : IDalamudPlugin
         briefing.Dispose();
         serverBar.Dispose();
         places.Dispose();
+        market.Dispose();
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;

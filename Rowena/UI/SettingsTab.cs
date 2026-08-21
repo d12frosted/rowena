@@ -163,6 +163,8 @@ internal sealed class SettingsTab(
         // Pushed rather than read, because the cache was handed its lifetime when it was built and
         // would otherwise keep the old one until the plugin reloaded.
         market.Ttl = config.PriceTtl();
+        market.BookBatchSize = config.PriceBatchSize;
+        market.SummaryBatchSize = config.SurveyBatchSize;
         save();
     }
 

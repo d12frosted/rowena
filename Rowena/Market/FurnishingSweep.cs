@@ -88,20 +88,14 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
-    public void Start(
-        string? buying,
-        string? selling,
-        int chunkSize,
-        int surveyBatch,
-        int shortlistSize,
-        TimeSpan maxAge)
+    public void Start(string? buying, string? selling, int shortlistSize, TimeSpan maxAge)
     {
         if (Running || string.IsNullOrWhiteSpace(buying) || string.IsNullOrWhiteSpace(selling))
             return;
 
         State = Phase.Products;
         Detail = "reading the sheets";
-        _ = Task.Run(() => Run(buying, selling, chunkSize, surveyBatch, shortlistSize, maxAge));
+        _ = Task.Run(() => Run(buying, selling, shortlistSize, maxAge));
     }
 
     /// <summary>
@@ -170,13 +164,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
             : null;
 
-    private async Task Run(
-        string buying,
-        string selling,
-        int chunkSize,
-        int surveyBatch,
-        int shortlistSize,
-        TimeSpan maxAge)
+    private async Task Run(string buying, string selling, int shortlistSize, TimeSpan maxAge)
     {
         try
         {
@@ -207,7 +195,7 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
             var wanted = products.Where(id => market.SummaryIsStale(selling, id, maxAge)).ToArray();
 
             State = Phase.Products;
-            await Survey(selling, wanted, surveyBatch).ConfigureAwait(false);
+            await Survey(selling, wanted).ConfigureAwait(false);
 
             // Counted from the cache rather than from the fetch, so data carried over from an
             // earlier run counts exactly as much as what was just fetched.
@@ -264,8 +252,8 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
                 .ToArray();
 
             State = Phase.Ingredients;
-            var materials = await Price(buying, materialIds, chunkSize, "materials").ConfigureAwait(false);
-            await Price(selling, productIds, chunkSize, "products").ConfigureAwait(false);
+            var materials = await Price(buying, materialIds, "materials").ConfigureAwait(false);
+            await Price(selling, productIds, "products").ConfigureAwait(false);
 
             Shortlist = shortlist;
             Blockers = Blocking(shortlist, buying, selling);
@@ -291,35 +279,33 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
         }
     }
 
-    private async Task<MarketCache.PricingResult> Survey(string scope, uint[] ids, int batchSize)
+    private async Task<MarketCache.PricingResult> Survey(string scope, uint[] ids)
     {
         if (ids.Length == 0)
             return new MarketCache.PricingResult(0, 0, 0);
-
-        while (market.Busy)
-            await Task.Delay(250).ConfigureAwait(false);
 
         Detail = $"surveying {ids.Length} furnishings";
 
         return await market
-            .SurveyAsync(scope, ids, batchSize, (done, total) => Detail = $"surveying: {done} of {total}")
+            .SurveyAsync(
+                scope, ids, FetchPriority.Sweep, (done, total) => Detail = $"surveying: {done} of {total}")
             .ConfigureAwait(false);
     }
 
-    private async Task<MarketCache.PricingResult> Price(string scope, uint[] ids, int chunkSize, string what)
+    /// <remarks>
+    /// Queued rather than attempted, so a press while this runs is served first rather than
+    /// dropped. What comes back is what the queue got round to, in its own time.
+    /// </remarks>
+    private async Task<MarketCache.PricingResult> Price(string scope, uint[] ids, string what)
     {
         if (ids.Length == 0)
             return new MarketCache.PricingResult(0, 0, 0);
 
-        // MarketCache refuses overlapping work, so wait for whatever else is in flight rather
-        // than silently skipping the pass.
-        while (market.Busy)
-            await Task.Delay(250).ConfigureAwait(false);
-
         Detail = $"pricing {ids.Length} {what}";
 
         return await market
-            .PriceAsync(scope, ids, chunkSize, (done, total) => Detail = $"pricing {what}: {done} of {total}")
+            .PriceAsync(
+                scope, ids, FetchPriority.Sweep, (done, total) => Detail = $"pricing {what}: {done} of {total}")
             .ConfigureAwait(false);
     }
 

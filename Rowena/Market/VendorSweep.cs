@@ -66,13 +66,13 @@ internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPlu
     public Snapshot Current { get; private set; } = new(Phase.Idle, "", 0, 0, 0, [], null);
 
     /// <summary>Starts a scan, or does nothing if one is already running.</summary>
-    public void Start(string? buying, int surveyBatch, int priceBatch, int toCost, TimeSpan maxAge)
+    public void Start(string? buying, int toCost, TimeSpan maxAge)
     {
         if (Current.Running || string.IsNullOrWhiteSpace(buying))
             return;
 
         Current = Current with { State = Phase.Surveying, Detail = "reading the item sheet" };
-        _ = Task.Run(() => Run(buying, surveyBatch, priceBatch, toCost, maxAge));
+        _ = Task.Run(() => Run(buying, toCost, maxAge));
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPlu
         });
     }
 
-    private async Task Run(string buying, int surveyBatch, int priceBatch, int toCost, TimeSpan maxAge)
+    private async Task Run(string buying, int toCost, TimeSpan maxAge)
     {
         try
         {
@@ -148,12 +148,9 @@ internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPlu
 
             if (wanted.Length > 0)
             {
-                while (market.Busy)
-                    await Task.Delay(250).ConfigureAwait(false);
-
                 await market
                     .SurveyAsync(
-                        buying, wanted, surveyBatch,
+                        buying, wanted, FetchPriority.Sweep,
                         (done, total) => Current = Current with { Detail = $"surveying: {done} of {total}" })
                     .ConfigureAwait(false);
             }
@@ -172,12 +169,9 @@ internal sealed class VendorSweep(VendorPrices vendors, MarketCache market, IPlu
             {
                 Current = Current with { State = Phase.Pricing, Detail = $"pricing {stale.Length} candidates" };
 
-                while (market.Busy)
-                    await Task.Delay(250).ConfigureAwait(false);
-
                 await market
                     .PriceAsync(
-                        buying, stale, priceBatch,
+                        buying, stale, FetchPriority.Sweep,
                         (done, total) => Current = Current with { Detail = $"pricing: {done} of {total}" })
                     .ConfigureAwait(false);
             }
