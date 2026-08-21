@@ -19,12 +19,20 @@ public readonly record struct DepthTier(long UnitPrice, int CumulativeUnits, lon
 /// </remarks>
 public sealed class OrderBook
 {
-    private OrderBook(uint itemId, IReadOnlyList<Listing> listings, double saleVelocityPerDay, DateTimeOffset retrieved)
+    private OrderBook(
+        uint itemId,
+        IReadOnlyList<Listing> listings,
+        double saleVelocityPerDay,
+        DateTimeOffset retrieved,
+        bool complete,
+        MarketSource source)
     {
         ItemId = itemId;
         Listings = listings;
         SaleVelocityPerDay = saleVelocityPerDay;
         Retrieved = retrieved;
+        Complete = complete;
+        Source = source;
     }
 
     public uint ItemId { get; }
@@ -39,6 +47,22 @@ public sealed class OrderBook
     public DateTimeOffset Retrieved { get; }
 
     /// <summary>
+    /// Whether these are all the listings there are.
+    /// </summary>
+    /// <remarks>
+    /// A fetch asks for at most so many listings, and one that comes back holding exactly that
+    /// many has probably been cut off: the response counts its own contents, so it cannot say.
+    /// What is cut off is the dear end, which means everything here is priced correctly and
+    /// only running past the end is unknown. Saying "the board is short" when it is merely out
+    /// of view understates what can be done, which is the opposite of the mistake this library
+    /// usually guards against and just as wrong.
+    /// </remarks>
+    public bool Complete { get; }
+
+    /// <summary>Where these listings came from.</summary>
+    public MarketSource Source { get; }
+
+    /// <summary>
     /// Builds a book, sorting defensively. Universalis happens to return listings in
     /// price order, but nothing in the arithmetic below should depend on a remote
     /// service's incidental behaviour.
@@ -47,10 +71,12 @@ public sealed class OrderBook
         uint itemId,
         IEnumerable<Listing> listings,
         double saleVelocityPerDay = 0d,
-        DateTimeOffset retrieved = default)
+        DateTimeOffset retrieved = default,
+        bool complete = true,
+        MarketSource source = MarketSource.Universalis)
     {
         var sorted = listings.OrderBy(listing => listing.UnitPrice).ToArray();
-        return new OrderBook(itemId, sorted, saleVelocityPerDay, retrieved);
+        return new OrderBook(itemId, sorted, saleVelocityPerDay, retrieved, complete, source);
     }
 
     /// <summary>An empty book, which is different from an absent one: nothing is for sale.</summary>
@@ -66,7 +92,11 @@ public sealed class OrderBook
     /// ranking it on another. This exists so a single source can be imposed on everything.
     /// </remarks>
     public OrderBook WithVelocity(double saleVelocityPerDay) =>
-        new(ItemId, Listings, saleVelocityPerDay, Retrieved);
+        new(ItemId, Listings, saleVelocityPerDay, Retrieved, Complete, Source);
+
+    /// <summary>The same listings, said to be all of them or not.</summary>
+    public OrderBook WithCompleteness(bool complete) =>
+        new(ItemId, Listings, SaleVelocityPerDay, Retrieved, complete, Source);
 
     /// <summary>Total units listed.</summary>
     public int UnitsListed => Listings.Sum(listing => listing.Quantity);
@@ -107,7 +137,9 @@ public sealed class OrderBook
             worst = listing.UnitPrice;
         }
 
-        return new BuyQuote(quantity, filled, total + taxed, worst, taxed);
+        // Running past the end of a book that was cut off is not a shortfall: the listings we
+        // cannot see are the dear ones, and they may well cover the rest.
+        return new BuyQuote(quantity, filled, total + taxed, worst, taxed, !Complete && filled < quantity);
     }
 
     /// <summary>
@@ -145,7 +177,7 @@ public sealed class OrderBook
             toDrop = 0;
         }
 
-        return Create(ItemId, remaining, SaleVelocityPerDay, Retrieved);
+        return Create(ItemId, remaining, SaleVelocityPerDay, Retrieved, Complete, Source);
     }
 
     /// <summary>

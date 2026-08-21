@@ -662,9 +662,15 @@ internal sealed class ConvertTab
 
         if (!single.IsExecutable)
         {
+            // Three different failures, and they ask for three different things. Short means
+            // the board really has no more. Unseen means the fetch was cut off and the board
+            // may well have more, which is fixed by asking for more listings rather than by
+            // giving up on the trade.
             var problem = single.Unsourced.Count > 0
                 ? $"short {string.Join(", ", single.Unsourced)}"
-                : $"no price for {string.Join(", ", single.Unpriced)}";
+                : single.Unseen.Count > 0
+                    ? $"only saw part of the book for {string.Join(", ", single.Unseen.Select(a => a.Resource.Name))}"
+                    : $"no price for {string.Join(", ", single.Unpriced)}";
 
             return new FlipRow(
                 conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),

@@ -29,7 +29,8 @@ public sealed record ConversionQuote(
     IReadOnlyList<ResourceAmount> Unsourced,
     IReadOnlyList<ResourceAmount> Unpriced,
     double? DaysToAbsorb,
-    IReadOnlyList<ResourceAmount> Vendored)
+    IReadOnlyList<ResourceAmount> Vendored,
+    IReadOnlyList<ResourceAmount> Unseen)
 {
     /// <summary>Net proceeds less what the inputs cost.</summary>
     public long Profit => NetProceeds - GilOutlay;
@@ -41,7 +42,11 @@ public sealed record ConversionQuote(
     /// True when every input could be sourced and every output could be priced. A quote
     /// that is not executable is still worth showing, but it is a projection, not a trade.
     /// </summary>
-    public bool IsExecutable => Unsourced.Count == 0 && Unpriced.Count == 0;
+    /// <summary>
+    /// Whether this can actually be done: everything sourced, everything priced, nothing
+    /// resting on listings we could not see.
+    /// </summary>
+    public bool IsExecutable => Unsourced.Count == 0 && Unpriced.Count == 0 && Unseen.Count == 0;
 
     /// <summary>
     /// Gil earned per unit of a bound currency. The number that ranks scrip sinks against

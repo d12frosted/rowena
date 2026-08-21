@@ -65,6 +65,7 @@ public static class ConversionEvaluator
         long outlay = 0;
         var currencySpent = new List<ResourceAmount>();
         var unsourced = new List<ResourceAmount>();
+        var unseen = new List<ResourceAmount>();
 
         foreach (var input in scaled.Inputs)
         {
@@ -84,7 +85,16 @@ public static class ConversionEvaluator
             var quote = book.CostToBuy(input.Quantity, tax);
             outlay += quote.Total;
 
-            if (!quote.IsComplete)
+            if (quote.IsComplete)
+                continue;
+
+            // Short because the board has no more, or short because we were only shown the
+            // cheap end of it. The second is not a fact about the market and must not be
+            // reported as one: it understates what could be done rather than overstating it,
+            // but a wrong answer confidently given is the thing this library exists to avoid.
+            if (quote.Uncertain)
+                unseen.Add(new ResourceAmount(input.Resource, quote.ShortBy));
+            else
                 unsourced.Add(new ResourceAmount(input.Resource, quote.ShortBy));
         }
 
@@ -145,7 +155,8 @@ public static class ConversionEvaluator
             Merge(unsourced),
             Merge(unpriced),
             daysToAbsorb,
-            Merge(vendored));
+            Merge(vendored),
+            Merge(unseen));
     }
 
     /// <summary>

@@ -10,7 +10,10 @@ namespace Rowena.Market;
 /// Deliberately terse. Names would triple the file for no benefit, and the world a listing sits
 /// on is not used by anything that reads this back.
 /// </remarks>
-internal sealed record StoredBook(string S, uint I, long T, double V, long[][] L);
+/// <param name="C">Whether the book was known to hold every listing there is.</param>
+/// <param name="P">Where it came from, as <see cref="MarketSource"/>.</param>
+/// <param name="W">The world each listing stands on, alongside L.</param>
+internal sealed record StoredBook(string S, uint I, long T, double V, long[][] L, bool C, int P, string[] W);
 
 internal sealed record StoredSweep(long At, int Candidates, string[] Shortlist);
 
@@ -40,7 +43,12 @@ internal sealed record StoredPrices(
 /// </remarks>
 internal sealed class PriceStore(string path, IPluginLog log)
 {
-    private const int CurrentVersion = 3;
+    /// <remarks>
+    /// Bumped whenever the shape changes. A file from an older version is discarded rather
+    /// than guessed at: prices are cheap to fetch again and a wrong guess about, say, whether
+    /// a book was complete would be believed for as long as the file lived.
+    /// </remarks>
+    private const int CurrentVersion = 4;
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
@@ -59,7 +67,10 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         entry.Book.ItemId,
                         entry.Fetched.ToUnixTimeMilliseconds(),
                         entry.Book.SaleVelocityPerDay,
-                        [.. entry.Book.Listings.Select(listing => new[] { listing.UnitPrice, listing.Quantity })])),
+                        [.. entry.Book.Listings.Select(listing => new[] { listing.UnitPrice, listing.Quantity })],
+                        entry.Book.Complete,
+                        (int)entry.Book.Source,
+                        [.. entry.Book.Listings.Select(listing => listing.World)])),
                 ],
                 [
                     .. summaries.Select(entry => new StoredSummary(
@@ -123,14 +134,23 @@ internal sealed class PriceStore(string path, IPluginLog log)
                 if (fetched < cutoff)
                     continue;
 
+                var worlds = book.W ?? [];
+
                 books.Add((
                     book.S ?? "",
                     OrderBook.Create(
                         book.I,
-                        (book.L ?? []).Where(pair => pair.Length >= 2)
-                            .Select(pair => new Listing(pair[0], (int)pair[1], "")),
+                        (book.L ?? [])
+                            .Select((pair, index) => (pair, index))
+                            .Where(entry => entry.pair.Length >= 2)
+                            .Select(entry => new Listing(
+                                entry.pair[0],
+                                (int)entry.pair[1],
+                                entry.index < worlds.Length ? worlds[entry.index] : "")),
                         book.V,
-                        fetched),
+                        fetched,
+                        book.C,
+                        (MarketSource)book.P),
                     fetched));
             }
 

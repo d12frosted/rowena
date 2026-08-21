@@ -60,7 +60,7 @@ public sealed class UniversalisClient(HttpClient http, int listings = 40) : IMar
         var url = $"https://universalis.app/api/v2/{Uri.EscapeDataString(scope)}/{ids}?listings={listings}";
 
         var json = await http.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
-        return UniversalisJson.ParseItems(json);
+        return UniversalisJson.ParseItems(json, listings);
     }
 
     public async Task<IReadOnlyDictionary<uint, MarketSummary>> SurveyAsync(

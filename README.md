@@ -311,6 +311,25 @@ Two things it will tell you plainly. Most scans find nothing, which is the hones
 and not a failure. And the expensive half is capped: the widest margins get costed first,
 and the number left uncosted is on screen rather than quietly dropped.
 
+## What the numbers do not know
+
+A fetch asks for at most so many listings, and Universalis counts `listingsCount` and
+`unitsForSale` from what it returned rather than from the board, so neither can say whether
+there was more. Landing exactly on the limit is the only signal there is, and a book that
+does is marked as possibly cut off. The recorded Mount Token book is one: forty listings
+asked for, forty returned.
+
+What gets cut off is the dear end, so everything in hand is priced correctly and only
+running past the end is unknown. That distinction is carried rather than flattened: an
+order the board genuinely cannot fill is short, and one that ran past the edge of what was
+fetched says so instead, because reporting it as short would claim the market cannot supply
+something it may well have. Both stop a trade being quoted; only one of them is a fact
+about the market, and only one is fixed by asking for more listings.
+
+Every book also records where it came from, since what this client saw at the board itself
+is exact and what Universalis returns is whatever somebody else uploaded, possibly hours
+ago.
+
 ## The board taxes both sides
 
 The buyer pays a flat 5% on top of every listing, and the seller receives the listed price

@@ -17,7 +17,17 @@ namespace Rowena.Core.Market;
 /// the top of the order actually pays, as opposed to the floor the board advertises.
 /// </param>
 /// <param name="Tax">The part of <paramref name="Total"/> that was the board's cut.</param>
-public readonly record struct BuyQuote(int Requested, int Filled, long Total, long WorstUnitPrice, long Tax)
+/// <param name="Uncertain">
+/// True when the order ran past the end of a book that was cut off, so the shortfall is what
+/// could not be seen rather than what is not there.
+/// </param>
+public readonly record struct BuyQuote(
+    int Requested,
+    int Filled,
+    long Total,
+    long WorstUnitPrice,
+    long Tax,
+    bool Uncertain = false)
 {
     /// <summary>True when the board could supply everything asked for.</summary>
     public bool IsComplete => Filled >= Requested;

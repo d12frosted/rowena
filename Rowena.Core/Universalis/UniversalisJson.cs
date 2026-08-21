@@ -14,10 +14,14 @@ namespace Rowena.Core.Universalis;
 public static class UniversalisJson
 {
     /// <summary>Parses a single-item response, the <c>/api/v2/{scope}/{itemId}</c> shape.</summary>
-    public static OrderBook ParseItem(string json)
+    /// <param name="requested">
+    /// How many listings were asked for, so a response holding exactly that many can be marked
+    /// as possibly cut off. Zero to claim nothing either way.
+    /// </param>
+    public static OrderBook ParseItem(string json, int requested = 0)
     {
         using var document = JsonDocument.Parse(json);
-        return ReadItem(document.RootElement);
+        return ReadItem(document.RootElement, requested);
     }
 
     /// <summary>
@@ -28,7 +32,8 @@ public static class UniversalisJson
     /// not an error worth throwing over: it usually means the item is untradable, which is
     /// a fact about the item and something the caller needs to handle anyway.
     /// </remarks>
-    public static IReadOnlyDictionary<uint, OrderBook> ParseItems(string json)
+    /// <inheritdoc cref="ParseItem"/>
+    public static IReadOnlyDictionary<uint, OrderBook> ParseItems(string json, int requested = 0)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
@@ -37,14 +42,14 @@ public static class UniversalisJson
         // comma-separated endpoint, so accept both here rather than at the call site.
         if (!root.TryGetProperty("items", out var items))
         {
-            var single = ReadItem(root);
+            var single = ReadItem(root, requested);
             return new Dictionary<uint, OrderBook> { [single.ItemId] = single };
         }
 
         var books = new Dictionary<uint, OrderBook>();
         foreach (var entry in items.EnumerateObject())
         {
-            var book = ReadItem(entry.Value);
+            var book = ReadItem(entry.Value, requested);
             books[book.ItemId] = book;
         }
 
@@ -112,7 +117,7 @@ public static class UniversalisJson
             ? found.GetDouble()
             : null;
 
-    private static OrderBook ReadItem(JsonElement item)
+    private static OrderBook ReadItem(JsonElement item, int requested)
     {
         var itemId = item.TryGetProperty("itemID", out var id) ? id.GetUInt32() : 0u;
 
@@ -138,6 +143,11 @@ public static class UniversalisJson
             ? DateTimeOffset.FromUnixTimeMilliseconds(uploaded.GetInt64())
             : default;
 
-        return OrderBook.Create(itemId, listings, velocity, retrieved);
+        // listingsCount and unitsForSale are counted from what was returned, not from the board,
+        // so neither can reveal a cut-off. Landing exactly on the limit is the only signal there
+        // is, and it errs towards doubt, which is the safe direction.
+        var complete = requested <= 0 || listings.Count < requested;
+
+        return OrderBook.Create(itemId, listings, velocity, retrieved, complete);
     }
 }

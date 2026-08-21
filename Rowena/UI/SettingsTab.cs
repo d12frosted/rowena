@@ -56,7 +56,8 @@ internal sealed class SettingsTab(
         changed |= Number(
             "Listings per item", config.ListingDepth, value => config.ListingDepth = value,
             "How deep the book is fetched. A shallow fetch is the exact mistake this plugin exists to\n"
-            + "correct, so keep it generous. Takes effect when the plugin next loads.");
+            + "correct, so keep it generous. A row saying it only saw part of the book wants this\n"
+            + "raised. Takes effect when the plugin next loads.");
 
         changed |= Number(
             "Most runs to size", config.SizingCap, value => config.SizingCap = value,
