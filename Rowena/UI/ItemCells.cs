@@ -100,7 +100,7 @@ internal sealed class ItemCells(
 
         if (ImGui.BeginPopupContextItem("actions"))
         {
-            Menu(label, itemId, recipeId, refreshTrade);
+            Menu(label, itemId, recipeId, refreshTrade, materials, inputsHeading);
             ImGui.EndPopup();
         }
 
@@ -197,7 +197,13 @@ internal sealed class ItemCells(
         ImGui.TextColored(Palette.Dim, string.Join(", ", parts));
     }
 
-    private void Menu(string label, uint itemId, uint? recipeId, Action? refreshTrade)
+    private void Menu(
+        string label,
+        uint itemId,
+        uint? recipeId,
+        Action? refreshTrade,
+        IReadOnlyList<MaterialLine>? materials,
+        string inputsHeading)
     {
         if (recipeId is { } recipe)
         {
@@ -211,8 +217,45 @@ internal sealed class ItemCells(
         if (refreshTrade is not null && ImGui.MenuItem("Refresh this trade's prices"))
             refreshTrade();
 
+        // The same three things for each input, because the thing you go and buy is as
+        // much the row's business as the thing you sell, and it was reachable only as text
+        // in a tooltip. A submenu each, so the flat menu stays about the item named on the row.
+        if (materials is { Count: > 0 })
+        {
+            ImGui.Separator();
+            ImGui.TextColored(Palette.Dim, $"   {inputsHeading}");
+
+            foreach (var material in materials)
+            {
+                ImGui.PushID((int)material.ItemId);
+
+                if (ImGui.BeginMenu($"{material.Quantity}x {material.Name}"))
+                {
+                    if (ImGui.MenuItem("Search the market board"))
+                        actions.SearchMarketBoard(material.ItemId);
+
+                    if (ImGui.MenuItem("Link in chat"))
+                        actions.LinkInChat(material.ItemId);
+
+                    if (ImGui.MenuItem("Copy name"))
+                        ImGui.SetClipboardText(material.Name);
+
+                    ImGui.EndMenu();
+                }
+
+                ImGui.PopID();
+            }
+
+            ImGui.Separator();
+        }
+
         if (ImGui.MenuItem("Link in chat"))
             actions.LinkInChat(itemId);
+
+        // The item's own name, not the row's label: on a flip the label is the whole
+        // transaction, and what gets pasted into a search box is the thing you sell.
+        if (ImGui.MenuItem("Copy name"))
+            ImGui.SetClipboardText(items.Name(itemId));
 
         if (recipeId is not { } craftable)
             return;
