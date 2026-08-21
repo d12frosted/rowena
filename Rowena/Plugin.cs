@@ -32,6 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
     private readonly ServerBar serverBar;
+    private readonly Places places;
     private readonly HttpClient http;
     private readonly Configuration config;
     private readonly MarketCache market;
@@ -73,7 +74,9 @@ public sealed class Plugin : IDalamudPlugin
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
         var boards = new Boards(market, scope);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
-        var venues = new VenueCell(new Places(PluginInterface, ClientState, GameGui, Log));
+        places = new Places(
+            PluginInterface, ClientState, GameGui, Framework, new Aetherytes(DataManager, Log), Log);
+        var venues = new VenueCell(places);
         // The refreshes are the window's, reached through lambdas because the window does not
         // exist yet: the tabs live inside it. Read at click time, when it long since does.
         var convertTab = new ConvertTab(
@@ -165,6 +168,7 @@ public sealed class Plugin : IDalamudPlugin
         market.Persist(sweep.Snapshot());
 
         serverBar.Dispose();
+        places.Dispose();
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;

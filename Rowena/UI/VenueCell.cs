@@ -9,8 +9,9 @@ namespace Rowena.UI;
 /// <remarks>
 /// Shows the spot in the zone you are standing in when there is one, otherwise the first,
 /// and says so: a counter in your own zone is an errand, one elsewhere is a trip. The rest
-/// are on hover. Right-click flags any of them on the map, and walks to the one you are in
-/// the zone of when vnavmesh is there to do the walking.
+/// are on hover. Right-click goes there: the walk when you are in the zone and vnavmesh is
+/// there to do it, a Lifestream teleport to the nearest aetheryte first when you are not.
+/// Flagging on the map is always offered, since it always works.
 /// </remarks>
 internal sealed class VenueCell(Places places)
 {
@@ -32,40 +33,63 @@ internal sealed class VenueCell(Places places)
             nearby ? Palette.Plain : Palette.Dim,
             $"{shown.Npc}, {shown.Zone} ({shown.Map.X:F1}, {shown.Map.Y:F1})");
 
+        var arrival = nearby ? null : places.ArrivalFor(shown);
+
         if (ImGui.IsItemHovered())
         {
             var lines = spots.Select(spot => $"{spot.Npc}, {spot.Zone} ({spot.Map.X:F1}, {spot.Map.Y:F1})");
             ImGui.SetTooltip(
                 (spots.Count > 1 ? "Offered at:\n" + string.Join("\n", lines) + "\n\n" : "")
-                + (nearby ? "In this zone. " : "")
-                + "Right-click to flag on the map"
-                + (nearby ? " or walk there with vnavmesh." : "."));
+                + (nearby
+                    ? "In this zone. Right-click to walk there with vnavmesh, or to flag it on the map."
+                    : "Right-click to go there: Lifestream to "
+                      + (arrival is { } a ? a.Name : "the zone")
+                      + ", then vnavmesh to the counter. Or just flag it on the map."));
         }
 
         if (ImGui.BeginPopupContextItem("where"))
         {
-            foreach (var spot in spots)
-            {
-                if (ImGui.MenuItem($"Flag on the map: {spot.Zone}"))
-                    places.Flag(spot);
-            }
-
+            // Going first, because it is the thing you came to the menu for; flagging is the
+            // fallback that always works.
             if (nearby)
             {
-                ImGui.Separator();
-
                 var canWalk = places.CanWalk;
                 if (!canWalk)
                     ImGui.BeginDisabled();
 
                 if (ImGui.MenuItem("Walk there with vnavmesh"))
-                    places.Walk(here);
+                    places.Go(here);
 
                 if (!canWalk)
                 {
                     ImGui.EndDisabled();
                     ImGui.TextColored(Palette.Dim, "   vnavmesh not found, or no mesh for this zone yet");
                 }
+            }
+            else
+            {
+                var canGo = places.CanTeleport && arrival is not null;
+                if (!canGo)
+                    ImGui.BeginDisabled();
+
+                if (ImGui.MenuItem(arrival is { } at ? $"Go there: teleport to {at.Name}, then walk" : "Go there"))
+                    places.Go(shown);
+
+                if (!canGo)
+                {
+                    ImGui.EndDisabled();
+                    ImGui.TextColored(
+                        Palette.Dim,
+                        arrival is null ? "   no aetheryte in that zone" : "   Lifestream not found");
+                }
+            }
+
+            ImGui.Separator();
+
+            foreach (var spot in spots)
+            {
+                if (ImGui.MenuItem($"Flag on the map: {spot.Zone}"))
+                    places.Flag(spot);
             }
 
             ImGui.EndPopup();

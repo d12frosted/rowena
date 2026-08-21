@@ -254,10 +254,11 @@ through the category picker the scrip and tomestone exchanges sit behind, placed
 Level sheet. An exchange offered in several cities lists them all, and the one in the zone
 you are standing in comes first.
 
-Right-click flags the spot on the game's own map, which also makes the nearest aetheryte
-obvious. From inside the spot's zone it can also hand the walk to vnavmesh, the way a craft
-is handed to Artisan: one click, that plugin's pathing, and only where a path exists. It
-does not teleport you; a teleport is a decision with a price on it.
+Right-click goes there. Inside the spot's zone that is a walk handed to vnavmesh, the way
+a craft is handed to Artisan: one click, that plugin's pathing. From anywhere else it is a
+Lifestream teleport to the nearest aetheryte in that zone, nearest measured on the map
+rather than guessed, with the walk armed to fire once the zone has loaded and the mesh is
+ready. Flagging the spot on the game's own map is always offered, since it always works.
 
 ## Not here yet
 
