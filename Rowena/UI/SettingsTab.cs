@@ -98,6 +98,26 @@ internal sealed class SettingsTab(
             "A hundred, comfortably. A summary carries no depth, which is why the first pass of a\n"
             + "sweep can be this wide and the second cannot.");
 
+        Group("Login and alerts");
+
+        changed |= Toggle(
+            "Brief me when I log in", config.BriefOnLogin, value => config.BriefOnLogin = value,
+            "One line in chat after the prices are refetched: what is near its cap, what the flips pay,\n"
+            + "how old the sweep is. /rowena brief says it again on demand.");
+
+        changed |= Toggle(
+            "Say when a currency nears its cap", config.AlertNearCap, value => config.AlertNearCap = value,
+            "Once, when it enters the last tenth; again only after it has been spent back down.");
+
+        changed |= Number(
+            "Say when a flip returns at least (%)", config.AlertFlipReturnPercent, value => config.AlertFlipReturnPercent = value,
+            "Once per trade while it holds. Zero turns it off. Read off cached prices, so it is as\n"
+            + "fresh as the last fetch and never fetches on its own.");
+
+        changed |= Toggle(
+            "Say when the sweep goes stale", config.AlertStaleSweep, value => config.AlertStaleSweep = value,
+            "Once, when the furnishing sweep passes its re-sweep age.");
+
         Group("Hand-off");
 
         changed |= Text(
@@ -173,6 +193,18 @@ internal sealed class SettingsTab(
 
         if (changed)
             set(Math.Max(0, edited));
+
+        Caption(caption);
+        return changed;
+    }
+
+    private static bool Toggle(string label, bool value, Action<bool> set, string caption)
+    {
+        var edited = value;
+        var changed = ImGui.Checkbox(label, ref edited);
+
+        if (changed)
+            set(edited);
 
         Caption(caption);
         return changed;

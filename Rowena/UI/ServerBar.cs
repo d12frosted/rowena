@@ -1,8 +1,5 @@
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Plugin.Services;
-using Rowena.Core.Conversions;
-using Rowena.Core.Market;
-using Rowena.Game;
 using Rowena.Market;
 
 namespace Rowena.UI;
@@ -31,10 +28,7 @@ internal sealed class ServerBar : IDisposable
     private readonly IDtrBarEntry entry;
     private readonly IFramework framework;
     private readonly MarketCache market;
-    private readonly Trades trades;
-    private readonly Boards boards;
-    private readonly Balances balances;
-    private readonly Configuration config;
+    private readonly Headlines headlines;
 
     private DateTime nextAt;
     private bool showingFlips;
@@ -43,19 +37,13 @@ internal sealed class ServerBar : IDisposable
         IDtrBar bar,
         IFramework framework,
         MarketCache market,
-        Trades trades,
-        Boards boards,
-        Balances balances,
-        Configuration config,
+        Headlines headlines,
         Action openSinks,
         Action openFlips)
     {
         this.framework = framework;
         this.market = market;
-        this.trades = trades;
-        this.boards = boards;
-        this.balances = balances;
-        this.config = config;
+        this.headlines = headlines;
 
         entry = bar.Get("Rowena");
         entry.Shown = false;
@@ -118,22 +106,7 @@ internal sealed class ServerBar : IDisposable
     /// <summary>The currency closest to its cap, once it is into the last tenth.</summary>
     private (string Line, string Detail)? NearCap()
     {
-        (Resource Currency, long Held, long Cap)? worst = null;
-
-        foreach (var currency in trades.Currencies)
-        {
-            if (balances.CapOf(currency) is not { } cap)
-                continue;
-
-            var held = balances.Held(currency);
-            if (held < cap - cap / 10)
-                continue;
-
-            if (worst is null || held * worst.Value.Cap > worst.Value.Held * cap)
-                worst = (currency, held, cap);
-        }
-
-        if (worst is not { } near)
+        if (headlines.NearCap() is not [var near, ..])
             return null;
 
         return (
@@ -142,24 +115,5 @@ internal sealed class ServerBar : IDisposable
             + "is simply lost; the Sinks tab knows what spending it pays.");
     }
 
-    /// <summary>What the flips would pay, off the books the cache already holds.</summary>
-    private long? BestFlips()
-    {
-        var tax = MarketTax.Standard;
-
-        var candidates = trades.Flips
-            .Where(conversion => ConversionEvaluator
-                .Evaluate(conversion, 1, boards.Buying, boards.Selling, tax)
-                is { IsExecutable: true, Profit: > 0 })
-            .ToArray();
-
-        if (candidates.Length == 0)
-            return null;
-
-        return ConversionAllocation
-            .Allocate(
-                candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap,
-                config.SellingHorizon())
-            .Sum(allocation => allocation.Profit);
-    }
+    private long? BestFlips() => headlines.BestFlips()?.Total;
 }

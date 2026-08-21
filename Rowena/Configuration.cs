@@ -120,6 +120,20 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>The same span, floored at a day.</summary>
     public int SellingHorizon() => Math.Max(1, SellingHorizonDays);
 
+    /// <summary>Whether logging in earns one line in chat saying what is worth knowing.</summary>
+    public bool BriefOnLogin { get; set; } = true;
+
+    /// <summary>Whether a currency entering the last tenth of its cap is said in chat, once.</summary>
+    public bool AlertNearCap { get; set; } = true;
+
+    /// <summary>
+    /// The return a flip has to reach before it is said in chat, in percent. Zero turns it off.
+    /// </summary>
+    public int AlertFlipReturnPercent { get; set; } = 100;
+
+    /// <summary>Whether a furnishing sweep older than its re-sweep age is said in chat, once.</summary>
+    public bool AlertStaleSweep { get; set; } = true;
+
     /// <summary>
     /// The currency the sink table was last looking at, by item id. Zero for "whichever comes first".
     /// </summary>

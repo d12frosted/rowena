@@ -246,6 +246,19 @@ How a currency is earned stays as catalogue data, a `handoff` string on a conver
 chain inherits from its first step since that is where the earning happens. The core never
 interprets it. It is the link an activity will need in order to know what it produces.
 
+## Read without being opened
+
+Logging in earns one line in chat, once the prices have been refetched: what is near its
+cap, what the flips pay and which one pays most, how old the furnishing sweep is. The
+server info bar carries the single most urgent of those all the time, and opens the tab
+it came from when clicked. `/rowena brief` says the line again on demand.
+
+Three alerts, each said once when it becomes true and not again until it has stopped being
+true: a currency entering the last tenth of its cap, a flip whose return crosses a
+threshold you set, a sweep past its re-sweep age. All of it is read off the price cache on
+a slow clock and fetches nothing on its own. Undercuts are deliberately not here; Marketbuddy
+and Dagobert watch those.
+
 ## Getting to the counter
 
 A shop's name is the one thing about it nobody can act on, so "where" is who to hand the
@@ -263,7 +276,6 @@ ready. Flagging the spot on the game's own map is always offered, since it alway
 ## Not here yet
 
 - **Artisan.** For a chain that turns out to want crafting rather than gathering.
-- **Alerts.** A fill under some price is a live event and currently you have to go looking.
 - **Undercut watching.** Covered well enough by Marketbuddy and Dagobert; no reason to
   rebuild it.
 

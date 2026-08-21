@@ -32,6 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
     private readonly ServerBar serverBar;
+    private readonly Briefing briefing;
     private readonly Places places;
     private readonly HttpClient http;
     private readonly Configuration config;
@@ -93,10 +94,16 @@ public sealed class Plugin : IDalamudPlugin
             convertTab, craftTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
+        var headlines = new Headlines(trades, boards, balances, config);
+
         serverBar = new ServerBar(
-            DtrBar, Framework, market, trades, boards, balances, config,
+            DtrBar, Framework, market, headlines,
             () => mainWindow.Show(MainWindow.Tab.Sinks),
             () => mainWindow.Show(MainWindow.Tab.Flips));
+
+        briefing = new Briefing(
+            ClientState, Framework, ChatGui, market, sweep, headlines, config,
+            () => scope.Ready, mainWindow.RefreshPrices);
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -106,7 +113,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage =
                 "Open Rowena. What you are holding, and what it is worth turning into. "
-                + "Add sinks, flips, craft or settings to open on that tab.",
+                + "Add sinks, flips, craft or settings to open on that tab; brief says the login line again.",
         });
     }
 
@@ -155,8 +162,12 @@ public sealed class Plugin : IDalamudPlugin
                 mainWindow.Show(MainWindow.Tab.Settings);
                 break;
 
+            case "brief" or "briefing":
+                briefing.Now();
+                break;
+
             default:
-                ChatGui.Print($"Rowena has no \"{wanted}\" tab. Try sinks, flips, craft or settings.");
+                ChatGui.Print($"Rowena has no \"{wanted}\" tab. Try sinks, flips, craft, settings or brief.");
                 break;
         }
     }
@@ -167,6 +178,7 @@ public sealed class Plugin : IDalamudPlugin
         // on the way past rather than only when it finishes.
         market.Persist(sweep.Snapshot());
 
+        briefing.Dispose();
         serverBar.Dispose();
         places.Dispose();
         CommandManager.RemoveHandler(CommandName);
