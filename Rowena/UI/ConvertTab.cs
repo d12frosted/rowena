@@ -27,6 +27,7 @@ internal sealed class ConvertTab
     private static readonly string?[] SinkHelp =
     [
         null,
+        "What one run of the trade costs, in the currency. The fixed rate at the counter.",
         "What one unit of the currency turns into: spent on this trade, with the result sold.\n"
         + "Not a price. The currency cannot be bought, only earned and spent.",
         "Gil left over from a single run, after the market's cut and after buying anything\n"
@@ -151,10 +152,11 @@ internal sealed class ConvertTab
 
         ImGui.Spacing();
 
-        if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("costs", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
@@ -171,6 +173,11 @@ internal sealed class ConvertTab
                 cells.Draw(row.Trade, sinkItem, refreshTrade: () => refreshTrade(row.Conversion));
             else
                 ImGui.TextUnformatted(row.Trade);
+
+            // The price in the currency. It is the one number on the row the board cannot
+            // change, so it is shown whether or not anything else could be priced.
+            ImGui.TableNextColumn();
+            Cell.Right(Palette.Plain, $"{row.PerRun:N0} {group.Unit}");
 
             // An unpriced row has nothing to say, and saying 0.00 would be a confident
             // answer where there is no data at all.
