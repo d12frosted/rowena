@@ -73,7 +73,7 @@ public sealed class Plugin : IDalamudPlugin
         var actions = new ItemActions(
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
-        var boards = new Boards(market, scope);
+        var boards = new Boards(market, scope, new VendorPrices(DataManager));
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
             PluginInterface, ClientState, Objects, GameGui, Framework, new Aetherytes(DataManager, Log), Log);

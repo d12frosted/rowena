@@ -40,8 +40,20 @@ internal static class Cell
     /// thing the table can say. Dimmed rows, the ones not being acted on, stay dim: the scale is
     /// for rows you might act on.
     /// </remarks>
-    public static void Absorb(double? days, bool dim = false)
+    public static void Absorb(double? days, bool dim = false, bool vendored = false)
     {
+        // Sold to a vendor: no queue at all, and worth saying as the reason rather than as
+        // "<1 day", since the reason is that the board pays less than the vendor after tax.
+        if (vendored)
+        {
+            Right(dim ? Palette.Dim : Palette.Good, "vendor");
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("A vendor pays more than the board nets after tax, so the output is sold\nto one on the spot. No waiting, no undercutting.");
+
+            return;
+        }
+
         var colour = dim
             ? Palette.Dim
             : days switch

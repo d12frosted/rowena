@@ -42,8 +42,9 @@ public static class ConversionRanking
         IEnumerable<Conversion> conversions,
         Func<uint, OrderBook?> books,
         MarketTax tax,
-        double? maxRunsPerDay = null) =>
-        ByGilPerDay(conversions, books, books, tax, maxRunsPerDay);
+        double? maxRunsPerDay = null,
+        Func<uint, long>? vendor = null) =>
+        ByGilPerDay(conversions, books, books, tax, maxRunsPerDay, vendor);
 
     /// <summary>
     /// Ranks where buying and selling happen on different boards.
@@ -58,12 +59,13 @@ public static class ConversionRanking
         Func<uint, OrderBook?> buying,
         Func<uint, OrderBook?> selling,
         MarketTax tax,
-        double? maxRunsPerDay = null) =>
+        double? maxRunsPerDay = null,
+        Func<uint, long>? vendor = null) =>
     [
         .. conversions
             .Select(conversion => For(
                 conversion,
-                ConversionEvaluator.Evaluate(conversion, 1, buying, selling, tax),
+                ConversionEvaluator.Evaluate(conversion, 1, buying, selling, tax, vendor),
                 maxRunsPerDay))
             .OrderByDescending(earnings => earnings.GilPerDay),
     ];

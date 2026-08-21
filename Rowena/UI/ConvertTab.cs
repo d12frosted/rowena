@@ -279,7 +279,7 @@ internal sealed class ConvertTab
             }
 
             ImGui.TableNextColumn();
-            Cell.Absorb(row.Absorb);
+            Cell.Absorb(row.Absorb, vendored: row.Vendored);
 
             ImGui.TableNextColumn();
             venues.Draw(row.Conversion.Id, row.Venue, trades.Where(row.Conversion));
@@ -343,6 +343,16 @@ internal sealed class ConvertTab
         ImGui.TextUnformatted(
             "Flips: buy the inputs on the board, hand them in, sell what comes out, "
             + $"sized to what sells within {config.SellingHorizon()} days");
+
+        // Gil lying on the board: a listing under what a vendor pays, tax included. Rare, and
+        // said loudly when it happens, because it is the one trade with no market risk at all.
+        foreach (var free in current.FreeGil)
+        {
+            ImGui.TextColored(
+                Palette.Good,
+                $"    free gil: {free.Units}x {free.Name} listed under the vendor price on {free.World}, "
+                + $"+{free.Profit:N0} bought and vendored");
+        }
 
         if (current.Flips.Length == 0)
         {
@@ -432,7 +442,7 @@ internal sealed class ConvertTab
             Cell.Right(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");
 
             ImGui.TableNextColumn();
-            Cell.Absorb(row.Absorb, dim: row.Idle);
+            Cell.Absorb(row.Absorb, dim: row.Idle, vendored: row.Vendored);
         }
 
         ImGui.EndTable();
@@ -486,7 +496,8 @@ internal sealed class ConvertTab
         // is never asked about it.
         var singles = trades.Flips.ToDictionary(
             conversion => conversion.Id,
-            conversion => ConversionEvaluator.Evaluate(conversion, 1, boards.Buying, boards.Selling, tax),
+            conversion => ConversionEvaluator.Evaluate(
+                conversion, 1, boards.Buying, boards.Selling, tax, boards.Vendor),
             StringComparer.Ordinal);
 
         var candidates = trades.Flips
@@ -496,7 +507,7 @@ internal sealed class ConvertTab
         var allocated = ConversionAllocation
             .Allocate(
                 candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap,
-                config.SellingHorizon())
+                config.SellingHorizon(), boards.Vendor)
             .ToDictionary(allocation => allocation.Conversion.Id, StringComparer.Ordinal);
 
         // Working rows first, then priced-but-idle by what one run would pay, then the
@@ -512,6 +523,7 @@ internal sealed class ConvertTab
 
         return new FlipModel(
             MeasureReadiness(),
+            FreeGil(),
             shown,
             allocated.Values.Sum(allocation => allocation.Profit),
             ordered.Length - shown.Length,
@@ -565,7 +577,8 @@ internal sealed class ConvertTab
             .Where(conversion => conversion.Consumes(currency) > 0)
             .Select(conversion =>
             {
-                var quote = ConversionEvaluator.Evaluate(conversion, 1, boards.Buying, boards.Selling, tax);
+                var quote = ConversionEvaluator.Evaluate(
+                    conversion, 1, boards.Buying, boards.Selling, tax, boards.Vendor);
                 var perRun = conversion.Consumes(currency);
 
                 var covers = perRun == 0 ? 0 : held / perRun;
@@ -583,7 +596,8 @@ internal sealed class ConvertTab
                     sellable,
                     banks,
                     conversion.Venue,
-                    quote.IsExecutable);
+                    quote.IsExecutable,
+                    quote.Vendored.Count > 0);
             })
             // What you would bank first; the rate breaks ties, and orders everything when the
             // balance is zero and nothing can be banked at all.
@@ -665,7 +679,7 @@ internal sealed class ConvertTab
 
             return new FlipRow(
                 conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
-                0, covers, 0, 0, null, null, true, problem);
+                0, covers, 0, 0, null, null, true, problem, false);
         }
 
         var allocation = allocated.GetValueOrDefault(conversion.Id);
@@ -674,14 +688,17 @@ internal sealed class ConvertTab
         // what one run would pay, dimmed, so the comparison is visible rather than absent.
         var idle = allocation is null || allocation.Runs == 0;
 
+        var vendored = single.Vendored.Count > 0;
+
         return idle
             ? new FlipRow(
                 conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
-                0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay, single.DaysToAbsorb, true, null)
+                0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay, single.DaysToAbsorb, true, null,
+                vendored)
             : new FlipRow(
                 conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
                 allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit, allocation.ReturnOnOutlay,
-                allocation.DaysToAbsorb, false, null);
+                allocation.DaysToAbsorb, false, null, vendored);
     }
 
     /// <summary>
@@ -738,7 +755,8 @@ internal sealed class ConvertTab
         long Sellable,
         long Banks,
         string Venue,
-        bool Priced);
+        bool Priced,
+        bool Vendored);
 
     /// <param name="Best">The most any row banks, or null when nothing can be banked.</param>
     private sealed record SinkGroup(Resource Currency, string Unit, long Held, SinkRow[] Rows, long? Best);
@@ -756,7 +774,8 @@ internal sealed class ConvertTab
         double? Roi,
         double? Absorb,
         bool Idle,
-        string? Problem);
+        string? Problem,
+        bool Vendored);
 
     /// <param name="TotalFlipProfit">
     /// What the best split of your gil across every flip pays, which is not the sum of the rows: the
@@ -766,6 +785,39 @@ internal sealed class ConvertTab
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
     /// <param name="Choices">Every currency the table could be about, and how much of each is held.</param>
     /// <param name="Selected">The one it is about, priced.</param>
+    private sealed record Free(uint ItemId, string Name, int Units, long Profit, string World);
+
+    /// <summary>
+    /// Listings under the vendor price, among the books already fetched.
+    /// </summary>
+    /// <remarks>
+    /// Only what the cache holds, which is the catalogue's items on the buying board: this
+    /// is not a sweep of the whole market for mispriced stacks, it is noticing when one of
+    /// the items already being watched is one. The best few, largest gain first.
+    /// </remarks>
+    private Free[] FreeGil()
+    {
+        var (bought, sold) = trades.Relevant(balances.Held);
+
+        return
+        [
+            .. bought.Concat(sold)
+                .Distinct()
+                .Select(id => (Id: id, Book: boards.Buying(id)))
+                .Where(entry => entry.Book is { Listings.Count: > 0 })
+                .Select(entry => (entry.Id, entry.Book!, Found: VendorArbitrage.Find(entry.Book!, boards.Vendor(entry.Id), MarketTax.Standard)))
+                .Where(entry => entry.Found.Units > 0)
+                .OrderByDescending(entry => entry.Found.Profit)
+                .Take(5)
+                .Select(entry => new Free(
+                    entry.Id,
+                    cells.Name(entry.Id),
+                    entry.Found.Units,
+                    entry.Found.Profit,
+                    entry.Item2.Listings[0].World)),
+        ];
+    }
+
     /// <param name="Total">Items this tab wants a book for, both boards counted.</param>
     /// <param name="Missing">Of those, how many no book has been fetched for.</param>
     private sealed record Readiness(int Total, int Missing);
@@ -783,8 +835,10 @@ internal sealed class ConvertTab
     /// </param>
     /// <param name="HiddenFlips">Rows the trim removed, all paying less than anything shown.</param>
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
+    /// <param name="FreeGil">Listings under the vendor price among the books the cache holds.</param>
     private sealed record FlipModel(
         Readiness Readiness,
+        Free[] FreeGil,
         FlipRow[] Flips,
         long TotalFlipProfit,
         int HiddenFlips,

@@ -12,8 +12,9 @@ public static class ConversionEvaluator
         Conversion conversion,
         int runs,
         Func<uint, OrderBook?> books,
-        MarketTax tax) =>
-        Evaluate(conversion, runs, books, books, tax);
+        MarketTax tax,
+        Func<uint, long>? vendor = null) =>
+        Evaluate(conversion, runs, books, books, tax, vendor);
 
     /// <summary>
     /// Values <paramref name="runs"/> repetitions of a conversion.
@@ -28,6 +29,11 @@ public static class ConversionEvaluator
     /// while a retainer sells only where it stands. Pricing both together combines the whole data
     /// centre's cheapest listing with the whole data centre's demand, and the second half of that is
     /// badly wrong: measured on Light, a Glade Bench sells for more at home and a tenth as often.
+    /// </param>
+    /// <param name="vendor">
+    /// What a vendor pays for an item, or null to sell only on the board. With it, every
+    /// output is worth whichever pays more, the board net of tax or the vendor, and one the
+    /// vendor wins is sold the moment it is made. See <see cref="VendorFloor"/>.
     /// </param>
     /// <remarks>
     /// Inputs are priced by walking the book, which is the entire reason this library
@@ -49,7 +55,8 @@ public static class ConversionEvaluator
         int runs,
         Func<uint, OrderBook?> buying,
         Func<uint, OrderBook?> selling,
-        MarketTax tax)
+        MarketTax tax,
+        Func<uint, long>? vendor = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(runs, 1);
 
@@ -82,8 +89,11 @@ public static class ConversionEvaluator
         }
 
         long gross = 0;
+        long net = 0;
         var unpriced = new List<ResourceAmount>();
+        var vendored = new List<ResourceAmount>();
         double? daysToAbsorb = null;
+        var never = false;
 
         foreach (var output in scaled.Outputs)
         {
@@ -94,29 +104,48 @@ public static class ConversionEvaluator
                 continue;
 
             var book = selling(output.Resource.Id);
-            if (book?.Floor is not { } floor)
+            var sale = VendorFloor.Value(book, vendor?.Invoke(output.Resource.Id) ?? 0, output.Quantity, tax);
+
+            if (sale is not { } sold)
             {
                 unpriced.Add(output);
                 continue;
             }
 
-            gross += floor * output.Quantity;
+            gross += sold.Gross;
+            net += sold.Net;
 
-            // The slowest output governs: the trade is not closed until all of it is sold.
-            if (book.DaysToAbsorb(output.Quantity) is { } days)
+            if (sold.ToVendor)
+            {
+                // A vendor takes it on the spot. Nothing to wait for, which is not the same as
+                // nothing known: zero days, not null.
+                vendored.Add(output);
+                daysToAbsorb ??= 0d;
+                continue;
+            }
+
+            // The slowest output governs: the trade is not closed until all of it is sold,
+            // and one that never sells is never, whatever the others do.
+            if (book!.DaysToAbsorb(output.Quantity) is { } days)
                 daysToAbsorb = Math.Max(daysToAbsorb ?? 0d, days);
+            else
+                never = true;
         }
+
+        if (never)
+            daysToAbsorb = null;
 
         return new ConversionQuote(
             conversion,
             runs,
             outlay,
             gross,
-            tax.NetProceeds(gross),
+            net,
             Merge(currencySpent),
             Merge(unsourced),
             Merge(unpriced),
-            daysToAbsorb);
+            daysToAbsorb,
+            Merge(vendored));
     }
 
     /// <summary>
@@ -136,8 +165,9 @@ public static class ConversionEvaluator
         Conversion conversion,
         Func<uint, OrderBook?> books,
         MarketTax tax,
-        int cap) =>
-        LargestProfitableSize(conversion, books, books, tax, cap);
+        int cap,
+        Func<uint, long>? vendor = null) =>
+        LargestProfitableSize(conversion, books, books, tax, cap, vendor);
 
     /// <inheritdoc cref="LargestProfitableSize(Conversion, Func{uint, OrderBook}, MarketTax, int)"/>
     public static int LargestProfitableSize(
@@ -145,13 +175,14 @@ public static class ConversionEvaluator
         Func<uint, OrderBook?> buying,
         Func<uint, OrderBook?> selling,
         MarketTax tax,
-        int cap)
+        int cap,
+        Func<uint, long>? vendor = null)
     {
         var best = 0;
 
         for (var runs = 1; runs <= cap; runs++)
         {
-            var quote = Evaluate(conversion, runs, buying, selling, tax);
+            var quote = Evaluate(conversion, runs, buying, selling, tax, vendor);
             if (!quote.IsExecutable || quote.Profit <= 0)
                 break;
 

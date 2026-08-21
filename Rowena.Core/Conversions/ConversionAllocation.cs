@@ -54,8 +54,9 @@ public static class ConversionAllocation
         MarketTax tax,
         long gilBudget,
         int capPerConversion,
-        double? sellingHorizonDays = null) =>
-        Allocate(conversions, books, books, tax, gilBudget, capPerConversion, sellingHorizonDays);
+        double? sellingHorizonDays = null,
+        Func<uint, long>? vendor = null) =>
+        Allocate(conversions, books, books, tax, gilBudget, capPerConversion, sellingHorizonDays, vendor);
 
     /// <summary>
     /// Allocates where buying and selling happen on different boards.
@@ -82,7 +83,8 @@ public static class ConversionAllocation
         MarketTax tax,
         long gilBudget,
         int capPerConversion,
-        double? sellingHorizonDays = null)
+        double? sellingHorizonDays = null,
+        Func<uint, long>? vendor = null)
     {
         var competing = conversions
             .Where(conversion => conversion.Inputs.Any(input => input.Resource.Kind == ResourceKind.Item))
@@ -129,9 +131,15 @@ public static class ConversionAllocation
 
             foreach (var output in ItemOutputs(conversion))
             {
+                var book = selling(output.Resource.Id);
+
+                // A vendor takes any amount on the spot; only the board has a queue.
+                if (VendorFloor.Beats(book, vendor?.Invoke(output.Resource.Id) ?? 0, tax))
+                    continue;
+
                 var after = queued.GetValueOrDefault(output.Resource.Id) + output.Quantity;
 
-                if (selling(output.Resource.Id)?.DaysToAbsorb(after) is not { } days || days > horizon)
+                if (book?.DaysToAbsorb(after) is not { } days || days > horizon)
                     return false;
             }
 
@@ -149,7 +157,7 @@ public static class ConversionAllocation
                     continue;
 
                 // One more run, priced against what is left rather than the whole book.
-                var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, selling, tax);
+                var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, selling, tax, vendor);
 
                 if (!quote.IsExecutable || quote.Profit <= 0 || quote.GilOutlay > budget)
                     continue;
@@ -188,7 +196,15 @@ public static class ConversionAllocation
 
             foreach (var output in ItemOutputs(conversion))
             {
-                if (selling(output.Resource.Id)?.DaysToAbsorb(queued[output.Resource.Id]) is { } days)
+                var book = selling(output.Resource.Id);
+
+                if (VendorFloor.Beats(book, vendor?.Invoke(output.Resource.Id) ?? 0, tax))
+                {
+                    worst ??= 0d;
+                    continue;
+                }
+
+                if (book?.DaysToAbsorb(queued[output.Resource.Id]) is { } days)
                     worst = Math.Max(worst ?? 0d, days);
             }
 

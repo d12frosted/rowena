@@ -12,11 +12,14 @@ namespace Rowena.Market;
 /// retainer sells where it stands. Pricing both sides against one board is what made the old numbers
 /// wrong: it combined the cheapest listing anywhere with the demand of everywhere.
 /// </remarks>
-internal sealed class Boards(MarketCache market, PricingScope scope)
+internal sealed class Boards(MarketCache market, PricingScope scope, VendorPrices vendors)
 {
     /// <summary>Where the inputs come from.</summary>
     public Func<uint, OrderBook?> Buying => market.Lookup(scope.Buying ?? "");
 
     /// <summary>Where the outputs go.</summary>
     public Func<uint, OrderBook?> Selling => market.Lookup(scope.Selling ?? "");
+
+    /// <summary>The floor under every sale: what a vendor pays, wherever you are.</summary>
+    public Func<uint, long> Vendor => vendors.For;
 }

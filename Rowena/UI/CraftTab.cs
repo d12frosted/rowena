@@ -432,7 +432,7 @@ internal sealed class CraftTab
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
         var ranked = ConversionRanking.ByGilPerDay(
-            sweep.Shortlist, boards.Buying, boards.Selling, MarketTax.Standard, cap);
+            sweep.Shortlist, boards.Buying, boards.Selling, MarketTax.Standard, cap, boards.Vendor);
 
         var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
 

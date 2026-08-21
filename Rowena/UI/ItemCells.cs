@@ -31,6 +31,9 @@ internal sealed class ItemCells(
 
     private const uint JobIconBase = 62000;
 
+    /// <summary>An item's name, for rows that are not drawn through <see cref="Draw"/>.</summary>
+    public string Name(uint itemId) => items.Name(itemId);
+
     /// <summary>Draws the icon for an item, or a matching gap when there is none.</summary>
     public void Icon(uint itemId, float size = IconSize) => RawIcon(items.Get(itemId).Icon, size);
 

@@ -279,6 +279,20 @@ ready. Flagging the spot on the game's own map is always offered, since it alway
 - **Undercut watching.** Covered well enough by Marketbuddy and Dagobert; no reason to
   rebuild it.
 
+## The vendor is the floor
+
+Every tradable item has a vendor price, and the vendor is the one buyer who never
+undercuts, never takes a cut and never runs out of appetite. So every output is worth
+whichever pays more, the board net of tax or the vendor, and one the vendor wins is sold
+the moment it is made: "to clear" says `vendor` instead of a number of days. A board that
+nets less than a vendor is a worse trade with extra steps, and the tables say so rather
+than quoting it.
+
+The same floor runs the other way. A listing priced under what a vendor pays, the buyer's
+5% included, is gil lying on the board, and the Flips tab says so when one of the items it
+already watches is listed that way. It is not a sweep of the whole market for mispriced
+stacks; it is noticing.
+
 ## The board taxes both sides
 
 The buyer pays a flat 5% on top of every listing, and the seller receives the listed price

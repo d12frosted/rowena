@@ -28,7 +28,8 @@ public sealed record ConversionQuote(
     IReadOnlyList<ResourceAmount> CurrencySpent,
     IReadOnlyList<ResourceAmount> Unsourced,
     IReadOnlyList<ResourceAmount> Unpriced,
-    double? DaysToAbsorb)
+    double? DaysToAbsorb,
+    IReadOnlyList<ResourceAmount> Vendored)
 {
     /// <summary>Net proceeds less what the inputs cost.</summary>
     public long Profit => NetProceeds - GilOutlay;

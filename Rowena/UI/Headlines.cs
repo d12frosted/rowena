@@ -49,7 +49,7 @@ internal sealed class Headlines(Trades trades, Boards boards, Balances balances,
 
         var candidates = trades.Flips
             .Where(conversion => ConversionEvaluator
-                .Evaluate(conversion, 1, boards.Buying, boards.Selling, tax)
+                .Evaluate(conversion, 1, boards.Buying, boards.Selling, tax, boards.Vendor)
                 is { IsExecutable: true, Profit: > 0 })
             .ToArray();
 
@@ -59,7 +59,7 @@ internal sealed class Headlines(Trades trades, Boards boards, Balances balances,
         var allocated = ConversionAllocation
             .Allocate(
                 candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap,
-                config.SellingHorizon())
+                config.SellingHorizon(), boards.Vendor)
             .Where(allocation => allocation.Runs > 0)
             .ToArray();
 
