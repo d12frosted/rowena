@@ -246,6 +246,19 @@ How a currency is earned stays as catalogue data, a `handoff` string on a conver
 chain inherits from its first step since that is where the earning happens. The core never
 interprets it. It is the link an activity will need in order to know what it produces.
 
+## Getting to the counter
+
+A shop's name is the one thing about it nobody can act on, so "where" is who to hand the
+trade to and on which map, read from the same sheets: the NPC an exchange is attached to,
+through the category picker the scrip and tomestone exchanges sit behind, placed by the
+Level sheet. An exchange offered in several cities lists them all, and the one in the zone
+you are standing in comes first.
+
+Right-click flags the spot on the game's own map, which also makes the nearest aetheryte
+obvious. From inside the spot's zone it can also hand the walk to vnavmesh, the way a craft
+is handed to Artisan: one click, that plugin's pathing, and only where a path exists. It
+does not teleport you; a teleport is a decision with a price on it.
+
 ## Not here yet
 
 - **Artisan.** For a chain that turns out to want crafting rather than gathering.

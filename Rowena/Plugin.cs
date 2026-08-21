@@ -26,6 +26,8 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IDtrBar DtrBar { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
+    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
@@ -70,11 +72,13 @@ public sealed class Plugin : IDalamudPlugin
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
         var boards = new Boards(market, scope);
-        var trades = new Trades(catalog, new SpecialShops(DataManager, Log).Trades());
+        var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
+        var venues = new VenueCell(new Places(PluginInterface, ClientState, GameGui, Log));
         // The refreshes are the window's, reached through lambdas because the window does not
         // exist yet: the tabs live inside it. Read at click time, when it long since does.
         var convertTab = new ConvertTab(
-            trades, boards, balances, cells, config, market, conversion => mainWindow!.RefreshTrade(conversion));
+            trades, boards, balances, cells, config, market, venues,
+            conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
             sweep, furnishings, boards, cells, basket, config,
             conversion => mainWindow!.RefreshTrade(conversion));

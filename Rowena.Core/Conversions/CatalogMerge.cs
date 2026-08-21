@@ -29,7 +29,7 @@ public static class CatalogMerge
     }
 
     /// <summary>The trade as a rate, insensitive to the order its sides were written in.</summary>
-    private static string Signature(Conversion conversion) =>
+    public static string Signature(Conversion conversion) =>
         $"{Side(conversion.Inputs)}>{Side(conversion.Outputs)}";
 
     private static string Side(IReadOnlyList<ResourceAmount> amounts) =>

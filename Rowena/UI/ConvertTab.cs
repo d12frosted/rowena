@@ -42,13 +42,15 @@ internal sealed class ConvertTab
         "How long the board would take to absorb the output of one run at the rate it\n"
         + "currently sells. A margin you cannot sell into is not a margin.\n"
         + "Green within a day, yellow within three, orange within a week, red beyond or never.",
-        "The counter in the world where the trade actually happens.",
+        "Who to hand it to and where. Plain when in the zone you are standing in, dim when it\n"
+        + "is a trip. Right-click to flag it on the map, or to walk there with vnavmesh.",
     ];
 
     private static readonly string?[] FlipHelp =
     [
         "What to buy on the board and what it becomes. Hover for each input and its cost.",
-        "The counter in the world where the hand-in happens.",
+        "Who to hand it to and where. Plain when in the zone you are standing in, dim when it\n"
+        + "is a trip. Right-click to flag it on the map, or to walk there with vnavmesh.",
         "How many runs your gil is best spent on, once every row has competed for the same\n"
         + "order book, and no run is counted that the board would not absorb within the\n"
         + "selling horizon. A zero means the inputs pay more elsewhere or nothing would sell\n"
@@ -71,6 +73,7 @@ internal sealed class ConvertTab
     private readonly ItemCells cells;
     private readonly Configuration config;
     private readonly MarketCache market;
+    private readonly VenueCell venues;
     private readonly Action<Conversion> refreshTrade;
 
     private readonly Rebuilt<SinkModel> sinks;
@@ -83,6 +86,7 @@ internal sealed class ConvertTab
         ItemCells cells,
         Configuration config,
         MarketCache market,
+        VenueCell venues,
         Action<Conversion> refreshTrade)
     {
         this.trades = trades;
@@ -91,6 +95,7 @@ internal sealed class ConvertTab
         this.cells = cells;
         this.config = config;
         this.market = market;
+        this.venues = venues;
         this.refreshTrade = refreshTrade;
 
         sinks = new Rebuilt<SinkModel>(BuildSinks);
@@ -183,7 +188,7 @@ internal sealed class ConvertTab
         ImGui.TableSetupColumn($"banks in {config.SellingHorizon()}d", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 300);
         Cell.Headers(SinkHelp);
 
         foreach (var row in group.Rows)
@@ -216,7 +221,7 @@ internal sealed class ConvertTab
                 ImGui.TableNextColumn();
                 Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Palette.Dim, row.Venue);
+                venues.Draw(row.Conversion.Id, row.Venue, trades.Where(row.Conversion));
                 continue;
             }
 
@@ -277,7 +282,7 @@ internal sealed class ConvertTab
             Cell.Absorb(row.Absorb);
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, row.Venue);
+            venues.Draw(row.Conversion.Id, row.Venue, trades.Where(row.Conversion));
         }
 
         ImGui.EndTable();
@@ -365,7 +370,7 @@ internal sealed class ConvertTab
             return;
 
         ImGui.TableSetupColumn("buy, then sell", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 200);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 300);
         ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, 55);
         ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("outlay", ImGuiTableColumnFlags.WidthFixed, 120);
@@ -390,7 +395,7 @@ internal sealed class ConvertTab
                 ImGui.TextUnformatted(row.Trade);
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, row.Venue);
+            venues.Draw(row.Conversion.Id, row.Venue, trades.Where(row.Conversion));
 
             if (row.Problem is { } problem)
             {

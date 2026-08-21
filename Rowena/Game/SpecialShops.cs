@@ -35,8 +35,14 @@ namespace Rowena.Game;
 /// the rank requirement is deliberately ignored: it gates once per character, not per
 /// trade.
 /// </remarks>
-internal sealed class SpecialShops(IDataManager data, IPluginLog log)
+internal sealed class SpecialShops(IDataManager data, Vendors vendors, IPluginLog log)
 {
+    private readonly Dictionary<string, IReadOnlyList<Spot>> spots = new(StringComparer.Ordinal);
+
+    /// <summary>Where a generated trade's counter stands; empty for one nobody offers at a known spot.</summary>
+    public IReadOnlyList<Spot> Where(string conversionId) =>
+        spots.TryGetValue(conversionId, out var found) ? found : [];
+
     /// <summary>Grand company row to its seal: Maelstrom, Twin Adder, Immortal Flames.</summary>
     private static readonly Dictionary<uint, uint> SealByCompany = new()
     {
@@ -84,8 +90,14 @@ internal sealed class SpecialShops(IDataManager data, IPluginLog log)
             if (!offered.TryGetValue(shop.RowId, out var vendor))
                 continue;
 
+            // The counter named for who stands at it and where, when the world says; the
+            // shop's own name only when it does not, since "Allagan Tomestones of Mathematics
+            // (Other)" is the one string here nobody can act on.
+            var placed = vendors.ForShop(shop.RowId);
             var shopName = shop.Name.ExtractText();
-            var venue = string.IsNullOrWhiteSpace(shopName) ? vendor : shopName;
+            var venue = placed.Count > 0
+                ? $"{placed[0].Npc}, {placed[0].Zone}"
+                : string.IsNullOrWhiteSpace(shopName) ? vendor : shopName;
             var index = 0;
 
             foreach (var entry in shop.Item)
@@ -157,8 +169,11 @@ internal sealed class SpecialShops(IDataManager data, IPluginLog log)
                         (int)receive.ReceiveCount))
                     .ToArray();
 
+                var id = $"shop-{shop.RowId}-{index}";
+                spots[id] = placed;
+
                 conversions.Add(new Conversion(
-                    $"shop-{shop.RowId}-{index}",
+                    id,
                     string.Join(" + ", outputs.Select(output => output.Resource.Name)),
                     inputs,
                     outputs,
@@ -192,13 +207,18 @@ internal sealed class SpecialShops(IDataManager data, IPluginLog log)
                 continue;
 
             var name = Name(items, row.Item.RowId);
+            var id = $"gcshop-{row.RowId}-{row.SubrowId}";
+            var placed = vendors.ForGrandCompany(company.RowId);
+            spots[id] = placed;
 
             yield return new Conversion(
-                $"gcshop-{row.RowId}-{row.SubrowId}",
+                id,
                 name,
                 [new ResourceAmount(Resource.Currency(seal, Name(items, seal)), (int)row.CostGCSeals)],
                 [new ResourceAmount(Resource.Item(row.Item.RowId, name), 1)],
-                $"{company.ValueNullable?.Name.ExtractText() ?? "grand company"} quartermaster");
+                placed.Count > 0
+                    ? $"{placed[0].Npc}, {placed[0].Zone}"
+                    : $"{company.ValueNullable?.Name.ExtractText() ?? "grand company"} quartermaster");
         }
     }
 

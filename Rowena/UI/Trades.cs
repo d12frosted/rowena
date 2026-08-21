@@ -1,4 +1,5 @@
 using Rowena.Core.Conversions;
+using Rowena.Game;
 
 namespace Rowena.UI;
 
@@ -18,15 +19,42 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class Trades
 {
+    private readonly SpecialShops shops;
     private readonly IReadOnlyList<Conversion> generated;
+    private readonly Dictionary<string, string> generatedBySignature;
 
     private HashSet<string> handIds = [];
     private HashSet<Resource> watched = [];
 
-    public Trades(ConversionCatalog catalog, IReadOnlyList<Conversion> generated)
+    public Trades(ConversionCatalog catalog, SpecialShops shops)
     {
-        this.generated = generated;
+        this.shops = shops;
+        generated = shops.Trades();
+
+        generatedBySignature = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var conversion in generated)
+            generatedBySignature.TryAdd(CatalogMerge.Signature(conversion), conversion.Id);
+
         Replace(catalog);
+    }
+
+    /// <summary>
+    /// Where a trade's counter stands, for any trade the sheets know a counter for.
+    /// </summary>
+    /// <remarks>
+    /// A hand-written trade wins the merge over the generated one describing the same
+    /// exchange, and loses the generated one's spots in the process. They are the same
+    /// counter, so the spots are looked up through the generated twin by signature.
+    /// </remarks>
+    public IReadOnlyList<Spot> Where(Conversion conversion)
+    {
+        var direct = shops.Where(conversion.Id);
+        if (direct.Count > 0)
+            return direct;
+
+        return generatedBySignature.TryGetValue(CatalogMerge.Signature(conversion), out var twin)
+            ? shops.Where(twin)
+            : [];
     }
 
     /// <summary>
