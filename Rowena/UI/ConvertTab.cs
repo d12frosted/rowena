@@ -147,14 +147,18 @@ internal sealed class ConvertTab
                     // Said as a yield rather than a price, because the column was read as one and
                     // the objection was fair: a scrip has no price. Nobody sells them and nobody
                     // can buy them. This is what one turns into by being spent here.
+                    //
+                    // The whole-balance figure is floor times everything, the exact optimism the
+                    // rest of this plugin exists to correct, so it never appears without the time
+                    // the board would need to make it real. A hundred thousand scrips through a
+                    // mount that sells three times a week is a year of undercutting, not a number.
                     ImGui.SetTooltip(
                         $"What one {group.Unit} turns into, spent on this trade and the result sold.\n"
                         + $"Not a price: {group.Unit} cannot be bought, only earned and spent.\n"
                         + $"\n"
                         + $"One run takes {row.PerRun:N0} and nets {row.Profit:N0} gil.\n"
                         + $"{row.PerRun:N0} x {row.Rate.Value:F2} gil is where that comes from.\n"
-                        + $"The {group.Held:N0} you hold would earn about "
-                        + $"{(long)(group.Held * row.Rate.Value):N0} gil this way.");
+                        + WholeBalance(group, row));
                 }
 
                 ImGui.TableNextColumn();
@@ -303,6 +307,36 @@ internal sealed class ConvertTab
             allocated.Values.Sum(allocation => allocation.Profit),
             ordered.Length - shown.Length,
             ordered.Count(row => row.Problem is not null));
+    }
+
+    /// <summary>
+    /// What spending the whole balance here would earn, with the time that claim needs.
+    /// </summary>
+    /// <remarks>
+    /// The gil figure extrapolates a one-run rate across every run the balance covers, which
+    /// values every sale at today's floor. Absorption scales the same way, so the correction
+    /// is exact where the optimism is not: the board's appetite is measured, the price
+    /// holding is hoped.
+    /// </remarks>
+    private static string WholeBalance(SinkGroup group, SinkRow row)
+    {
+        // A watched currency shows at a balance of zero, where "the 0 you hold would earn
+        // 0 gil" answers nothing. The question at zero is what earning some would pay.
+        if (group.Held == 0)
+            return "You hold none yet: this is what earning some would be worth.";
+
+        var earns =
+            $"The {group.Held:N0} you hold would earn about "
+            + $"{(long)(group.Held * row.Rate!.Value):N0} gil this way";
+
+        if (row.Absorb is not { } perRun || row.PerRun == 0)
+            return earns + ",\nthough nothing is selling right now, so there is no knowing when.";
+
+        var whole = perRun * group.Held / row.PerRun;
+
+        return whole < 1d
+            ? earns + ", sold within the day."
+            : earns + $",\nsold over the {Phrases.Absorb(whole)} the board would need to absorb it.";
     }
 
     /// <summary>
