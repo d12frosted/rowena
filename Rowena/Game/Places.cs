@@ -11,16 +11,18 @@ namespace Rowena.Game;
 /// Getting to a spot: flagging it on the map, or going there.
 /// </summary>
 /// <remarks>
-/// The map flag is the game's own and always works. Going is two hand-offs: Lifestream for
-/// the teleport to the nearest aetheryte in the spot's zone, and vnavmesh for the walk from
-/// there, each the way crafting is handed to Artisan: one click, that plugin's doing. The
-/// walk is armed rather than chained, because arriving takes a loading screen and the mesh
-/// a moment after that; it fires on the first tick both are true, and gives up quietly if
-/// the zone never arrives, since a teleport can be cancelled by walking off.
+/// The map flag is the game's own and always works. Going is a journey with state, because
+/// none of its steps is instant: Lifestream teleports and a loading screen follows; the
+/// zone arrives and vnavmesh needs a moment to build its mesh; the walk starts and takes
+/// as long as it takes. Each is a hand-off, the way crafting is handed to Artisan, and the
+/// journey is the bookkeeping between them: it waits for whatever is not ready yet, says
+/// so, and gives up quietly when a step never completes, since a teleport can be cancelled
+/// by walking off and a mesh can fail to build.
 /// </remarks>
 internal sealed class Places : IDisposable
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan ZonePatience = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan MeshPatience = TimeSpan.FromSeconds(120);
 
     private readonly IClientState client;
     private readonly IGameGui gui;
@@ -30,10 +32,9 @@ internal sealed class Places : IDisposable
 
     private readonly ICallGateSubscriber<bool> navReady;
     private readonly ICallGateSubscriber<Vector3, bool, bool> moveTo;
+    private readonly ICallGateSubscriber<bool> pathRunning;
+    private readonly ICallGateSubscriber<object> pathStop;
     private readonly ICallGateSubscriber<uint, byte, bool> teleport;
-
-    private Spot? armed;
-    private DateTime armedUntil;
 
     public Places(
         IDalamudPluginInterface plugins,
@@ -51,6 +52,8 @@ internal sealed class Places : IDisposable
 
         navReady = plugins.GetIpcSubscriber<bool>("vnavmesh.Nav.IsReady");
         moveTo = plugins.GetIpcSubscriber<Vector3, bool, bool>("vnavmesh.SimpleMove.PathfindAndMoveTo");
+        pathRunning = plugins.GetIpcSubscriber<bool>("vnavmesh.Path.IsRunning");
+        pathStop = plugins.GetIpcSubscriber<object>("vnavmesh.Path.Stop");
         teleport = plugins.GetIpcSubscriber<uint, byte, bool>("Lifestream.Teleport");
 
         framework.Update += Tick;
@@ -58,13 +61,43 @@ internal sealed class Places : IDisposable
 
     public void Dispose() => framework.Update -= Tick;
 
+    public enum Phase
+    {
+        /// <summary>Teleported; waiting for the zone to load.</summary>
+        Travelling,
+
+        /// <summary>In the zone; waiting for vnavmesh to have a mesh.</summary>
+        WaitingForMesh,
+
+        /// <summary>Handed to vnavmesh; it is walking.</summary>
+        Walking,
+    }
+
+    /// <param name="Deadline">When the current phase is given up on.</param>
+    public sealed record Journey(Spot Target, Phase Phase, DateTime Deadline);
+
+    /// <summary>The journey under way, or null.</summary>
+    public Journey? Current { get; private set; }
+
+    /// <summary>What the journey is doing, for showing.</summary>
+    public string? Status => Current switch
+    {
+        null => null,
+        { Phase: Phase.Travelling } journey => $"Going to {journey.Target.Npc}: waiting for {journey.Target.Zone} to load",
+        { Phase: Phase.WaitingForMesh } journey => $"Going to {journey.Target.Npc}: waiting for vnavmesh's mesh",
+        { } journey => $"Walking to {journey.Target.Npc}",
+    };
+
     /// <summary>The zone you are standing in, or zero when not in one.</summary>
     public uint Here => client.TerritoryType;
 
     public bool IsHere(Spot spot) => spot.TerritoryId != 0 && spot.TerritoryId == Here;
 
-    /// <summary>Whether vnavmesh is loaded and has a mesh for this zone.</summary>
-    public bool CanWalk => Ask(navReady);
+    /// <summary>Whether vnavmesh is loaded at all. Whether it is ready is a moment, not a fact.</summary>
+    public bool HasNav => navReady.HasFunction;
+
+    /// <summary>Whether vnavmesh has a mesh for this zone right now.</summary>
+    public bool NavReady => Ask(navReady);
 
     /// <summary>Whether Lifestream is there to teleport with.</summary>
     public bool CanTeleport => teleport.HasFunction;
@@ -77,12 +110,18 @@ internal sealed class Places : IDisposable
         gui.OpenMapWithMapLink(new MapLinkPayload(spot.TerritoryId, spot.MapId, spot.Map.X, spot.Map.Y));
 
     /// <summary>
-    /// Goes to the spot: walks if already in its zone, otherwise teleports and arms the walk.
+    /// Starts going to the spot: waits for the mesh if already in its zone, teleports first
+    /// if not. A journey already under way is replaced.
     /// </summary>
     public bool Go(Spot spot)
     {
+        Cancel();
+
         if (IsHere(spot))
-            return Walk(spot);
+        {
+            Current = new Journey(spot, Phase.WaitingForMesh, DateTime.UtcNow + MeshPatience);
+            return true;
+        }
 
         if (ArrivalFor(spot) is not { } arrival)
             return false;
@@ -102,27 +141,62 @@ internal sealed class Places : IDisposable
             return false;
         }
 
-        armed = spot;
-        armedUntil = DateTime.UtcNow + Patience;
+        Current = new Journey(spot, Phase.Travelling, DateTime.UtcNow + ZonePatience);
         return true;
+    }
+
+    /// <summary>Forgets the journey, and stops vnavmesh if it was walking for it.</summary>
+    public void Cancel()
+    {
+        if (Current is { Phase: Phase.Walking })
+        {
+            try
+            {
+                pathStop.InvokeAction();
+            }
+            catch (IpcNotReadyError)
+            {
+                // Nothing to stop.
+            }
+        }
+
+        Current = null;
     }
 
     private void Tick(IFramework _)
     {
-        if (armed is not { } spot)
+        if (Current is not { } journey)
             return;
 
-        if (DateTime.UtcNow > armedUntil)
+        if (DateTime.UtcNow > journey.Deadline)
         {
-            armed = null;
+            log.Information($"Gave up going to {journey.Target.Npc}: {journey.Phase} took too long.");
+            Current = null;
             return;
         }
 
-        if (!IsHere(spot) || !CanWalk)
-            return;
+        switch (journey.Phase)
+        {
+            case Phase.Travelling when IsHere(journey.Target):
+                Current = journey with { Phase = Phase.WaitingForMesh, Deadline = DateTime.UtcNow + MeshPatience };
+                break;
 
-        armed = null;
-        Walk(spot);
+            case Phase.WaitingForMesh when !IsHere(journey.Target):
+                // Left the zone again before the mesh came; the walk would go nowhere.
+                Current = null;
+                break;
+
+            case Phase.WaitingForMesh when NavReady:
+                Current = Walk(journey.Target)
+                    ? journey with { Phase = Phase.Walking, Deadline = DateTime.MaxValue }
+                    : null;
+                break;
+
+            case Phase.Walking when !Ask(pathRunning):
+                // Arrived, or vnavmesh stopped for its own reasons. Either way it is over.
+                Current = null;
+                break;
+        }
     }
 
     private bool Walk(Spot spot)

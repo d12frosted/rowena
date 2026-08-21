@@ -53,21 +53,31 @@ internal sealed class VenueCell(Places places)
 
         if (ImGui.BeginPopupContextItem("where"))
         {
+            var going = places.Current is { } journey && journey.Target.TerritoryId == shown.TerritoryId
+                && journey.Target.Npc == shown.Npc;
+
             // Going first, because it is the thing you came to the menu for; flagging is the
-            // fallback that always works.
-            if (nearby)
+            // fallback that always works. "Not ready" is never a reason to refuse: the journey
+            // waits for the mesh, and says so in the strip while it does.
+            if (going)
             {
-                var canWalk = places.CanWalk;
-                if (!canWalk)
+                ImGui.TextColored(Palette.Dim, places.Status ?? "");
+
+                if (ImGui.MenuItem("Stop going there"))
+                    places.Cancel();
+            }
+            else if (nearby)
+            {
+                if (!places.HasNav)
                     ImGui.BeginDisabled();
 
-                if (ImGui.MenuItem("Walk there with vnavmesh"))
+                if (ImGui.MenuItem(places.NavReady ? "Walk there with vnavmesh" : "Walk there with vnavmesh, once its mesh is ready"))
                     places.Go(here);
 
-                if (!canWalk)
+                if (!places.HasNav)
                 {
                     ImGui.EndDisabled();
-                    ImGui.TextColored(Palette.Dim, "   vnavmesh not found, or no mesh for this zone yet");
+                    ImGui.TextColored(Palette.Dim, "   vnavmesh not found");
                 }
             }
             else

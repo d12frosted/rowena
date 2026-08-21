@@ -25,6 +25,7 @@ internal sealed class StatusStrip
     private readonly Trades trades;
     private readonly GatherBuddyIpc gatherBuddy;
     private readonly ItemCells cells;
+    private readonly Places places;
     private readonly Action refresh;
 
     private readonly Rebuilt<Wallet> wallet;
@@ -35,6 +36,7 @@ internal sealed class StatusStrip
         Trades trades,
         GatherBuddyIpc gatherBuddy,
         ItemCells cells,
+        Places places,
         Action refresh)
     {
         this.market = market;
@@ -42,6 +44,7 @@ internal sealed class StatusStrip
         this.trades = trades;
         this.gatherBuddy = gatherBuddy;
         this.cells = cells;
+        this.places = places;
         this.refresh = refresh;
 
         wallet = new Rebuilt<Wallet>(Build);
@@ -98,6 +101,17 @@ internal sealed class StatusStrip
 
         if (current.Gathering is { } gathering)
             ImGui.TextColored(Palette.Dim, gathering);
+
+        // A journey under way, wherever you are looking. Read live rather than from the
+        // snapshot, since it changes on its own clock and a stale "waiting" reads as stuck.
+        if (places.Status is { } going)
+        {
+            ImGui.TextColored(Palette.Dim, going);
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton("stop"))
+                places.Cancel();
+        }
     }
 
     /// <summary>
