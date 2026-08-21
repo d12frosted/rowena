@@ -31,7 +31,8 @@ internal sealed class ConvertTab
         + "Not a price. The currency cannot be bought, only earned and spent.",
         "Gil left over from a single run, after the market's cut and after buying anything\n"
         + "the trade needs that you have not got.",
-        "How many runs the balance you are holding pays for.",
+        "How many runs the balance you are holding pays for. Under one run, how far\n"
+        + "along the next one is.",
         "How long the board would take to absorb the output of one run at the rate it\n"
         + "currently sells. A margin you cannot sell into is not a margin.",
         "The counter in the world where the trade actually happens.",
@@ -165,7 +166,23 @@ internal sealed class ConvertTab
                 Cell.Right($"{row.Profit:N0}");
 
                 ImGui.TableNextColumn();
-                Cell.Right(row.Covers is { } covers ? $"{covers:N0} runs" : "-");
+
+                // Under one run, the useful answer is not "0 runs" but how far along the
+                // next one is: 3.9% of a mount is news a dash would have hidden.
+                if (row.Covers is { } covers && covers > 0)
+                {
+                    Cell.Right($"{covers:N0} runs");
+                }
+                else if (row.Covers is 0 && row.PerRun > 0 && group.Held > 0)
+                {
+                    Cell.Right(Palette.Dim, $"{(double)group.Held / row.PerRun:P1}");
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip($"{group.Held:N0} of the {row.PerRun:N0} one run takes.");
+                }
+                else
+                {
+                    Cell.Right(Palette.Dim, "-");
+                }
 
                 ImGui.TableNextColumn();
                 Cell.Right(Phrases.Absorb(row.Absorb));

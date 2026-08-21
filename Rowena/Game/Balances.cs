@@ -44,6 +44,28 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
             : allaganTools.Owned(resource.Id) ?? InBags(resource.Id);
 
     /// <summary>
+    /// The most of a currency the game will let you hold, when it enforces a cap.
+    /// </summary>
+    /// <remarks>
+    /// Null when there is none, or none the game will admit to: only CurrencyManager knows
+    /// caps, so the bag-dwelling pseudo-currencies report nothing rather than a guess. The
+    /// cap matters because a capped currency stops being earned without saying so; scrips
+    /// at 3,900 of 4,000 are a warning, not a balance.
+    /// </remarks>
+    public unsafe long? CapOf(Resource resource)
+    {
+        if (resource.Kind != ResourceKind.Currency)
+            return null;
+
+        var manager = CurrencyManager.Instance();
+        if (manager is null || !manager->HasItem(resource.Id))
+            return null;
+
+        var max = manager->GetItemMaxCount(resource.Id);
+        return max == 0 ? null : max;
+    }
+
+    /// <summary>
     /// A bound currency, asking every place the game keeps them.
     /// </summary>
     /// <remarks>

@@ -69,10 +69,24 @@ internal sealed class StatusStrip
 
         ImGui.TextUnformatted($"Gil {current.Gil:N0}");
 
-        foreach (var (currency, held) in current.Currencies)
+        foreach (var (currency, held, cap) in current.Currencies)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Palette.Dim, $"   {currency} {held:N0}");
+
+            // A capped currency shows its cap, because the distance to it is a decision:
+            // near the top, earning silently stops. Near is coloured so it is not missed.
+            if (cap is { } max)
+            {
+                var close = held >= max - max / 10;
+                ImGui.TextColored(close ? Palette.Bad : Palette.Dim, $"   {currency} {held:N0}/{max:N0}");
+
+                if (close && ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Nearly capped. Anything earned past the cap is simply lost.");
+            }
+            else
+            {
+                ImGui.TextColored(Palette.Dim, $"   {currency} {held:N0}");
+            }
         }
 
         if (current.Gathering is { } gathering)
@@ -92,7 +106,7 @@ internal sealed class StatusStrip
                 .. trades.Currencies
                     .Select(currency => (currency, Held: balances.Held(currency)))
                     .Where(entry => entry.Held > 0 || trades.IsWatched(entry.currency))
-                    .Select(entry => (entry.currency.Name, entry.Held)),
+                    .Select(entry => (entry.currency.Name, entry.Held, balances.CapOf(entry.currency))),
             ],
             GatheringLine());
 
@@ -124,6 +138,9 @@ internal sealed class StatusStrip
                 : $"GatherBuddyReborn: {status}";
     }
 
-    /// <param name="Currencies">Each spendable currency and how much of it you are holding.</param>
-    private sealed record Wallet(long Gil, (string Name, long Held)[] Currencies, string? Gathering);
+    /// <param name="Currencies">
+    /// Each spendable currency, how much of it you are holding, and the cap when the game
+    /// enforces one.
+    /// </param>
+    private sealed record Wallet(long Gil, (string Name, long Held, long? Cap)[] Currencies, string? Gathering);
 }
