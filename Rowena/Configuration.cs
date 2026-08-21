@@ -108,6 +108,19 @@ public sealed class Configuration : IPluginConfiguration
     public int CraftsPerDayCap { get; set; }
 
     /// <summary>
+    /// How many days of selling a sink is judged over.
+    /// </summary>
+    /// <remarks>
+    /// A sink is ranked by what it would actually bank within this horizon: runs you can afford,
+    /// capped by runs the board would absorb in the time. A week by default. The per-unit rate
+    /// is still shown, but ranking on it alone crowned items nobody had ever bought.
+    /// </remarks>
+    public int SellingHorizonDays { get; set; } = 7;
+
+    /// <summary>The same span, floored at a day.</summary>
+    public int SellingHorizon() => Math.Max(1, SellingHorizonDays);
+
+    /// <summary>
     /// The currency the sink table was last looking at, by item id. Zero for "whichever comes first".
     /// </summary>
     /// <remarks>

@@ -34,6 +34,9 @@ internal sealed class ConvertTab
         + "Not a price. The currency cannot be bought, only earned and spent.",
         "Gil left over from a single run, after the market's cut and after buying anything\n"
         + "the trade needs that you have not got.",
+        "What spending here would actually bank within the selling horizon: the runs you can\n"
+        + "afford, capped by the runs the board would absorb in the time, times the net per\n"
+        + "run. The table ranks by this. A rate nobody buys at is theory; this is the gil.",
         "How many runs the balance you are holding pays for. Under one run, how far\n"
         + "along the next one is.",
         "How long the board would take to absorb the output of one run at the rate it\n"
@@ -151,7 +154,9 @@ internal sealed class ConvertTab
 
     private void DrawSinks(SinkModel current)
     {
-        ImGui.TextUnformatted("Sinks: what a bound currency is worth once converted and sold");
+        ImGui.TextUnformatted(
+            $"Sinks: what a bound currency is worth once converted and sold, "
+            + $"ranked by what {config.SellingHorizon()} days of selling would bank");
 
         if (current.Choices.Length == 0)
         {
@@ -166,13 +171,14 @@ internal sealed class ConvertTab
 
         ImGui.Spacing();
 
-        if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable($"sinks-{group.Currency.Id}", 8, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("costs", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn($"banks in {config.SellingHorizon()}d", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
         ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 270);
@@ -206,16 +212,16 @@ internal sealed class ConvertTab
                 ImGui.TableNextColumn();
                 Cell.Right(Palette.Dim, "-");
                 ImGui.TableNextColumn();
+                Cell.Right(Palette.Dim, "-");
+                ImGui.TableNextColumn();
                 ImGui.TextColored(Palette.Dim, row.Venue);
                 continue;
             }
 
             ImGui.TableNextColumn();
-            var leader = group.Best is { } best && Math.Abs(row.Rate!.Value - best) < 0.001d;
-            // Only the leader is coloured. Marking everything defeats the point.
             // The unit is printed in the cell, not only in the header. Two decimals beside a
             // column of millions reads as millions, and this number really is under a hundred.
-            Cell.Right(leader ? Palette.Good : Palette.Plain, $"{row.Rate!.Value:F2} gil");
+            Cell.Right(Palette.Plain, $"{row.Rate!.Value:F2} gil");
             if (ImGui.IsItemHovered())
             {
                 // Said as a yield rather than a price, because the column was read as one and
@@ -237,6 +243,14 @@ internal sealed class ConvertTab
 
             ImGui.TableNextColumn();
             Cell.Right($"{row.Profit:N0}");
+
+            // Only the leader is coloured. Marking everything defeats the point, and the
+            // leader is the row that banks the most, not the one with the prettiest rate.
+            ImGui.TableNextColumn();
+            var leader = group.Best is { } best && best > 0 && row.Banks == best;
+            Cell.Right(row.Banks > 0 ? leader ? Palette.Good : Palette.Plain : Palette.Dim, row.Banks > 0 ? $"{row.Banks:N0}" : "-");
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(BanksExplained(group, row));
 
             ImGui.TableNextColumn();
 
@@ -541,6 +555,9 @@ internal sealed class ConvertTab
                 var quote = ConversionEvaluator.Evaluate(conversion, 1, boards.Buying, boards.Selling, tax);
                 var perRun = conversion.Consumes(currency);
 
+                var covers = perRun == 0 ? 0 : held / perRun;
+                var (sellable, banks) = Banks(quote, covers, config.SellingHorizon());
+
                 return new SinkRow(
                     conversion,
                     conversion.Name,
@@ -548,21 +565,67 @@ internal sealed class ConvertTab
                     quote.IsExecutable ? quote.GilPer(currency) : null,
                     perRun,
                     quote.Profit,
-                    perRun == 0 ? null : held / perRun,
+                    perRun == 0 ? null : covers,
                     quote.DaysToAbsorb,
+                    sellable,
+                    banks,
                     conversion.Venue,
                     quote.IsExecutable);
             })
-            .OrderByDescending(row => row.Rate ?? double.MinValue)
+            // What you would bank first; the rate breaks ties, and orders everything when the
+            // balance is zero and nothing can be banked at all.
+            .OrderByDescending(row => row.Banks)
+            .ThenByDescending(row => row.Rate ?? double.MinValue)
             .ToArray();
 
-        var best = rows
-            .Where(row => row.Priced)
-            .Select(row => row.Rate!.Value)
-            .DefaultIfEmpty()
-            .Max();
+        var best = rows.Select(row => row.Banks).DefaultIfEmpty().Max();
 
-        return new SinkGroup(currency, Phrases.UnitOf(currency), held, rows, rows.Any(row => row.Priced) ? best : null);
+        return new SinkGroup(currency, Phrases.UnitOf(currency), held, rows, best > 0 ? best : null);
+    }
+
+    /// <summary>
+    /// What a sink would actually bank within the horizon, and over how many runs.
+    /// </summary>
+    /// <remarks>
+    /// Runs you can afford, capped by runs the board would absorb in the time, times the net
+    /// per run. This is the number the table ranks by, and it is a volume limit rather than a
+    /// price discount: the price stays at the floor, as everywhere, and what gives is how much
+    /// of it you get to sell. A sink whose output nobody buys banks nothing, however handsome
+    /// its rate, which is exactly why a rate alone was the wrong thing to rank on.
+    /// </remarks>
+    private static (long Sellable, long Banks) Banks(ConversionQuote quote, long covers, int horizonDays)
+    {
+        if (!quote.IsExecutable || quote.Profit <= 0 || covers <= 0)
+            return (0, 0);
+
+        // Per-run absorption is the slowest output's; null means nothing sells.
+        if (quote.DaysToAbsorb is not { } daysPerRun)
+            return (0, 0);
+
+        var absorbable = daysPerRun <= 0 ? covers : (long)Math.Floor(horizonDays / daysPerRun);
+        var sellable = Math.Min(covers, absorbable);
+
+        return (sellable, sellable * quote.Profit);
+    }
+
+    private string BanksExplained(SinkGroup group, SinkRow row)
+    {
+        var days = config.SellingHorizon();
+
+        if (row.Absorb is null)
+            return "Nothing. Nobody is buying the output, so there is no selling it in any number of days.";
+
+        if (row.Covers is not { } covers || covers == 0)
+            return $"Nothing. The {group.Held:N0} you hold do not cover one run.";
+
+        if (row.Sellable == 0)
+            return $"Nothing within {days} days: the board would take longer than that to absorb even one run.";
+
+        var limit = row.Sellable < covers
+            ? $"the board would only absorb {row.Sellable:N0} of them in {days} days"
+            : $"all {row.Sellable:N0} of them would sell within {days} days";
+
+        return $"You can afford {covers:N0} runs and {limit}.\n{row.Sellable:N0} x {row.Profit:N0} gil.";
     }
 
     private FlipRow BuildFlipRow(
@@ -648,6 +711,8 @@ internal sealed class ConvertTab
             }),
     ];
 
+    /// <param name="Sellable">Runs that both the balance and the board's appetite allow within the horizon.</param>
+    /// <param name="Banks">What those runs net, which the table ranks by.</param>
     private sealed record SinkRow(
         Conversion Conversion,
         string Trade,
@@ -657,10 +722,13 @@ internal sealed class ConvertTab
         long Profit,
         long? Covers,
         double? Absorb,
+        long Sellable,
+        long Banks,
         string Venue,
         bool Priced);
 
-    private sealed record SinkGroup(Resource Currency, string Unit, long Held, SinkRow[] Rows, double? Best);
+    /// <param name="Best">The most any row banks, or null when nothing can be banked.</param>
+    private sealed record SinkGroup(Resource Currency, string Unit, long Held, SinkRow[] Rows, long? Best);
 
     private sealed record FlipRow(
         Conversion Conversion,

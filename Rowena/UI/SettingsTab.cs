@@ -62,6 +62,12 @@ internal sealed class SettingsTab(
             "Most runs to size", config.SizingCap, value => config.SizingCap = value,
             "The largest number of runs a flip is allowed to be sized at.");
 
+        changed |= Number(
+            "Days of selling to judge a sink by", config.SellingHorizonDays, value => config.SellingHorizonDays = value,
+            "A sink ranks by what it would bank within this many days: runs you can afford, capped by\n"
+            + "runs the board would absorb in the time. The rate per unit is still shown; ranking on it\n"
+            + "alone put items nobody has ever bought at the top.");
+
         Group("The furnishing sweep");
 
         changed |= Number(

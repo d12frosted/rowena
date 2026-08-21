@@ -114,15 +114,18 @@ a tab, `/rowena flips`, opens on that one instead of toggling.
 
 Deliberately not a market browser. It only answers the questions that need both halves of
 the picture, your balances and the depth of the board, because either alone is already
-covered by something else. Sinks are ranked by gil per scrip; flips show outlay, profit,
-return and how many runs the book will actually bear.
+covered by something else. Sinks are ranked by what they would actually bank within a week,
+not by the prettiest rate; flips show outlay, profit, return and how many runs the book will
+actually bear.
 
 A strip across the top says which boards you are pricing against, what is in your pockets
 and how old the prices are. Every number below is read against it, so it does not scroll
 away. Under it, a tab per question:
 
 - **Sinks.** What a bound currency in your pockets is worth spending, one currency at a
-  time: pick it, and its sinks rank by gil per unit. Currencies the file names stay on
+  time: pick it, and its sinks rank by what a week of selling would bank, which is the runs
+  you can afford capped by the runs the board will take. The gil-per-unit rate is still
+  there, but a rate nobody buys at is theory. Currencies the file names stay on
   screen at zero, since "is it worth going to earn scrips" is asked precisely when you have
   none; the generated ones earn a place by being held.
 - **Flips.** Buy the inputs on the board, hand them in, sell what comes out. Each row names
