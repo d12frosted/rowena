@@ -52,7 +52,9 @@ public static class ArtisanList
             Options);
 
     // Names and casing mirror Artisan's own classes exactly, so these are shaped for it rather than
-    // for this codebase.
+    // for this codebase. That includes the members Artisan declares as fields rather than properties;
+    // the ones this never sets are initialised to their defaults out loud, since the importer reads
+    // them back and a member that quietly read as "never assigned" was a warning on every build.
     private sealed class CraftingList
     {
         public int ID { get; set; }
@@ -65,7 +67,7 @@ public static class ArtisanList
 
         public bool SkipIfEnough { get; set; }
 
-        public bool SkipLiteral;
+        public bool SkipLiteral = false;
 
         public bool Materia { get; set; }
 
@@ -73,11 +75,11 @@ public static class ArtisanList
 
         public int RepairPercent = 50;
 
-        public bool AddAsQuickSynth;
+        public bool AddAsQuickSynth = false;
 
         public bool TidyAfter = true;
 
-        public bool OnlyRestockNonCrafted;
+        public bool OnlyRestockNonCrafted = false;
     }
 
     private sealed class ListItem

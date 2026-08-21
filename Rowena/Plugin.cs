@@ -67,7 +67,7 @@ public sealed class Plugin : IDalamudPlugin
 
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
-            new ArtisanIpc(PluginInterface, Log), allaganTools, basket, config, ChatGui, Log);
+            new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
         var boards = new Boards(market, scope);
         var trades = new Trades(catalog, new SpecialShops(DataManager, Log).Trades());

@@ -19,7 +19,6 @@ internal sealed class ItemActions(
     ArtisanIpc artisan,
     AllaganToolsIpc allaganTools,
     CraftBasket basket,
-    Configuration config,
     IChatGui chat,
     IPluginLog log)
 {
