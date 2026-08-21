@@ -23,11 +23,13 @@ internal readonly record struct Spot(
 /// A shop's name is the one thing about it nobody can act on. "Allagan Tomestones of
 /// Mathematics (Other)" is true and useless; the question is who to walk up to and where.
 ///
-/// Three routes from a shop to an NPC. Most shops are named directly in an NPC's data. The
-/// scrip and tomestone exchanges are not: they sit behind an InclusionShop, the category
-/// picker, which is what the NPC's data names, and the real shops hang off its categories
-/// and series. Seal shops are named as GCShop rows. All three end in an NPC id, and the
-/// Level sheet says where each NPC is placed, on which map.
+/// The routes from a shop to an NPC. Some shops are named directly in an NPC's data. Most
+/// are not: the NPC offers a menu, a TopicSelect, or a PreHandler gate, or a CustomTalk
+/// script whose arguments name the next step, and the scrip and tomestone exchanges sit a
+/// further level down behind an InclusionShop, the category picker, with the real shops
+/// hanging off its categories and series. Each indirection is followed until a shop id
+/// falls out. Seal shops are GCShop rows reached the same way. Every route ends in an NPC
+/// id, and the Level sheet says where each NPC is placed, on which map.
 ///
 /// An exchange is often offered in several cities, Rowena's representatives being the
 /// obvious case, so a shop maps to a list of spots rather than one. Which of them to show is
@@ -112,28 +114,72 @@ internal sealed class Vendors(IDataManager data, IPluginLog log)
                 pickerToShops[picker.RowId] = shops;
         }
 
+        // The menus an NPC can put between you and a shop. "Purchase items" is a TopicSelect
+        // listing shops; a PreHandler gates one behind an unlock; a CustomTalk is a script
+        // whose arguments can name any of these. Each is followed until a shop id falls out.
+        var topicToShops = new Dictionary<uint, List<uint>>();
+        foreach (var topic in data.GetExcelSheet<TopicSelect>())
+        {
+            var shops = topic.Shop.Select(shop => shop.RowId).Where(id => id != 0).ToList();
+            if (shops.Count > 0)
+                topicToShops[topic.RowId] = shops;
+        }
+
+        var handlerToTarget = new Dictionary<uint, uint>();
+        foreach (var handler in data.GetExcelSheet<PreHandler>())
+        {
+            if (handler.Target.RowId != 0)
+                handlerToTarget[handler.RowId] = handler.Target.RowId;
+        }
+
+        var talkToArgs = new Dictionary<uint, List<uint>>();
+        foreach (var talk in data.GetExcelSheet<CustomTalk>())
+        {
+            var args = talk.Script.Select(script => script.ScriptArg).Where(arg => arg != 0).Distinct().ToList();
+            if (args.Count > 0)
+                talkToArgs[talk.RowId] = args;
+        }
+
+        void Follow(uint id, uint npcId, int depth)
+        {
+            // Scripts can reference scripts; four levels is more than the game uses, and a
+            // bound is cheaper than proving the graph has no cycles.
+            if (id == 0 || depth > 4)
+                return;
+
+            if (pickerToShops.TryGetValue(id, out var behind))
+            {
+                foreach (var shop in behind)
+                    Offer(shop, npcId);
+            }
+            else if (topicToShops.TryGetValue(id, out var listed))
+            {
+                foreach (var shop in listed)
+                    Follow(shop, npcId, depth + 1);
+            }
+            else if (handlerToTarget.TryGetValue(id, out var target))
+            {
+                Follow(target, npcId, depth + 1);
+            }
+            else if (talkToArgs.TryGetValue(id, out var args))
+            {
+                foreach (var arg in args)
+                    Follow(arg, npcId, depth + 1);
+            }
+            else
+            {
+                // Any other id is offered as itself; whether it is a shop this plugin reads
+                // is decided by whoever asks.
+                Offer(id, npcId);
+            }
+        }
+
         var residents = data.GetExcelSheet<ENpcResident>();
 
         foreach (var npc in data.GetExcelSheet<ENpcBase>())
         {
             foreach (var dataRef in npc.ENpcData)
-            {
-                var id = dataRef.RowId;
-                if (id == 0)
-                    continue;
-
-                if (pickerToShops.TryGetValue(id, out var behind))
-                {
-                    foreach (var shop in behind)
-                        Offer(shop, npc.RowId);
-                }
-                else
-                {
-                    // Any other id is offered as itself; whether it is a shop this plugin
-                    // reads is decided by whoever asks.
-                    Offer(id, npc.RowId);
-                }
-            }
+                Follow(dataRef.RowId, npc.RowId, 0);
         }
 
         var territories = data.GetExcelSheet<TerritoryType>();
