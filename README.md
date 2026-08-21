@@ -110,7 +110,7 @@ read about. Break that file and you lose your edit, not the plugin.
 ## The plugin
 
 `/rowena` opens one window: what you are holding, and what it is worth turning into. Naming
-a tab, `/rowena craft`, opens on that one instead of toggling.
+a tab, `/rowena flips`, opens on that one instead of toggling.
 
 Deliberately not a market browser. It only answers the questions that need both halves of
 the picture, your balances and the depth of the board, because either alone is already
@@ -121,8 +121,14 @@ A strip across the top says which boards you are pricing against, what is in you
 and how old the prices are. Every number below is read against it, so it does not scroll
 away. Under it, a tab per question:
 
-- **Convert.** Sinks and flips. Two questions about one wallet, priced off one fetch, and
-  worth comparing: whether to spend scrips or gil is one decision.
+- **Sinks.** What a bound currency in your pockets is worth spending, one currency at a
+  time: pick it, and its sinks rank by gil per unit. Currencies the file names stay on
+  screen at zero, since "is it worth going to earn scrips" is asked precisely when you have
+  none; the generated ones earn a place by being held.
+- **Flips.** Buy the inputs on the board, hand them in, sell what comes out. Each row names
+  the transaction rather than the product, says where the hand-in happens, and carries each
+  input with its cost in the tooltip. Rows compete for one order book and are sized
+  together.
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,

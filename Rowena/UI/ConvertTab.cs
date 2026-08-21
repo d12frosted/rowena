@@ -11,9 +11,11 @@ namespace Rowena.UI;
 /// through the trades that only want gil.
 /// </summary>
 /// <remarks>
-/// Both halves of one question, which is why they share a tab. They are the same machinery pointed at
-/// two different wallets, they are priced off the same fetch, and comparing them is the point: whether
-/// to spend scrips or gil is a decision you make once, looking at both.
+/// One class, two tabs. They are the same machinery pointed at two different wallets and priced
+/// off the same fetch, which is why the code is shared; they used to share a screen as well, and
+/// that stopped working the moment both tables got long. Nobody compared the bottom of one with
+/// the top of the other, they scrolled. Each tab has its own snapshot, so the one not being looked
+/// at costs nothing: in particular the flip allocation is never run for somebody reading sinks.
 /// </remarks>
 internal sealed class ConvertTab
 {
@@ -42,7 +44,8 @@ internal sealed class ConvertTab
 
     private static readonly string?[] FlipHelp =
     [
-        null,
+        "What to buy on the board and what it becomes. Hover for each input and its cost.",
+        "The counter in the world where the hand-in happens.",
         "How many runs your gil is best spent on, once every row has competed for the same\n"
         + "order book. A zero means the shared inputs pay more on another row.",
         "Runs your own stock already covers, retainers included. Not deducted from the outlay:\n"
@@ -65,7 +68,8 @@ internal sealed class ConvertTab
     private readonly MarketCache market;
     private readonly Action<Conversion> refreshTrade;
 
-    private readonly Rebuilt<Model> model;
+    private readonly Rebuilt<SinkModel> sinks;
+    private readonly Rebuilt<FlipModel> flips;
 
     public ConvertTab(
         Trades trades,
@@ -84,16 +88,26 @@ internal sealed class ConvertTab
         this.market = market;
         this.refreshTrade = refreshTrade;
 
-        model = new Rebuilt<Model>(Build);
+        sinks = new Rebuilt<SinkModel>(BuildSinks);
+        flips = new Rebuilt<FlipModel>(BuildFlips);
     }
 
-    public void Draw()
+    /// <summary>The Sinks tab: what a bound currency in your pockets is worth spending.</summary>
+    public void DrawSinks()
     {
-        var current = model.Current;
+        var current = sinks.Current;
 
         DrawReadiness(current.Readiness);
         ImGui.Spacing();
         DrawSinks(current);
+    }
+
+    /// <summary>The Flips tab: what buying, converting and selling would pay.</summary>
+    public void DrawFlips()
+    {
+        var current = flips.Current;
+
+        DrawReadiness(current.Readiness);
         ImGui.Spacing();
         DrawFlips(current);
     }
@@ -135,7 +149,7 @@ internal sealed class ConvertTab
             + "Refresh prices to fetch them.");
     }
 
-    private void DrawSinks(Model current)
+    private void DrawSinks(SinkModel current)
     {
         ImGui.TextUnformatted("Sinks: what a bound currency is worth once converted and sold");
 
@@ -263,7 +277,7 @@ internal sealed class ConvertTab
     /// sinks. The choice is remembered, because the one you were looking at is the one you
     /// will want again, and a fresh rebuild does not get to forget it.
     /// </remarks>
-    private void DrawChooser(Model current)
+    private void DrawChooser(SinkModel current)
     {
         var chosen = current.Selected;
         var label = chosen is null ? "" : Choice(chosen.Currency, chosen.Held);
@@ -291,7 +305,7 @@ internal sealed class ConvertTab
             if (ImGui.Selectable(Choice(currency, held), selected))
             {
                 config.SinkCurrency = currency.Id;
-                model.Invalidate();
+                sinks.Invalidate();
             }
 
             if (selected)
@@ -303,12 +317,15 @@ internal sealed class ConvertTab
 
     private static string Choice(Resource currency, long held) => $"{currency.Name} ({held:N0} held)";
 
-    private void DrawFlips(Model current)
+    private void DrawFlips(FlipModel current)
     {
-        if (current.Flips.Length == 0)
-            return;
+        ImGui.TextUnformatted("Flips: buy the inputs on the board, hand them in, sell what comes out");
 
-        ImGui.TextUnformatted("Flips: buy the inputs, convert, sell the output");
+        if (current.Flips.Length == 0)
+        {
+            ImGui.TextColored(Palette.Dim, "Nothing in the catalogue trades items for items.");
+            return;
+        }
 
         if (current.TotalFlipProfit > 0)
         {
@@ -326,10 +343,11 @@ internal sealed class ConvertTab
                 + (current.Unpriceable > 0 ? $", {current.Unpriceable} unpriceable" : ""));
         }
 
-        if (!ImGui.BeginTable("flips", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("flips", 8, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
-        ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("buy, then sell", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 200);
         ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, 55);
         ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("outlay", ImGuiTableColumnFlags.WidthFixed, 120);
@@ -342,11 +360,19 @@ internal sealed class ConvertTab
         {
             ImGui.TableNextRow();
 
+            // Named as the transaction rather than as the product, because the product alone
+            // said nothing about what to go and buy. The tooltip carries each input with its
+            // cost, the way a craft carries its materials.
             ImGui.TableNextColumn();
             if (row.ItemId is { } flipItem)
-                cells.Draw(row.Trade, flipItem, refreshTrade: () => refreshTrade(row.Conversion));
+                cells.Draw(
+                    row.Trade, flipItem, materials: row.Inputs, inputsHeading: "buy",
+                    refreshTrade: () => refreshTrade(row.Conversion));
             else
                 ImGui.TextUnformatted(row.Trade);
+
+            ImGui.TableNextColumn();
+            ImGui.TextColored(Palette.Dim, row.Venue);
 
             if (row.Problem is { } problem)
             {
@@ -387,7 +413,19 @@ internal sealed class ConvertTab
         ImGui.EndTable();
     }
 
-    private Model Build()
+    /// <summary>
+    /// How much of what this tab needs the cache already has.
+    /// </summary>
+    private Readiness MeasureReadiness()
+    {
+        var (bought, sold) = trades.Relevant(balances.Held);
+
+        return new Readiness(
+            bought.Length + sold.Length,
+            bought.Count(id => boards.Buying(id) is null) + sold.Count(id => boards.Selling(id) is null));
+    }
+
+    private SinkModel BuildSinks()
     {
         var tax = MarketTax.Standard;
 
@@ -411,10 +449,12 @@ internal sealed class ConvertTab
 
         var selected = chosen is { } currency ? BuildSinkGroup(currency, tax) : null;
 
-        var (bought, sold) = trades.Relevant(balances.Held);
-        var readiness = new Readiness(
-            bought.Length + sold.Length,
-            bought.Count(id => boards.Buying(id) is null) + sold.Count(id => boards.Selling(id) is null));
+        return new SinkModel(MeasureReadiness(), choices, selected);
+    }
+
+    private FlipModel BuildFlips()
+    {
+        var tax = MarketTax.Standard;
 
         // One quote per flip, reused for the row and for the allocation prefilter. A flip
         // that loses money on its first run only loses more on its second, so the allocator
@@ -443,10 +483,8 @@ internal sealed class ConvertTab
 
         var shown = ordered.Take(FlipsInTable).ToArray();
 
-        return new Model(
-            readiness,
-            choices,
-            selected,
+        return new FlipModel(
+            MeasureReadiness(),
             shown,
             allocated.Values.Sum(allocation => allocation.Profit),
             ordered.Length - shown.Length,
@@ -549,7 +587,9 @@ internal sealed class ConvertTab
                 ? $"short {string.Join(", ", single.Unsourced)}"
                 : $"no price for {string.Join(", ", single.Unpriced)}";
 
-            return new FlipRow(conversion, conversion.Name, Produced(conversion), 0, covers, 0, 0, null, null, true, problem);
+            return new FlipRow(
+                conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
+                0, covers, 0, 0, null, null, true, problem);
         }
 
         var allocation = allocated.GetValueOrDefault(conversion.Id);
@@ -560,12 +600,53 @@ internal sealed class ConvertTab
 
         return idle
             ? new FlipRow(
-                conversion, conversion.Name, Produced(conversion), 0, covers, single.GilOutlay, single.Profit,
-                single.ReturnOnOutlay, single.DaysToAbsorb, true, null)
+                conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
+                0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay, single.DaysToAbsorb, true, null)
             : new FlipRow(
-                conversion, conversion.Name, Produced(conversion), allocation!.Runs, covers, allocation.GilOutlay,
-                allocation.Profit, allocation.ReturnOnOutlay, allocation.DaysToAbsorb, false, null);
+                conversion, Transaction(conversion), Produced(conversion), conversion.Venue, Inputs(conversion),
+                allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit, allocation.ReturnOnOutlay,
+                allocation.DaysToAbsorb, false, null);
     }
+
+    /// <summary>
+    /// A flip as the thing you would do: what goes in, what comes out.
+    /// </summary>
+    /// <remarks>
+    /// The conversion's own name is the product for generated trades, which told you what you
+    /// would end up with and nothing about what to go and buy. The file's names already read
+    /// this way; composing the label for every row keeps the column consistent.
+    /// </remarks>
+    private static string Transaction(Conversion conversion)
+    {
+        var inputs = string.Join(
+            " + ",
+            conversion.Inputs.Select(input => $"{input.Quantity:N0}x {input.Resource.Name}"));
+
+        var outputs = string.Join(
+            " + ",
+            conversion.Outputs.Select(output =>
+                output.Quantity == 1 ? output.Resource.Name : $"{output.Quantity:N0}x {output.Resource.Name}"));
+
+        return $"{inputs} -> {outputs}";
+    }
+
+    /// <summary>Each input with what it costs off the book, for the tooltip.</summary>
+    private ItemCells.MaterialLine[] Inputs(Conversion conversion) =>
+    [
+        .. conversion.Inputs
+            .Where(input => input.Resource.Kind == ResourceKind.Item)
+            .Select(input =>
+            {
+                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, MarketTax.Standard);
+
+                return new ItemCells.MaterialLine(
+                    input.Resource.Id,
+                    input.Resource.Name,
+                    input.Quantity,
+                    quote?.Total ?? 0,
+                    quote is { IsComplete: true });
+            }),
+    ];
 
     private sealed record SinkRow(
         Conversion Conversion,
@@ -585,6 +666,8 @@ internal sealed class ConvertTab
         Conversion Conversion,
         string Trade,
         uint? ItemId,
+        string Venue,
+        ItemCells.MaterialLine[] Inputs,
         int Runs,
         long HeldCovers,
         long Outlay,
@@ -606,10 +689,21 @@ internal sealed class ConvertTab
     /// <param name="Missing">Of those, how many no book has been fetched for.</param>
     private sealed record Readiness(int Total, int Missing);
 
-    private sealed record Model(
+    /// <param name="Choices">Every currency the table could be about, and how much of each is held.</param>
+    /// <param name="Selected">The one it is about, priced.</param>
+    private sealed record SinkModel(
         Readiness Readiness,
         (Resource Currency, long Held)[] Choices,
-        SinkGroup? Selected,
+        SinkGroup? Selected);
+
+    /// <param name="TotalFlipProfit">
+    /// What the best split of your gil across every flip pays, which is not the sum of the rows: the
+    /// rows compete for one order book and the allocation decides between them.
+    /// </param>
+    /// <param name="HiddenFlips">Rows the trim removed, all paying less than anything shown.</param>
+    /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
+    private sealed record FlipModel(
+        Readiness Readiness,
         FlipRow[] Flips,
         long TotalFlipProfit,
         int HiddenFlips,

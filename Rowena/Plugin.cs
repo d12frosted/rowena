@@ -88,7 +88,8 @@ public sealed class Plugin : IDalamudPlugin
 
         serverBar = new ServerBar(
             DtrBar, Framework, market, trades, boards, balances, config,
-            () => mainWindow.Show(MainWindow.Tab.Convert));
+            () => mainWindow.Show(MainWindow.Tab.Sinks),
+            () => mainWindow.Show(MainWindow.Tab.Flips));
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -98,7 +99,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage =
                 "Open Rowena. What you are holding, and what it is worth turning into. "
-                + "Add convert, craft or settings to open on that tab.",
+                + "Add sinks, flips, craft or settings to open on that tab.",
         });
     }
 
@@ -131,8 +132,12 @@ public sealed class Plugin : IDalamudPlugin
 
         switch (wanted)
         {
-            case "convert" or "sinks" or "flips":
-                mainWindow.Show(MainWindow.Tab.Convert);
+            case "sinks" or "convert":
+                mainWindow.Show(MainWindow.Tab.Sinks);
+                break;
+
+            case "flips":
+                mainWindow.Show(MainWindow.Tab.Flips);
                 break;
 
             case "craft" or "crafts":
@@ -144,7 +149,7 @@ public sealed class Plugin : IDalamudPlugin
                 break;
 
             default:
-                ChatGui.Print($"Rowena has no \"{wanted}\" tab. Try convert, craft or settings.");
+                ChatGui.Print($"Rowena has no \"{wanted}\" tab. Try sinks, flips, craft or settings.");
                 break;
         }
     }

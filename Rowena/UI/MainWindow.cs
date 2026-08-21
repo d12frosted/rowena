@@ -126,12 +126,22 @@ internal sealed class MainWindow : Window
         // The label carries the tab's identity in ImGui unless it is told otherwise, so every one of
         // these pins its own id after ###. Without that, a label that counts something would hand the
         // tab a new identity each time the count changed, and reset the selection along with it.
-        if (ImGui.BeginTabItem("Convert###convert", Selecting(Tab.Convert)))
+        if (ImGui.BeginTabItem("Sinks###sinks", Selecting(Tab.Sinks)))
         {
             if (buying is null || selling is null)
                 NoBoard();
             else
-                convert.Draw();
+                convert.DrawSinks();
+
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Flips###flips", Selecting(Tab.Flips)))
+        {
+            if (buying is null || selling is null)
+                NoBoard();
+            else
+                convert.DrawFlips();
 
             ImGui.EndTabItem();
         }
@@ -173,7 +183,8 @@ internal sealed class MainWindow : Window
 
     internal enum Tab
     {
-        Convert,
+        Sinks,
+        Flips,
         Craft,
         Settings,
     }

@@ -17,7 +17,7 @@ namespace Rowena.UI;
 /// across the flips would pay. When neither has anything to say the entry hides, since a
 /// bar slot that always says something trains you to read none of it.
 ///
-/// Clicking opens the window on the Convert tab, where the headline's working is.
+/// Clicking opens the window on the tab the headline came from, where its working is.
 ///
 /// Recomputed on its own clock, a few seconds rather than the window's half-second: it
 /// runs whether or not anything is open, and the allocation behind the flip figure is not
@@ -37,6 +37,7 @@ internal sealed class ServerBar : IDisposable
     private readonly Configuration config;
 
     private DateTime nextAt;
+    private bool showingFlips;
 
     public ServerBar(
         IDtrBar bar,
@@ -46,7 +47,8 @@ internal sealed class ServerBar : IDisposable
         Boards boards,
         Balances balances,
         Configuration config,
-        Action openConvert)
+        Action openSinks,
+        Action openFlips)
     {
         this.framework = framework;
         this.market = market;
@@ -57,7 +59,10 @@ internal sealed class ServerBar : IDisposable
 
         entry = bar.Get("Rowena");
         entry.Shown = false;
-        entry.OnClick = _ => openConvert();
+
+        // Where the click lands follows the headline: a cap warning is answered by sinks, a
+        // profit figure by flips. Whatever was last shown is where the working is.
+        entry.OnClick = _ => (showingFlips ? openFlips : openSinks)();
 
         framework.Update += Tick;
     }
@@ -92,11 +97,13 @@ internal sealed class ServerBar : IDisposable
             entry.Text = $"Rowena: {warning.Line}";
             entry.Tooltip = warning.Detail;
             entry.Shown = true;
+            showingFlips = false;
             return;
         }
 
         if (BestFlips() is { } profit and > 0)
         {
+            showingFlips = true;
             entry.Text = $"Rowena: flips pay {Phrases.CompactGil(profit)}";
             entry.Tooltip =
                 $"The best split of your gil across the flips pays {profit:N0} gil\n"
@@ -132,7 +139,7 @@ internal sealed class ServerBar : IDisposable
         return (
             $"{Phrases.UnitOf(near.Currency)} {near.Held:N0}/{near.Cap:N0}",
             $"{near.Currency.Name} is nearly capped. Anything earned past the cap\n"
-            + "is simply lost; the Convert tab knows what spending it pays.");
+            + "is simply lost; the Sinks tab knows what spending it pays.");
     }
 
     /// <summary>What the flips would pay, off the books the cache already holds.</summary>

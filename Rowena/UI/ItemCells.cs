@@ -72,6 +72,9 @@ internal sealed class ItemCells(
     /// which is the one action worth having without a menu.
     /// </param>
     /// <param name="materials">Shown in the tooltip, so a craft can be judged without clicking.</param>
+    /// <param name="inputsHeading">
+    /// What the tooltip calls that list. A craft has materials; a flip has things to buy.
+    /// </param>
     /// <param name="refreshTrade">
     /// When the row is a trade, refetches its items' prices. In the menu because it is the
     /// step before committing gil: the numbers are minutes old and the board is not.
@@ -81,7 +84,8 @@ internal sealed class ItemCells(
         uint itemId,
         uint? recipeId = null,
         IReadOnlyList<MaterialLine>? materials = null,
-        Action? refreshTrade = null)
+        Action? refreshTrade = null,
+        string inputsHeading = "materials")
     {
         ImGui.PushID($"{itemId}-{recipeId ?? 0}");
 
@@ -92,7 +96,7 @@ internal sealed class ItemCells(
             actions.OpenCraftingLog(recipe);
 
         if (ImGui.IsItemHovered())
-            Tooltip(label, itemId, recipeId, materials);
+            Tooltip(label, itemId, recipeId, materials, inputsHeading);
 
         if (ImGui.BeginPopupContextItem("actions"))
         {
@@ -103,7 +107,12 @@ internal sealed class ItemCells(
         ImGui.PopID();
     }
 
-    private void Tooltip(string label, uint itemId, uint? recipeId, IReadOnlyList<MaterialLine>? materials)
+    private void Tooltip(
+        string label,
+        uint itemId,
+        uint? recipeId,
+        IReadOnlyList<MaterialLine>? materials,
+        string inputsHeading)
     {
         ImGui.BeginTooltip();
 
@@ -132,7 +141,7 @@ internal sealed class ItemCells(
         if (materials is { Count: > 0 })
         {
             ImGui.Separator();
-            ImGui.TextColored(Palette.Dim, "materials");
+            ImGui.TextColored(Palette.Dim, inputsHeading);
 
             foreach (var material in materials)
             {
