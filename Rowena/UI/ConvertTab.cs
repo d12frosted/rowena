@@ -444,7 +444,14 @@ internal sealed class ConvertTab
     /// </summary>
     private Readiness MeasureReadiness()
     {
-        var (bought, sold) = trades.Relevant(balances.Held);
+        // Asked once per currency rather than once per trade that wants it. Reading a balance
+        // is a poke into game memory, the catalogue holds two and a half thousand trades and
+        // about a hundred and fifty currencies between them, and this runs twice a second on
+        // two tabs: measured, the difference is most of a redraw.
+        var held = new Dictionary<Resource, long>();
+
+        var (bought, sold) = trades.Relevant(
+            resource => held.TryGetValue(resource, out var known) ? known : held[resource] = balances.Held(resource));
 
         return new Readiness(
             bought.Length + sold.Length,

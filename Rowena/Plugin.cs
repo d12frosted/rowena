@@ -43,6 +43,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly MarketCache market;
     private readonly PricingScope scope;
     private readonly Diagnostics diagnostics;
+    private readonly DebugChannel debug;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
 
@@ -129,6 +130,25 @@ public sealed class Plugin : IDalamudPlugin
             () => scope.Ready,
             () => mainWindow.RefreshPrices(FetchPriority.Background));
 
+        // Driving the plugin from a file, so the half of the work that needs a button pressed
+        // can be done by whoever is reading the log rather than only by whoever is at the game.
+        debug = new DebugChannel(
+            PluginInterface.ConfigDirectory.FullName, Framework, config, diagnostics, Log,
+            new Dictionary<string, Action>
+            {
+                ["refresh"] = () => mainWindow.RefreshPrices(),
+                ["sweep"] = () => sweep.Start(scope.Buying, scope.Selling, config.FurnishingShortlist, config.SweepAge()),
+                ["scan"] = () => vendorSweep.Start(scope.Buying, config.VendorCandidatesToCost, config.SweepAge()),
+                ["brief"] = () => briefing.Now(),
+                ["open"] = () => mainWindow.IsOpen = true,
+                ["close"] = () => mainWindow.IsOpen = false,
+                ["sinks"] = () => mainWindow.Show(MainWindow.Tab.Sinks),
+                ["flips"] = () => mainWindow.Show(MainWindow.Tab.Flips),
+                ["vendor"] = () => mainWindow.Show(MainWindow.Tab.Vendor),
+                ["craft"] = () => mainWindow.Show(MainWindow.Tab.Craft),
+            },
+            diagnosticsPanel.Report);
+
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
         PluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -208,6 +228,7 @@ public sealed class Plugin : IDalamudPlugin
         // on the way past rather than only when it finishes.
         market.Persist(sweep.Snapshot());
 
+        debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();
         places.Dispose();

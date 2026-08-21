@@ -184,7 +184,7 @@ internal sealed class DiagnosticsPanel(
     }
 
     /// <summary>The whole thing as text, for handing to somebody who can read it.</summary>
-    private string Report()
+    public string Report()
     {
         var report = new StringBuilder();
         report.AppendLine("Rowena diagnostics");

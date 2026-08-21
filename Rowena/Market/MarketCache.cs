@@ -38,6 +38,7 @@ internal sealed class MarketCache : IDisposable
     private readonly object waiting = new();
 
     private volatile bool inFlight;
+    private int flying;
     private int done;
 
     public MarketCache(IMarketDataSource source, PriceStore store, Diagnostics diagnostics, IPluginLog log)
@@ -95,14 +96,17 @@ internal sealed class MarketCache : IDisposable
     {
         get
         {
-            var left = queue.Pending;
+            // What is queued plus what is being asked for right now. Leaving the batch in
+            // flight out of it meant a single-item fetch reported "0 of 0", since the queue
+            // empties the moment the batch is taken.
+            var left = queue.Pending + Volatile.Read(ref flying);
 
-            if (left == 0 && !inFlight)
+            if (left == 0)
                 return null;
 
             // Counted rather than remembered: the total is what has been done plus what is
-            // still queued, so it grows when more is asked for and cannot drift out of step
-            // with a queue that merges duplicates.
+            // still outstanding, so it grows when more is asked for and cannot drift out of
+            // step with a queue that merges duplicates.
             var finished = Volatile.Read(ref done);
             return (finished, finished + left);
         }
@@ -269,6 +273,7 @@ internal sealed class MarketCache : IDisposable
             }
 
             inFlight = true;
+            Interlocked.Exchange(ref flying, batch.Ids.Length);
 
             try
             {
@@ -303,6 +308,7 @@ internal sealed class MarketCache : IDisposable
             }
             finally
             {
+                Interlocked.Exchange(ref flying, 0);
                 inFlight = false;
             }
 

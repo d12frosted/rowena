@@ -146,6 +146,25 @@ public static class ConversionAllocation
             return true;
         }
 
+        // What one more run of each conversion would pay, against the book as it stands. Kept
+        // between rounds because committing a run only changes the answer for conversions that
+        // wanted some of the same item: with two and a half thousand exchanges in the catalogue,
+        // re-pricing all of them every round was tens of thousands of book walks inside a frame,
+        // and a redraw somebody could feel.
+        var quotes = new Dictionary<string, ConversionQuote?>(StringComparer.Ordinal);
+
+        ConversionQuote? QuoteFor(Conversion conversion)
+        {
+            if (quotes.TryGetValue(conversion.Id, out var cached))
+                return cached;
+
+            var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, selling, tax, vendor);
+            var usable = quote.IsExecutable && quote.Profit > 0 ? quote : null;
+
+            quotes[conversion.Id] = usable;
+            return usable;
+        }
+
         while (true)
         {
             Conversion? best = null;
@@ -156,10 +175,9 @@ public static class ConversionAllocation
                 if (runs[conversion.Id] >= capPerConversion || !ClearsInTime(conversion))
                     continue;
 
-                // One more run, priced against what is left rather than the whole book.
-                var quote = ConversionEvaluator.Evaluate(conversion, 1, Remaining, selling, tax, vendor);
-
-                if (!quote.IsExecutable || quote.Profit <= 0 || quote.GilOutlay > budget)
+                // Priced against what is left rather than the whole book, and only re-priced
+                // when something it buys has been bought out from under it.
+                if (QuoteFor(conversion) is not { } quote || quote.GilOutlay > budget)
                     continue;
 
                 if (bestQuote is null || quote.Profit > bestQuote.Profit)
@@ -172,10 +190,25 @@ public static class ConversionAllocation
             if (best is null || bestQuote is null)
                 break;
 
+            var consumed = new HashSet<uint>();
+
             foreach (var input in best.Inputs.Where(input => input.Resource.Kind == ResourceKind.Item))
             {
+                consumed.Add(input.Resource.Id);
+
                 if (Remaining(input.Resource.Id) is { } book)
                     left[input.Resource.Id] = book.WithoutCheapest(input.Quantity);
+            }
+
+            // Only the conversions that wanted some of what was just taken are worth pricing
+            // again. Everything else faces exactly the book it faced a moment ago.
+            foreach (var conversion in competing)
+            {
+                if (conversion.Inputs.Any(input =>
+                        input.Resource.Kind == ResourceKind.Item && consumed.Contains(input.Resource.Id)))
+                {
+                    quotes.Remove(conversion.Id);
+                }
             }
 
             foreach (var output in ItemOutputs(best))
