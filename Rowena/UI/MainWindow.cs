@@ -48,6 +48,7 @@ internal sealed class MainWindow : Window
         Balances balances,
         PricingScope scope,
         GatherBuddyIpc gatherBuddy,
+        ItemCells cells,
         FurnishingSweep sweep,
         ConvertTab convert,
         CraftTab crafts,
@@ -73,7 +74,7 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        strip = new StatusStrip(market, balances, trades, gatherBuddy, RefreshPrices);
+        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, RefreshPrices);
     }
 
     /// <summary>

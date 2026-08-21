@@ -82,7 +82,7 @@ public sealed class Plugin : IDalamudPlugin
             config, market, catalogFile, trades, () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
-            trades, market, balances, scope, gatherBuddy, sweep,
+            trades, market, balances, scope, gatherBuddy, cells, sweep,
             convertTab, craftTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 

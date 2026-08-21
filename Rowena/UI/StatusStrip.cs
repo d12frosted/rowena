@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Rowena.Core.Conversions;
 using Rowena.Game;
 using Rowena.IPC;
 using Rowena.Market;
@@ -23,6 +24,7 @@ internal sealed class StatusStrip
     private readonly Balances balances;
     private readonly Trades trades;
     private readonly GatherBuddyIpc gatherBuddy;
+    private readonly ItemCells cells;
     private readonly Action refresh;
 
     private readonly Rebuilt<Wallet> wallet;
@@ -32,12 +34,14 @@ internal sealed class StatusStrip
         Balances balances,
         Trades trades,
         GatherBuddyIpc gatherBuddy,
+        ItemCells cells,
         Action refresh)
     {
         this.market = market;
         this.balances = balances;
         this.trades = trades;
         this.gatherBuddy = gatherBuddy;
+        this.cells = cells;
         this.refresh = refresh;
 
         wallet = new Rebuilt<Wallet>(Build);
@@ -73,18 +77,23 @@ internal sealed class StatusStrip
 
         foreach (var (currency, held, cap) in current.Currencies)
         {
-            // A capped currency shows its cap once the cap is within sight, because from there
-            // the distance to it is a decision: near the top, earning silently stops. Far from
-            // it, "2/65,000" is width spent on nothing. Near is coloured so it is not missed.
+            // Icon and number, name on hover. The icon is how a currency is recognised in the
+            // game, and a row of them reads at a glance where a row of names was a paragraph.
             var close = cap is { } max && held >= max - max / 10;
-            var inSight = cap is { } limit && held * 2 >= limit;
-            var text = inSight ? $"   {currency} {held:N0}/{cap:N0}" : $"   {currency} {held:N0}";
+            var text = cap is { } limit ? $"{held:N0}/{limit:N0}" : $"{held:N0}";
 
-            Flow(text);
+            Flow(16f + 4f + ImGui.CalcTextSize(text).X);
+            cells.Icon(currency.Id, 16f);
+            ImGui.SameLine(0f, 4f);
             ImGui.TextColored(close ? Palette.Bad : Palette.Dim, text);
 
-            if (close && ImGui.IsItemHovered())
-                ImGui.SetTooltip("Nearly capped. Anything earned past the cap is simply lost.");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    close
+                        ? $"{currency.Name}: nearly capped. Anything earned past the cap is simply lost."
+                        : currency.Name);
+            }
         }
 
         if (current.Gathering is { } gathering)
@@ -92,40 +101,44 @@ internal sealed class StatusStrip
     }
 
     /// <summary>
-    /// Continues the current line if the next piece fits, and starts a new one if it does not.
+    /// Continues the current line if a piece this wide fits, and starts a new one if it does not.
     /// </summary>
     /// <remarks>
-    /// The currencies were one SameLine chain, and with a dozen in your pockets it ran off the
-    /// right edge, gave the window a horizontal scroll and dragged the tables into it. ImGui
-    /// does not wrap items, only text, so the wrapping is done by hand: measure, and break the
-    /// line before the piece that would not fit.
+    /// ImGui wraps text, not items. A chain of SameLine that runs off the right edge gives the
+    /// window a horizontal scroll and drags the tables into it, so the line is broken by hand
+    /// before the piece that would not fit. Rarely reached now that the strip is short, and
+    /// kept so that it cannot happen again.
     /// </remarks>
-    private static void Flow(string next)
+    private static void Flow(float width)
     {
-        ImGui.SameLine();
+        ImGui.SameLine(0f, 14f);
 
-        var room = ImGui.GetWindowContentRegionMax().X - ImGui.GetCursorPosX();
-
-        if (ImGui.CalcTextSize(next).X > room)
+        if (width > ImGui.GetWindowContentRegionMax().X - ImGui.GetCursorPosX())
             ImGui.NewLine();
     }
 
-    /// <summary>What is in your pockets, and what you are doing about it.</summary>
+    /// <summary>What is in your pockets that every tab should be read against.</summary>
     /// <remarks>
-    /// Only the currencies actually in them, plus the file's own, zero or not. The generated
-    /// catalogue knows about every token the game has ever minted, and a strip listing a
-    /// hundred and fifty zeroes would bury the four balances that mean anything.
+    /// Not everything in them. Every currency you hold has a table in the Sinks tab, with its
+    /// count beside its name, and listing all twenty here as well was a paragraph nobody read.
+    /// What stays is what changes how the rest of the window is read: the currencies the file
+    /// declares an interest in, and any currency within sight of its cap, since a cap is a
+    /// decision wherever you are looking.
     /// </remarks>
     private Wallet Build() =>
         new(
             balances.Gil,
             [
                 .. trades.Currencies
-                    .Select(currency => (currency, Held: balances.Held(currency)))
-                    .Where(entry => entry.Held > 0 || trades.IsWatched(entry.currency))
-                    .Select(entry => (entry.currency.Name, entry.Held, balances.CapOf(entry.currency))),
+                    .Select(currency => (Currency: currency, Held: balances.Held(currency), Cap: balances.CapOf(currency)))
+                    .Where(entry => trades.IsWatched(entry.Currency)
+                        || entry.Cap is { } cap && entry.Held * 2 >= cap)
+                    .Select(entry => (entry.Currency, entry.Held, InSight(entry.Held, entry.Cap))),
             ],
             GatheringLine());
+
+    /// <summary>The cap, once it is close enough to be worth the width of printing.</summary>
+    private static long? InSight(long held, long? cap) => cap is { } limit && held * 2 >= limit ? limit : null;
 
     /// <summary>
     /// What GatherBuddyReborn is up to, reported and not driven.
@@ -159,5 +172,5 @@ internal sealed class StatusStrip
     /// Each spendable currency, how much of it you are holding, and the cap when the game
     /// enforces one.
     /// </param>
-    private sealed record Wallet(long Gil, (string Name, long Held, long? Cap)[] Currencies, string? Gathering);
+    private sealed record Wallet(long Gil, (Resource Currency, long Held, long? Cap)[] Currencies, string? Gathering);
 }
