@@ -49,7 +49,8 @@ internal sealed class ConvertTab
         "Gil left over once the output is sold and the market has taken its cut.",
         "Profit over outlay. Worth reading next to the column beside it: a high return on a\n"
         + "trade that takes a month to sell is not a good trade.",
-        "How long the board would take to absorb everything these runs would produce.",
+        "How long the board would take to absorb everything these runs would produce,\n"
+        + "counting every row that sells into the same book: one market, one queue.",
     ];
 
     private readonly Trades trades;
@@ -384,10 +385,8 @@ internal sealed class ConvertTab
                 single.DaysToAbsorb, true, null)
             : new FlipRow(
                 conversion.Name, Produced(conversion), allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit,
-                allocation.ReturnOnOutlay, Multiply(single.DaysToAbsorb, allocation.Runs), false, null);
+                allocation.ReturnOnOutlay, allocation.DaysToAbsorb, false, null);
     }
-
-    private static double? Multiply(double? days, int factor) => days is { } value ? value * factor : null;
 
     private sealed record SinkRow(
         string Trade,

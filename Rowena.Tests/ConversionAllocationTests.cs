@@ -115,6 +115,66 @@ public class ConversionAllocationTests
         Assert.Empty(allocations);
     }
 
+    private static Conversion Flip(string id, uint input, uint output) =>
+        new(
+            id,
+            id,
+            [new ResourceAmount(Resource.Item(input, $"input {input}"), 1)],
+            [new ResourceAmount(Resource.Item(output, $"output {output}"), 1)],
+            "somewhere");
+
+    private static Func<uint, OrderBook?> Synthetic(params OrderBook[] books) =>
+        id => books.FirstOrDefault(book => book.ItemId == id);
+
+    private static OrderBook Deep(uint id, long price, double velocity = 0d) =>
+        OrderBook.Create(id, [new Listing(price, 10, "Phoenix")], velocity);
+
+    [Fact]
+    public void TradesSellingIntoTheSameBookShareItsAbsorption()
+    {
+        // Two trades, one output market. Each alone would claim its three units clear in a
+        // day and a half; the board digests one queue of six, and both rows must say so.
+        var books = Synthetic(Deep(1, 100), Deep(2, 100), Deep(9, 10_000, velocity: 2d));
+
+        var byId = ConversionAllocation
+            .Allocate([Flip("a", 1, 9), Flip("b", 2, 9)], books, MarketTax.None, long.MaxValue, 3)
+            .ToDictionary(allocation => allocation.Conversion.Id);
+
+        Assert.Equal(3, byId["a"].Runs);
+        Assert.Equal(3, byId["b"].Runs);
+        Assert.Equal(3d, byId["a"].DaysToAbsorb);
+        Assert.Equal(3d, byId["b"].DaysToAbsorb);
+    }
+
+    [Fact]
+    public void TradesWithTheirOwnMarketsAbsorbAlone()
+    {
+        var books = Synthetic(
+            Deep(1, 100), Deep(2, 100),
+            Deep(9, 10_000, velocity: 2d), Deep(8, 10_000, velocity: 1d));
+
+        var byId = ConversionAllocation
+            .Allocate([Flip("a", 1, 9), Flip("b", 2, 8)], books, MarketTax.None, long.MaxValue, 3)
+            .ToDictionary(allocation => allocation.Conversion.Id);
+
+        Assert.Equal(1.5d, byId["a"].DaysToAbsorb);
+        Assert.Equal(3d, byId["b"].DaysToAbsorb);
+    }
+
+    [Fact]
+    public void NothingAllocatedHasNothingToAbsorb()
+    {
+        // Selling at a loss: the row gets no runs, so there is no queue to report.
+        var books = Synthetic(Deep(1, 100), Deep(9, 50, velocity: 2d));
+
+        var only = ConversionAllocation
+            .Allocate([Flip("a", 1, 9)], books, MarketTax.None, long.MaxValue, 3)
+            .Single();
+
+        Assert.Equal(0, only.Runs);
+        Assert.Null(only.DaysToAbsorb);
+    }
+
     [Fact]
     public void AllocationCostsMorePerRunAsItGoesDeeper()
     {

@@ -3,7 +3,18 @@ using Rowena.Core.Market;
 namespace Rowena.Core.Conversions;
 
 /// <summary>How many times to run one conversion, and what that costs and pays.</summary>
-public sealed record Allocation(Conversion Conversion, int Runs, long GilOutlay, long Profit)
+/// <param name="DaysToAbsorb">
+/// How long the selling board takes to digest what the allocated runs produce, counting
+/// every allocation that sells into the same book: two trades dumping into one market are
+/// one queue, and a trade is not closed until its part of the queue has sold. Null when
+/// nothing was allocated, or when nothing it sells has a sale rate.
+/// </param>
+public sealed record Allocation(
+    Conversion Conversion,
+    int Runs,
+    long GilOutlay,
+    long Profit,
+    double? DaysToAbsorb)
 {
     public double? ReturnOnOutlay => GilOutlay == 0 ? null : (double)Profit / GilOutlay;
 }
@@ -131,13 +142,46 @@ public static class ConversionAllocation
             budget -= bestQuote.GilOutlay;
         }
 
+        // What the allocated runs will dump on the selling board, queued per item. Absorption
+        // is then read against the whole queue, not each row's own contribution: the second
+        // trade into a book waits behind the first whichever order they sell in.
+        var queued = new Dictionary<uint, int>();
+
+        foreach (var conversion in competing)
+        {
+            foreach (var output in ItemOutputs(conversion))
+                queued[output.Resource.Id] =
+                    queued.GetValueOrDefault(output.Resource.Id)
+                    + output.Quantity * runs[conversion.Id];
+        }
+
+        double? Absorb(Conversion conversion)
+        {
+            if (runs[conversion.Id] == 0)
+                return null;
+
+            double? worst = null;
+
+            foreach (var output in ItemOutputs(conversion))
+            {
+                if (selling(output.Resource.Id)?.DaysToAbsorb(queued[output.Resource.Id]) is { } days)
+                    worst = Math.Max(worst ?? 0d, days);
+            }
+
+            return worst;
+        }
+
         return
         [
             .. competing.Select(conversion => new Allocation(
                 conversion,
                 runs[conversion.Id],
                 outlay[conversion.Id],
-                profit[conversion.Id])),
+                profit[conversion.Id],
+                Absorb(conversion))),
         ];
     }
+
+    private static IEnumerable<ResourceAmount> ItemOutputs(Conversion conversion) =>
+        conversion.Outputs.Where(output => output.Resource.Kind == ResourceKind.Item);
 }
