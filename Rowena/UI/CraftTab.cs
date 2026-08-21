@@ -38,6 +38,7 @@ internal sealed class CraftTab
         + "data centre: your retainer sells where it stands.",
         "Profit times sales a day, which is what the table is ranked by. A ceiling, not a\n"
         + "forecast: it assumes you take every sale at today's price.",
+        null,
     ];
 
     private readonly FurnishingSweep sweep;
@@ -288,7 +289,7 @@ internal sealed class CraftTab
 
         if (!ImGui.BeginTable(
                 "crafts",
-                7,
+                8,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Sortable))
             return;
 
@@ -304,6 +305,11 @@ internal sealed class CraftTab
         ImGui.TableSetupColumn("return", NumberColumn, 70);
         ImGui.TableSetupColumn("sales/day", NumberColumn, 75);
         ImGui.TableSetupColumn("gil/day", NumberColumn | ImGuiTableColumnFlags.DefaultSort, 100);
+
+        // The last column is a control, not a fact, so it has no name and no sort. Building
+        // the list is what this table is for, and it should not live only in a menu.
+        ImGui.TableSetupColumn(
+            "", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 26);
         Cell.Headers(Help);
         ReadSort();
 
@@ -339,6 +345,20 @@ internal sealed class CraftTab
                     "A ceiling, not a forecast: it assumes you take every sale at today's price.\n"
                     + "Furnishings sit in thin books, often a wall of single units at a round\n"
                     + "number, so adding supply tends to move the price rather than join it.");
+            }
+
+            ImGui.TableNextColumn();
+            if (row.RecipeId is { } addable)
+            {
+                ImGui.PushID((int)addable);
+
+                if (ImGui.SmallButton("+"))
+                    basket.Add(addable, row.ItemId, row.Item, 1);
+
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Add one to the list you are building above.");
+
+                ImGui.PopID();
             }
         }
 
