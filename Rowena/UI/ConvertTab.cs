@@ -261,6 +261,14 @@ internal sealed class ConvertTab
         var chosen = current.Selected;
         var label = chosen is null ? "" : Choice(chosen.Currency, chosen.Held);
 
+        // The icon sits beside the combo rather than inside its preview, which is plain text.
+        // Currencies are items, so the same icon the tables use is the right one here.
+        if (chosen is not null)
+        {
+            cells.Icon(chosen.Currency.Id);
+            ImGui.SameLine();
+        }
+
         ImGui.SetNextItemWidth(340f);
 
         if (!ImGui.BeginCombo("##sink-currency", label))
@@ -269,6 +277,9 @@ internal sealed class ConvertTab
         foreach (var (currency, held) in current.Choices)
         {
             var selected = chosen is not null && chosen.Currency.Id == currency.Id;
+
+            cells.Icon(currency.Id, 16f);
+            ImGui.SameLine();
 
             if (ImGui.Selectable(Choice(currency, held), selected))
             {
