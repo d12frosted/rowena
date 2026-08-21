@@ -68,11 +68,13 @@ public sealed class Plugin : IDalamudPlugin
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope);
         var boards = new Boards(market, scope);
         var trades = new Trades(catalog, new SpecialShops(DataManager, Log).Trades());
-        var convertTab = new ConvertTab(trades, boards, balances, cells, config);
-        var craftTab = new CraftTab(sweep, furnishings, boards, cells, basket, config);
-
-        // The refresh is the window's, reached through a lambda because the window does not
-        // exist yet: the tab lives inside it. Read at click time, when it long since does.
+        // The refreshes are the window's, reached through lambdas because the window does not
+        // exist yet: the tabs live inside it. Read at click time, when it long since does.
+        var convertTab = new ConvertTab(
+            trades, boards, balances, cells, config, conversion => mainWindow!.RefreshTrade(conversion));
+        var craftTab = new CraftTab(
+            sweep, furnishings, boards, cells, basket, config,
+            conversion => mainWindow!.RefreshTrade(conversion));
         var settingsTab = new SettingsTab(
             config, market, catalogFile, trades, () => mainWindow!.RefreshPrices(), Save);
 

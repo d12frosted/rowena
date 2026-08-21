@@ -1,6 +1,7 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
+using Rowena.Core.Conversions;
 using Rowena.Game;
 using Rowena.IPC;
 using Rowena.Market;
@@ -80,6 +81,28 @@ internal sealed class MainWindow : Window
     /// which swaps trades in that no book has been fetched for yet.
     /// </summary>
     public void RefreshPrices() => RefreshCatalogue(scope.Buying, scope.Selling, force: true);
+
+    /// <summary>
+    /// Refetches one trade's items, for checking the board before committing gil to it.
+    /// </summary>
+    /// <remarks>
+    /// Forced past the TTL, because the click is a statement of distrust in the cache and
+    /// answering it from the cache would be absurd. Quietly does nothing while a fetch is
+    /// already running, which the strip is already saying.
+    /// </remarks>
+    public void RefreshTrade(Conversion conversion)
+    {
+        market.RefreshInBackground(scope.Buying, ItemIds(conversion.Inputs), force: true);
+        market.RefreshInBackground(scope.Selling, ItemIds(conversion.Outputs), force: true);
+    }
+
+    private static uint[] ItemIds(IReadOnlyList<ResourceAmount> side) =>
+    [
+        .. side
+            .Where(amount => amount.Resource.Kind == ResourceKind.Item)
+            .Select(amount => amount.Resource.Id)
+            .Distinct(),
+    ];
 
     public override void Draw()
     {

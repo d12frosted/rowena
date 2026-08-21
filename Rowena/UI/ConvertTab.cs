@@ -59,6 +59,7 @@ internal sealed class ConvertTab
     private readonly Balances balances;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly Action<Conversion> refreshTrade;
 
     private readonly Rebuilt<Model> model;
 
@@ -67,13 +68,15 @@ internal sealed class ConvertTab
         Boards boards,
         Balances balances,
         ItemCells cells,
-        Configuration config)
+        Configuration config,
+        Action<Conversion> refreshTrade)
     {
         this.trades = trades;
         this.boards = boards;
         this.balances = balances;
         this.cells = cells;
         this.config = config;
+        this.refreshTrade = refreshTrade;
 
         model = new Rebuilt<Model>(Build);
     }
@@ -116,7 +119,7 @@ internal sealed class ConvertTab
 
                 ImGui.TableNextColumn();
                 if (row.ItemId is { } sinkItem)
-                    cells.Draw(row.Trade, sinkItem);
+                    cells.Draw(row.Trade, sinkItem, refreshTrade: () => refreshTrade(row.Conversion));
                 else
                     ImGui.TextUnformatted(row.Trade);
 
@@ -236,7 +239,7 @@ internal sealed class ConvertTab
 
             ImGui.TableNextColumn();
             if (row.ItemId is { } flipItem)
-                cells.Draw(row.Trade, flipItem);
+                cells.Draw(row.Trade, flipItem, refreshTrade: () => refreshTrade(row.Conversion));
             else
                 ImGui.TextUnformatted(row.Trade);
 
@@ -377,6 +380,7 @@ internal sealed class ConvertTab
                 var perRun = conversion.Consumes(currency);
 
                 return new SinkRow(
+                    conversion,
                     conversion.Name,
                     Produced(conversion),
                     quote.IsExecutable ? quote.GilPer(currency) : null,
@@ -421,7 +425,7 @@ internal sealed class ConvertTab
                 ? $"short {string.Join(", ", single.Unsourced)}"
                 : $"no price for {string.Join(", ", single.Unpriced)}";
 
-            return new FlipRow(conversion.Name, Produced(conversion), 0, covers, 0, 0, null, null, true, problem);
+            return new FlipRow(conversion, conversion.Name, Produced(conversion), 0, covers, 0, 0, null, null, true, problem);
         }
 
         var allocation = allocated.GetValueOrDefault(conversion.Id);
@@ -432,14 +436,15 @@ internal sealed class ConvertTab
 
         return idle
             ? new FlipRow(
-                conversion.Name, Produced(conversion), 0, covers, single.GilOutlay, single.Profit, single.ReturnOnOutlay,
-                single.DaysToAbsorb, true, null)
+                conversion, conversion.Name, Produced(conversion), 0, covers, single.GilOutlay, single.Profit,
+                single.ReturnOnOutlay, single.DaysToAbsorb, true, null)
             : new FlipRow(
-                conversion.Name, Produced(conversion), allocation!.Runs, covers, allocation.GilOutlay, allocation.Profit,
-                allocation.ReturnOnOutlay, allocation.DaysToAbsorb, false, null);
+                conversion, conversion.Name, Produced(conversion), allocation!.Runs, covers, allocation.GilOutlay,
+                allocation.Profit, allocation.ReturnOnOutlay, allocation.DaysToAbsorb, false, null);
     }
 
     private sealed record SinkRow(
+        Conversion Conversion,
         string Trade,
         uint? ItemId,
         double? Rate,
@@ -453,6 +458,7 @@ internal sealed class ConvertTab
     private sealed record SinkGroup(Resource Currency, string Unit, long Held, SinkRow[] Rows, double? Best);
 
     private sealed record FlipRow(
+        Conversion Conversion,
         string Trade,
         uint? ItemId,
         int Runs,

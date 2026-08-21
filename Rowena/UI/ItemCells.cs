@@ -72,11 +72,16 @@ internal sealed class ItemCells(
     /// which is the one action worth having without a menu.
     /// </param>
     /// <param name="materials">Shown in the tooltip, so a craft can be judged without clicking.</param>
+    /// <param name="refreshTrade">
+    /// When the row is a trade, refetches its items' prices. In the menu because it is the
+    /// step before committing gil: the numbers are minutes old and the board is not.
+    /// </param>
     public void Draw(
         string label,
         uint itemId,
         uint? recipeId = null,
-        IReadOnlyList<MaterialLine>? materials = null)
+        IReadOnlyList<MaterialLine>? materials = null,
+        Action? refreshTrade = null)
     {
         ImGui.PushID($"{itemId}-{recipeId ?? 0}");
 
@@ -91,7 +96,7 @@ internal sealed class ItemCells(
 
         if (ImGui.BeginPopupContextItem("actions"))
         {
-            Menu(label, itemId, recipeId);
+            Menu(label, itemId, recipeId, refreshTrade);
             ImGui.EndPopup();
         }
 
@@ -183,7 +188,7 @@ internal sealed class ItemCells(
         ImGui.TextColored(Palette.Dim, string.Join(", ", parts));
     }
 
-    private void Menu(string label, uint itemId, uint? recipeId)
+    private void Menu(string label, uint itemId, uint? recipeId, Action? refreshTrade)
     {
         if (recipeId is { } recipe)
         {
@@ -193,6 +198,9 @@ internal sealed class ItemCells(
 
         if (ImGui.MenuItem("Search the market board"))
             actions.SearchMarketBoard(itemId);
+
+        if (refreshTrade is not null && ImGui.MenuItem("Refresh this trade's prices"))
+            refreshTrade();
 
         if (ImGui.MenuItem("Link in chat"))
             actions.LinkInChat(itemId);

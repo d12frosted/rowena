@@ -46,6 +46,7 @@ internal sealed class CraftTab
     private readonly ItemCells cells;
     private readonly CraftBasket basket;
     private readonly Configuration config;
+    private readonly Action<Conversion> refreshTrade;
 
     private readonly Rebuilt<Model> model;
 
@@ -58,7 +59,8 @@ internal sealed class CraftTab
         Boards boards,
         ItemCells cells,
         CraftBasket basket,
-        Configuration config)
+        Configuration config,
+        Action<Conversion> refreshTrade)
     {
         this.sweep = sweep;
         this.furnishings = furnishings;
@@ -66,6 +68,7 @@ internal sealed class CraftTab
         this.cells = cells;
         this.basket = basket;
         this.config = config;
+        this.refreshTrade = refreshTrade;
 
         model = new Rebuilt<Model>(Build);
     }
@@ -309,7 +312,7 @@ internal sealed class CraftTab
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            cells.Draw(row.Item, row.ItemId, row.RecipeId, row.Breakdown);
+            cells.Draw(row.Item, row.ItemId, row.RecipeId, row.Breakdown, () => refreshTrade(row.Conversion));
 
             ImGui.TableNextColumn();
             cells.Job(row.JobId, row.Job);
@@ -420,6 +423,7 @@ internal sealed class CraftTab
                 var made = furnishings.Behind(earnings.Conversion.Id);
 
                 return new CraftRow(
+                    earnings.Conversion,
                     earnings.Conversion.Name,
                     made?.ItemId ?? 0,
                     made?.RecipeId,
@@ -474,6 +478,7 @@ internal sealed class CraftTab
     }
 
     private sealed record CraftRow(
+        Conversion Conversion,
         string Item,
         uint ItemId,
         uint? RecipeId,
