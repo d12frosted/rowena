@@ -74,7 +74,7 @@ public sealed class Plugin : IDalamudPlugin
         // The refreshes are the window's, reached through lambdas because the window does not
         // exist yet: the tabs live inside it. Read at click time, when it long since does.
         var convertTab = new ConvertTab(
-            trades, boards, balances, cells, config, conversion => mainWindow!.RefreshTrade(conversion));
+            trades, boards, balances, cells, config, market, conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
             sweep, furnishings, boards, cells, basket, config,
             conversion => mainWindow!.RefreshTrade(conversion));

@@ -59,6 +59,7 @@ internal sealed class ConvertTab
     private readonly Balances balances;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly MarketCache market;
     private readonly Action<Conversion> refreshTrade;
 
     private readonly Rebuilt<Model> model;
@@ -69,6 +70,7 @@ internal sealed class ConvertTab
         Balances balances,
         ItemCells cells,
         Configuration config,
+        MarketCache market,
         Action<Conversion> refreshTrade)
     {
         this.trades = trades;
@@ -76,6 +78,7 @@ internal sealed class ConvertTab
         this.balances = balances;
         this.cells = cells;
         this.config = config;
+        this.market = market;
         this.refreshTrade = refreshTrade;
 
         model = new Rebuilt<Model>(Build);
@@ -85,9 +88,48 @@ internal sealed class ConvertTab
     {
         var current = model.Current;
 
+        DrawReadiness(current.Readiness);
+        ImGui.Spacing();
         DrawSinks(current);
         ImGui.Spacing();
         DrawFlips(current);
+    }
+
+    /// <summary>
+    /// Whether the numbers below are ready to be believed.
+    /// </summary>
+    /// <remarks>
+    /// The strip says how old prices are; this says whether this tab has them at all. They
+    /// are different questions. Prices can be a minute old and still missing for half of what
+    /// this tab wants, because a currency that entered your pockets since the last fetch
+    /// brought its sinks with it, and a table of "no prices yet" under an unremarkable strip
+    /// read as a plugin that had quietly stopped working.
+    /// </remarks>
+    private void DrawReadiness(Readiness readiness)
+    {
+        if (market.Busy)
+        {
+            var progress = market.Progress is { } p ? $" {p.Done} of {p.Total}" : "...";
+            ImGui.TextColored(Palette.Dim, $"Fetching prices{progress}. The tables fill in as answers arrive.");
+            return;
+        }
+
+        if (readiness.Total == 0)
+        {
+            ImGui.TextColored(Palette.Dim, "Nothing here needs a price.");
+            return;
+        }
+
+        if (readiness.Missing == 0)
+        {
+            ImGui.TextColored(Palette.Good, $"Ready: all {readiness.Total} items this tab needs are priced.");
+            return;
+        }
+
+        ImGui.TextColored(
+            Palette.Bad,
+            $"Not ready: {readiness.Missing} of {readiness.Total} items have no price yet. "
+            + "Refresh prices to fetch them.");
     }
 
     private void DrawSinks(Model current)
@@ -349,6 +391,11 @@ internal sealed class ConvertTab
 
         var selected = chosen is { } currency ? BuildSinkGroup(currency, tax) : null;
 
+        var (bought, sold) = trades.Relevant(balances.Held);
+        var readiness = new Readiness(
+            bought.Length + sold.Length,
+            bought.Count(id => boards.Buying(id) is null) + sold.Count(id => boards.Selling(id) is null));
+
         // One quote per flip, reused for the row and for the allocation prefilter. A flip
         // that loses money on its first run only loses more on its second, so the allocator
         // is never asked about it.
@@ -377,6 +424,7 @@ internal sealed class ConvertTab
         var shown = ordered.Take(FlipsInTable).ToArray();
 
         return new Model(
+            readiness,
             choices,
             selected,
             shown,
@@ -534,7 +582,12 @@ internal sealed class ConvertTab
     /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
     /// <param name="Choices">Every currency the table could be about, and how much of each is held.</param>
     /// <param name="Selected">The one it is about, priced.</param>
+    /// <param name="Total">Items this tab wants a book for, both boards counted.</param>
+    /// <param name="Missing">Of those, how many no book has been fetched for.</param>
+    private sealed record Readiness(int Total, int Missing);
+
     private sealed record Model(
+        Readiness Readiness,
         (Resource Currency, long Held)[] Choices,
         SinkGroup? Selected,
         FlipRow[] Flips,
