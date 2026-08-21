@@ -23,6 +23,21 @@ internal static class Phrases
         _ => $"{days.Value:F1} days",
     };
 
+    /// <summary>
+    /// Gil at a width the server bar can afford.
+    /// </summary>
+    /// <remarks>
+    /// The bar gets a handful of characters, so this trades digits for magnitude. Everywhere
+    /// with room for the real number shows the real number.
+    /// </remarks>
+    public static string CompactGil(long gil) => gil switch
+    {
+        >= 10_000_000 => $"{gil / 1_000_000d:F0}M",
+        >= 1_000_000 => $"{gil / 1_000_000d:F1}M",
+        >= 10_000 => $"{gil / 1_000d:F0}k",
+        _ => $"{gil:N0}",
+    };
+
     /// <summary>An age, at the precision the age itself deserves.</summary>
     public static string Ago(TimeSpan span) => span switch
     {

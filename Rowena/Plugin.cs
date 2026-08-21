@@ -24,9 +24,12 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static ITextureProvider Textures { get; private set; } = null!;
     [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IDtrBar DtrBar { get; private set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
+    private readonly ServerBar serverBar;
     private readonly HttpClient http;
     private readonly Configuration config;
     private readonly MarketCache market;
@@ -82,6 +85,10 @@ public sealed class Plugin : IDalamudPlugin
             trades, market, balances, scope, gatherBuddy, sweep,
             convertTab, craftTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
+
+        serverBar = new ServerBar(
+            DtrBar, Framework, trades, boards, balances, config,
+            () => mainWindow.Show(MainWindow.Tab.Convert));
 
         PluginInterface.UiBuilder.Draw += windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
@@ -148,6 +155,7 @@ public sealed class Plugin : IDalamudPlugin
         // on the way past rather than only when it finishes.
         market.Persist(sweep.Snapshot());
 
+        serverBar.Dispose();
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windows.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
