@@ -27,6 +27,7 @@ internal sealed class MainWindow : Window
 {
     private readonly Trades trades;
     private readonly MarketCache market;
+    private readonly Balances balances;
     private readonly PricingScope scope;
     private readonly FurnishingSweep sweep;
     private readonly StatusStrip strip;
@@ -56,6 +57,7 @@ internal sealed class MainWindow : Window
     {
         this.trades = trades;
         this.market = market;
+        this.balances = balances;
         this.scope = scope;
         this.sweep = sweep;
         this.convert = convert;
@@ -185,12 +187,15 @@ internal sealed class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// Inputs and outputs go to different places, and an item can be both, so this is two passes
-    /// rather than one over a merged list.
+    /// rather than one over a merged list. Only the trades you could run are priced: the whole
+    /// generated catalogue is a thousand ids, and most belong to currencies you hold none of.
     /// </remarks>
     private void RefreshCatalogue(string? buying, string? selling, bool force = false)
     {
-        market.RefreshInBackground(buying, trades.Bought, force);
-        market.RefreshInBackground(selling, trades.Sold, force);
+        var (bought, sold) = trades.Relevant(balances.Held);
+
+        market.RefreshInBackground(buying, bought, force);
+        market.RefreshInBackground(selling, sold, force);
     }
 
     /// <summary>

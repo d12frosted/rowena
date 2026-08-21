@@ -44,15 +44,20 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
             : allaganTools.Owned(resource.Id) ?? InBags(resource.Id);
 
     /// <summary>
-    /// A bound currency, asking both places the game keeps them.
+    /// A bound currency, asking every place the game keeps them.
     /// </summary>
     /// <remarks>
     /// Scrips, tomestones and the like are held by CurrencyManager and are not in any
     /// inventory container. Reading only the Currency container looks like it works, because
     /// gil is in there and answers correctly, while every scrip silently reads zero. Ask
     /// CurrencyManager first and fall back to the container, which is where gil actually is.
+    ///
+    /// The bags are the last resort, for the currencies that are not really currencies: sky
+    /// pirate spoils, cracked clusters, anything untradable a shop takes in trade. They sit
+    /// in ordinary inventory, so the first two reads know nothing about them.
     /// </remarks>
-    private long Currency(uint itemId) => InCurrencyManager(itemId) ?? InCurrencyContainer(itemId);
+    private long Currency(uint itemId) =>
+        InCurrencyManager(itemId) ?? InCurrencyContainer(itemId) ?? InBags(itemId);
 
     private unsafe long? InCurrencyManager(uint itemId)
     {
@@ -66,15 +71,16 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
         return manager->GetItemCount(itemId);
     }
 
-    private unsafe long InCurrencyContainer(uint itemId)
+    /// <summary>The Currency container's answer, or null when the item is not kept there.</summary>
+    private unsafe long? InCurrencyContainer(uint itemId)
     {
         var manager = InventoryManager.Instance();
         if (manager is null)
-            return 0;
+            return null;
 
         var container = manager->GetInventoryContainer(InventoryType.Currency);
         if (container is null || !container->IsLoaded)
-            return 0;
+            return null;
 
         for (var slotIndex = 0; slotIndex < container->Size; slotIndex++)
         {
@@ -83,7 +89,7 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
                 return slot->Quantity;
         }
 
-        return 0;
+        return null;
     }
 
     /// <summary>Ordinary items, counted across bags, armoury and what you are wearing.</summary>

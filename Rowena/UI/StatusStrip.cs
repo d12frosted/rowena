@@ -80,10 +80,20 @@ internal sealed class StatusStrip
     }
 
     /// <summary>What is in your pockets, and what you are doing about it.</summary>
+    /// <remarks>
+    /// Only the currencies actually in them, plus the file's own, zero or not. The generated
+    /// catalogue knows about every token the game has ever minted, and a strip listing a
+    /// hundred and fifty zeroes would bury the four balances that mean anything.
+    /// </remarks>
     private Wallet Build() =>
         new(
             balances.Gil,
-            [.. trades.Currencies.Select(currency => (currency.Name, balances.Held(currency)))],
+            [
+                .. trades.Currencies
+                    .Select(currency => (currency, Held: balances.Held(currency)))
+                    .Where(entry => entry.Held > 0 || trades.IsWatched(entry.currency))
+                    .Select(entry => (entry.currency.Name, entry.Held)),
+            ],
             GatheringLine());
 
     /// <summary>

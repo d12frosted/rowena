@@ -6,10 +6,10 @@ market board is behind the price it advertises.
 Named after the woman who runs every scrip exchange in the game and has never once given
 anybody a good deal.
 
-> **Highly experimental, and still being built.** Things move between commits, the catalogue
-> is small and written by hand, and nobody but me has run this. The arithmetic is tested. The
-> data under it is whatever Universalis last heard from somebody's client, so check the board
-> yourself before acting on a number here.
+> **Highly experimental, and still being built.** Things move between commits, and nobody
+> but me has run this. The arithmetic is tested. The data under it is whatever Universalis
+> last heard from somebody's client, so check the board yourself before acting on a number
+> here.
 
 ## Why
 
@@ -63,8 +63,23 @@ profitable" but "how many can I actually do before the book eats the margin".
 
 ## The catalogue
 
-Trades live in `conversions.json`, because every rate in it is something a patch can change
-and adding a sink should be an edit, not a rebuild.
+Most trades are read out of the game's own shop sheets, because the game already publishes
+every exchange it operates: every scrip counter, tomestone vendor, hunt shop and seal
+quartermaster, machine-readably, updated by the patch itself. Around eleven hundred
+exchanges come out of that walk, and none of them can go stale. Only shops some NPC
+actually offers count, since the sheets also keep every shop that ever existed, and a
+retired exchange would come back as a trade priced in a currency the counter no longer
+takes.
+
+That scale forces a discipline the small catalogue never needed: a hundred and fifty
+currencies cannot all be on screen or all be priced. So generated trades earn their place
+by being runnable, which for anything spending a bound currency means you actually hold
+some. Their prices are only fetched on the same rule.
+
+On top of that sits `conversions.json`, hand-written, because a file can say things the
+sheets cannot: chains, handoffs, a venue written for a human, and which currencies are
+worth watching even at a balance of zero. Where the file and the sheets describe the same
+trade, the file wins.
 
 ```json
 {
@@ -118,7 +133,8 @@ away. Under it, a tab per question:
 - **Settings.** The knobs, with a line under each saying what it does to the plugin rather
   than restating its name. The two that decide whether any other number is right, which
   boards to price against, used to be file-only, and Dalamud's settings gear used to open the
-  market screen and call that settings. The catalogue is still a file, read at load.
+  market screen and call that settings. The catalogue file reloads from here too, without
+  touching the plugin.
 
 Tabs rather than one long screen. The furnishing table is twenty-five rows and was pushing
 the scrip tables off the top, and nobody has ever needed both in view at once. It also means

@@ -17,6 +17,9 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class ConvertTab
 {
+    /// <summary>How many flip rows the table shows. The count it was trimmed from is shown too.</summary>
+    private const int FlipsInTable = 25;
+
     /// <remarks>
     /// One entry per column, null where the header says enough on its own. Written out rather than
     /// built per frame, since a table redraws sixty times a second and none of this ever changes.
@@ -183,6 +186,16 @@ internal sealed class ConvertTab
             ImGui.TextColored(Palette.Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
         }
 
+        // Never a silent cap. The hidden rows are the ones that pay less than everything
+        // shown, or that the board cannot price at all, and both counts are said.
+        if (current.HiddenFlips > 0)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                $"    the best {current.Flips.Length} of {current.Flips.Length + current.HiddenFlips}"
+                + (current.Unpriceable > 0 ? $", {current.Unpriceable} unpriceable" : ""));
+        }
+
         if (!ImGui.BeginTable("flips", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
@@ -248,17 +261,47 @@ internal sealed class ConvertTab
     {
         var tax = MarketTax.Standard;
 
+        // Only the currencies in your pockets, plus the ones the file declares an interest
+        // in. The generated catalogue knows about every event token ever minted, and a sink
+        // you cannot feed is not a decision; a hand-written one is a standing question.
         var sinks = trades.Currencies
+            .Where(currency => balances.Held(currency) > 0 || trades.IsWatched(currency))
             .Select(currency => BuildSinkGroup(currency, tax))
             .ToArray();
 
+        // One quote per flip, reused for the row and for the allocation prefilter. A flip
+        // that loses money on its first run only loses more on its second, so the allocator
+        // is never asked about it.
+        var singles = trades.Flips.ToDictionary(
+            conversion => conversion.Id,
+            conversion => ConversionEvaluator.Evaluate(conversion, 1, boards.Buying, boards.Selling, tax),
+            StringComparer.Ordinal);
+
+        var candidates = trades.Flips
+            .Where(conversion => singles[conversion.Id] is { IsExecutable: true, Profit: > 0 })
+            .ToArray();
+
         var allocated = ConversionAllocation
-            .Allocate(trades.Flips, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap)
+            .Allocate(candidates, boards.Buying, boards.Selling, tax, balances.Gil, config.SizingCap)
             .ToDictionary(allocation => allocation.Conversion.Id, StringComparer.Ordinal);
 
-        var flipRows = trades.Flips.Select(conversion => BuildFlipRow(conversion, allocated, tax)).ToArray();
+        // Working rows first, then priced-but-idle by what one run would pay, then the
+        // unpriceable. The trim eats from the bottom, so what disappears is what the board
+        // could not answer for anyway.
+        var ordered = trades.Flips
+            .Select(conversion => BuildFlipRow(conversion, singles[conversion.Id], allocated, tax))
+            .OrderByDescending(row => row.Runs > 0 ? 2 : row.Problem is null ? 1 : 0)
+            .ThenByDescending(row => row.Profit)
+            .ToArray();
 
-        return new Model(sinks, flipRows, allocated.Values.Sum(allocation => allocation.Profit));
+        var shown = ordered.Take(FlipsInTable).ToArray();
+
+        return new Model(
+            sinks,
+            shown,
+            allocated.Values.Sum(allocation => allocation.Profit),
+            ordered.Length - shown.Length,
+            ordered.Count(row => row.Problem is not null));
     }
 
     /// <summary>
@@ -306,11 +349,10 @@ internal sealed class ConvertTab
 
     private FlipRow BuildFlipRow(
         Conversion conversion,
+        ConversionQuote single,
         IReadOnlyDictionary<string, Allocation> allocated,
         MarketTax tax)
     {
-        var single = ConversionEvaluator.Evaluate(conversion, 1, boards.Buying, boards.Selling, tax);
-
         // Runs your own stock already covers, counting retainers. Deliberately reported beside
         // the outlay rather than subtracted from it: materials you happen to own are not free,
         // they are worth what the board would pay for them, and pricing them at nothing would
@@ -376,5 +418,12 @@ internal sealed class ConvertTab
     /// What the best split of your gil across every flip pays, which is not the sum of the rows: the
     /// rows compete for one order book and the allocation decides between them.
     /// </param>
-    private sealed record Model(SinkGroup[] Sinks, FlipRow[] Flips, long TotalFlipProfit);
+    /// <param name="HiddenFlips">Rows the trim removed, all paying less than anything shown.</param>
+    /// <param name="Unpriceable">Flips the board could not price at all, hidden or not.</param>
+    private sealed record Model(
+        SinkGroup[] Sinks,
+        FlipRow[] Flips,
+        long TotalFlipProfit,
+        int HiddenFlips,
+        int Unpriceable);
 }
