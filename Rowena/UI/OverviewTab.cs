@@ -128,7 +128,7 @@ internal sealed class OverviewTab(
 
         // Milliseconds, as the sweep stores them. Read as seconds this is a date past the end
         // of representable time, which is how it announced itself.
-        if (sweep.Snapshot() is { } snapshot
+        if (sweep.Stored() is { } snapshot
             && DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(snapshot.At) > config.SweepAge())
         {
             yield return new Note(

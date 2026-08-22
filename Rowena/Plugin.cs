@@ -258,7 +258,7 @@ public sealed class Plugin : IDalamudPlugin
     /// </remarks>
     private void RecheckCrafts()
     {
-        var shortlist = sweep.Shortlist;
+        var shortlist = sweep.Current.Shortlist;
 
         market.RefreshInBackground(
             scope.Buying,
@@ -354,7 +354,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         // A sweep is minutes of requests and a reload is constant in dev mode, so it is written out
         // on the way past rather than only when it finishes.
-        market.Persist(sweep.Snapshot());
+        market.Persist(sweep.Stored());
 
         warmup.Dispose();
         sales.Dispose();

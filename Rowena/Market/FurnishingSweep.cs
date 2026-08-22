@@ -50,55 +50,59 @@ internal sealed class FurnishingSweep(
         Failed,
     }
 
-    public Phase State { get; private set; } = Phase.Idle;
-
-    /// <summary>Where the sweep has got to, for showing rather than for logic.</summary>
-    public string Detail { get; private set; } = "";
-
-    /// <summary>Every craftable tradable furnishing found in the sheets.</summary>
-    public int Candidates { get; private set; }
-
-    /// <summary>The ones worth costing, once the products were priced.</summary>
-    public IReadOnlyList<Conversion> Shortlist { get; private set; } = [];
-
-    public DateTimeOffset? ReadyAt { get; private set; }
-
     /// <summary>
-    /// The materials standing between the shortlist and a price, commonest first.
+    /// Everything a reader needs about the sweep, as one value.
     /// </summary>
     /// <remarks>
-    /// This exists to settle one question with evidence instead of opinion: whether following
-    /// recipes down to raw materials is worth building. Direct-ingredient pricing discards any
-    /// furnishing whose materials are not on the board, and the tree would rescue precisely those
-    /// whose blocker is itself craftable. If the blockers turn out to be restoration mats, map
-    /// drops or untradables, no amount of tree walking helps and the work should not be done.
+    /// One record swapped whole rather than six properties written one after another. They were
+    /// written from a background task and read from the draw thread, and while each write is
+    /// atomic on its own, nothing made them atomic together: the phase turning to Ready one
+    /// instruction before the shortlist was stored is a frame that draws a finished sweep with
+    /// the previous run's rows in it. That is the kind of fault that happens once and never
+    /// reproduces, so it is designed out rather than watched for.
+    ///
+    /// The same shape the gathering sweep already uses, and the same shape the views use for
+    /// their own snapshots.
     /// </remarks>
-    public IReadOnlyList<Blocker> Blockers { get; private set; } = [];
+    /// <param name="Detail">Where the sweep has got to, for showing rather than for logic.</param>
+    /// <param name="Candidates">Every craftable sellable thing found in the sheets.</param>
+    /// <param name="Shortlist">The ones worth costing, once the products were priced.</param>
+    /// <param name="Blockers">What stands between the shortlist and a price, commonest first.</param>
+    public sealed record Snapshot(
+        Phase State,
+        string Detail,
+        int Candidates,
+        IReadOnlyList<Conversion> Shortlist,
+        DateTimeOffset? ReadyAt,
+        IReadOnlyList<Blocker> Blockers)
+    {
+        public bool Running => State is Phase.Products or Phase.Shortlisting or Phase.Ingredients;
 
-    public bool Running => State is Phase.Products or Phase.Shortlisting or Phase.Ingredients;
+        /// <summary>
+        /// There is a shortlist worth showing, complete or not.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the shortlist rather than of the phase, so a run in progress does not count as
+        /// having nothing. This used to mean "finished", which made Re-sweep destroy the ranking you
+        /// pressed it while reading and give you an empty screen for the several minutes it took to
+        /// build another. A shortlist stays valid until a run replaces it, and the prices under it
+        /// only improve as the run proceeds.
+        /// </remarks>
+        public bool HasResults => Shortlist.Count > 0;
+    }
 
-    /// <summary>
-    /// There is a shortlist worth showing, complete or not.
-    /// </summary>
-    /// <remarks>
-    /// Asked of the shortlist rather than of the phase, so a run in progress does not count as having
-    /// nothing. This used to mean "finished", which made Re-sweep destroy the ranking you pressed it
-    /// while reading and give you an empty screen for the several minutes it took to build another.
-    /// A shortlist stays valid until a run replaces it, and the prices under it only improve as the
-    /// run proceeds.
-    /// </remarks>
-    public bool HasResults => Shortlist.Count > 0;
+    /// <summary>The sweep as it stands. Read it once; it is replaced whole, never edited.</summary>
+    public Snapshot Current { get; private set; } = new(Phase.Idle, "", 0, [], null, []);
 
-    /// <param name="Blocks">How many shortlisted furnishings this one material makes unpriceable.</param>
+    /// <param name="Blocks">How many shortlisted crafts this one material makes unpriceable.</param>
     public sealed record Blocker(string Material, int Blocks);
 
     public void Start(string? buying, string? selling, int shortlistSize, TimeSpan maxAge)
     {
-        if (Running || string.IsNullOrWhiteSpace(buying) || string.IsNullOrWhiteSpace(selling))
+        if (Current.Running || string.IsNullOrWhiteSpace(buying) || string.IsNullOrWhiteSpace(selling))
             return;
 
-        State = Phase.Products;
-        Detail = "reading the sheets";
+        Current = Current with { State = Phase.Products, Detail = "reading the sheets" };
         _ = Task.Run(() => Run(buying, selling, shortlistSize, maxAge));
     }
 
@@ -115,15 +119,11 @@ internal sealed class FurnishingSweep(
     /// </remarks>
     public void Restore(StoredSweep stored, string buying, string selling)
     {
-        if (Running || HasResults)
+        if (Current.Running || Current.HasResults)
             return;
 
-        SellingBoard = selling;
-        RestoredBuying = buying;
-        RestoredSelling = selling;
-
-        State = Phase.Shortlisting;
-        Detail = "restoring the last sweep";
+        against = new Against(buying, selling);
+        Current = Current with { State = Phase.Shortlisting, Detail = "restoring the last sweep" };
 
         _ = Task.Run(() =>
         {
@@ -139,46 +139,54 @@ internal sealed class FurnishingSweep(
 
                 if (shortlist.Length == 0)
                 {
-                    State = Phase.Idle;
-                    Detail = "";
+                    Current = Current with { State = Phase.Idle, Detail = "" };
                     return;
                 }
 
-                Candidates = stored.Candidates;
-                Shortlist = shortlist;
-                Blockers = Blocking(shortlist, RestoredBuying, RestoredSelling);
-                ReadyAt = DateTimeOffset.FromUnixTimeMilliseconds(stored.At);
-                State = Phase.Ready;
-                Detail = $"{shortlist.Length} of {Candidates} costed";
+                Current = new Snapshot(
+                    Phase.Ready,
+                    $"{shortlist.Length} of {stored.Candidates} costed",
+                    stored.Candidates,
+                    shortlist,
+                    DateTimeOffset.FromUnixTimeMilliseconds(stored.At),
+                    Blocking(shortlist, against.Buying, against.Selling));
 
-                log.Information($"Restored a sweep of {shortlist.Length} furnishings from cache.");
+                log.Information($"Restored a sweep of {shortlist.Length} crafts from cache.");
             }
             catch (Exception error)
             {
-                State = Phase.Idle;
-                Detail = "";
+                Current = Current with { State = Phase.Idle, Detail = "" };
                 log.Warning(error, "Could not restore the last sweep.");
             }
         });
     }
 
     /// <summary>The sweep as it goes to disk. Null until one has finished.</summary>
-    public StoredSweep? Snapshot() =>
-        HasResults && ReadyAt is { } at
-            ? new StoredSweep(at.ToUnixTimeMilliseconds(), Candidates, [.. Shortlist.Select(c => c.Id)])
+    public StoredSweep? Stored()
+    {
+        var now = Current;
+
+        return now.HasResults && now.ReadyAt is { } at
+            ? new StoredSweep(at.ToUnixTimeMilliseconds(), now.Candidates, [.. now.Shortlist.Select(c => c.Id)])
             : null;
+    }
 
     private async Task Run(string buying, string selling, int shortlistSize, TimeSpan maxAge)
     {
         try
         {
             var candidates = furnishings.Craftable();
-            Candidates = candidates.Count;
+
+            Current = Current with { Candidates = candidates.Count };
 
             if (candidates.Count == 0)
             {
-                State = Phase.Failed;
-                Detail = "no craftable furnishings found in the sheets";
+                Current = Current with
+                {
+                    State = Phase.Failed,
+                    Detail = "no craftable, sellable things found in the sheets",
+                };
+
                 return;
             }
 
@@ -198,38 +206,32 @@ internal sealed class FurnishingSweep(
             // counts is the one your retainer can actually meet.
             var wanted = products.Where(id => market.SummaryIsStale(selling, id, maxAge)).ToArray();
 
-            State = Phase.Products;
+            Current = Current with { State = Phase.Products };
             await Survey(selling, wanted).ConfigureAwait(false);
 
             // Counted from the cache rather than from the fetch, so data carried over from an
             // earlier run counts exactly as much as what was just fetched.
             var gaps = products.Count(id => market.Summary(selling, id) is null);
 
-            State = Phase.Shortlisting;
-            Detail = "picking what is worth costing";
-            SellingBoard = selling;
-            RestoredBuying = buying;
-            RestoredSelling = selling;
+            Current = Current with { State = Phase.Shortlisting, Detail = "picking what is worth costing" };
+            against = new Against(buying, selling);
+
             var shortlist = Shortlisted(candidates, shortlistSize);
 
             if (shortlist.Length == 0)
             {
-                Shortlist = [];
-                ReadyAt = DateTimeOffset.UtcNow;
-
                 // The distinction that matters. "Nothing is selling" is a finding; "I never got the
                 // prices" is a failure, and they must not read the same.
-                if (gaps > 0)
+                Current = Current with
                 {
-                    State = Phase.Partial;
-                    Detail = $"no market data for {gaps} of {products.Length} furnishings, so nothing "
-                        + "could be ranked. Re-sweep asks only for the gaps.";
-                }
-                else
-                {
-                    State = Phase.Ready;
-                    Detail = $"none of {Candidates} furnishings are selling on this board";
-                }
+                    State = gaps > 0 ? Phase.Partial : Phase.Ready,
+                    Detail = gaps > 0
+                        ? $"no market data for {gaps} of {products.Length} things, so nothing could be "
+                          + "ranked. Re-sweep asks only for the gaps."
+                        : $"none of {Current.Candidates} are selling on this board",
+                    Shortlist = [],
+                    ReadyAt = DateTimeOffset.UtcNow,
+                };
 
                 return;
             }
@@ -255,31 +257,35 @@ internal sealed class FurnishingSweep(
                 .Where(id => market.IsStale(selling, id, maxAge))
                 .ToArray();
 
-            State = Phase.Ingredients;
+            Current = Current with { State = Phase.Ingredients };
+
             var materials = await Price(buying, materialIds, "materials").ConfigureAwait(false);
             await Price(selling, productIds, "products").ConfigureAwait(false);
 
-            Shortlist = shortlist;
-            Blockers = Blocking(shortlist, buying, selling);
-            ReadyAt = DateTimeOffset.UtcNow;
-
+            var blockers = Blocking(shortlist, buying, selling);
             var incomplete = gaps > 0 || materials.FailedChunks > 0;
-            State = incomplete ? Phase.Partial : Phase.Ready;
+            var costed = $"{shortlist.Length} of {Current.Candidates} costed";
 
-            Detail = incomplete
-                ? $"{shortlist.Length} of {Candidates} costed, {gaps} furnishings still unpriced"
-                : $"{shortlist.Length} of {Candidates} costed";
+            // Everything the finished run has to say, published in one write. A reader either
+            // sees the whole of this run or the whole of the last one, never half of each.
+            Current = Current with
+            {
+                State = incomplete ? Phase.Partial : Phase.Ready,
+                Detail = incomplete ? $"{costed}, {gaps} still unpriced" : costed,
+                Shortlist = shortlist,
+                ReadyAt = DateTimeOffset.UtcNow,
+                Blockers = blockers,
+            };
 
-            log.Information($"Furnishing sweep done: {shortlist.Length} of {Candidates} costed.");
+            log.Information($"Craft sweep done: {costed}.");
 
-            foreach (var blocker in Blockers.Take(15))
+            foreach (var blocker in blockers.Take(15))
                 log.Information($"  blocked by {blocker.Material} ({blocker.Blocks})");
         }
         catch (Exception error)
         {
-            State = Phase.Failed;
-            Detail = error.Message;
-            log.Error(error, "Furnishing sweep failed.");
+            Current = Current with { State = Phase.Failed, Detail = error.Message };
+            log.Error(error, "Craft sweep failed.");
         }
     }
 
@@ -288,11 +294,11 @@ internal sealed class FurnishingSweep(
         if (ids.Length == 0)
             return new MarketCache.PricingResult(0, 0, 0);
 
-        Detail = $"surveying {ids.Length} furnishings";
+        Current = Current with { Detail = $"surveying {ids.Length} things" };
 
         return await market
             .SurveyAsync(
-                scope, ids, FetchPriority.Sweep, (done, total) => Detail = $"surveying: {done} of {total}")
+                scope, ids, FetchPriority.Sweep, (done, total) => Current = Current with { Detail = $"surveying: {done} of {total}" })
             .ConfigureAwait(false);
     }
 
@@ -305,11 +311,11 @@ internal sealed class FurnishingSweep(
         if (ids.Length == 0)
             return new MarketCache.PricingResult(0, 0, 0);
 
-        Detail = $"pricing {ids.Length} {what}";
+        Current = Current with { Detail = $"pricing {ids.Length} {what}" };
 
         return await market
             .PriceAsync(
-                scope, ids, FetchPriority.Sweep, (done, total) => Detail = $"pricing {what}: {done} of {total}")
+                scope, ids, FetchPriority.Sweep, (done, total) => Current = Current with { Detail = $"pricing {what}: {done} of {total}" })
             .ConfigureAwait(false);
     }
 
@@ -354,13 +360,13 @@ internal sealed class FurnishingSweep(
     private long Cheapest(Conversion conversion) =>
         conversion.Outputs.Count == 0
             ? 0
-            : market.Summary(SellingBoard, conversion.Outputs[0].Resource.Id)?.Floor ?? 0;
+            : market.Summary(against.Selling, conversion.Outputs[0].Resource.Id)?.Floor ?? 0;
 
     /// <summary>How fast the product moves, for telling a quiet market from a busy one.</summary>
     private double Pace(Conversion conversion) =>
         conversion.Outputs.Count == 0
             ? 0
-            : market.Summary(SellingBoard, conversion.Outputs[0].Resource.Id)?.SaleVelocityPerDay ?? 0;
+            : market.Summary(against.Selling, conversion.Outputs[0].Resource.Id)?.SaleVelocityPerDay ?? 0;
 
     /// <summary>
     /// Which materials are doing the blocking, counted across the shortlist.
@@ -380,19 +386,20 @@ internal sealed class FurnishingSweep(
     ];
 
     /// <summary>The board a restore or a run last used for selling, for recomputing derived figures.</summary>
-    private string SellingBoard { get; set; } = "";
+    /// <summary>Which boards the shortlist was priced against: one job, not three properties.</summary>
+    private sealed record Against(string Buying, string Selling);
 
-    private string RestoredBuying { get; set; } = "";
+    private Against against = new("", "");
 
-    private string RestoredSelling { get; set; } = "";
-
+    
+    
     private double Revenue(Conversion conversion)
     {
         double total = 0;
 
         foreach (var output in conversion.Outputs)
         {
-            if (market.Summary(SellingBoard, output.Resource.Id) is { } summary)
+            if (market.Summary(against.Selling, output.Resource.Id) is { } summary)
                 total += summary.DailyRevenue * output.Quantity;
         }
 

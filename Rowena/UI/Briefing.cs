@@ -173,9 +173,9 @@ internal sealed class Briefing : IDisposable
             parts.Add("no flip pays right now");
         }
 
-        parts.Add(sweep.ReadyAt is { } swept
+        parts.Add(sweep.Current.ReadyAt is { } swept
             ? $"sweep {Phrases.Ago(DateTimeOffset.UtcNow - swept)} old"
-            : "no furnishing sweep yet");
+            : "no craft sweep yet");
 
         var prefix = fresh ? "" : "prices not refetched, from the cache: ";
         return prefix + string.Join(". ", parts) + ".";
@@ -234,12 +234,16 @@ internal sealed class Briefing : IDisposable
 
         if (config.AlertStaleSweep)
         {
-            var stale = sweep.ReadyAt is { } at && DateTimeOffset.UtcNow - at > config.SweepAge() && !sweep.Running;
+            // Read once: whether it is stale and how stale it is must come from the same run.
+            var scan = sweep.Current;
+            var stale = scan.ReadyAt is { } at && DateTimeOffset.UtcNow - at > config.SweepAge() && !scan.Running;
 
             if (stale && !staleSaid)
             {
                 staleSaid = true;
-                Say($"the furnishing sweep is {Phrases.Ago(DateTimeOffset.UtcNow - sweep.ReadyAt!.Value)} old. Re-sweep when convenient.");
+
+                Say($"the craft sweep is {Phrases.Ago(DateTimeOffset.UtcNow - scan.ReadyAt!.Value)} old. "
+                    + "Re-sweep when convenient.");
             }
             else if (!stale)
             {

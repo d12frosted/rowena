@@ -344,7 +344,7 @@ internal sealed class MainWindow : Window
     /// </remarks>
     private void PersistFinishedSweep()
     {
-        if (sweep.Snapshot() is not { } snapshot || snapshot.At == persistedSweepAt)
+        if (sweep.Stored() is not { } snapshot || snapshot.At == persistedSweepAt)
             return;
 
         persistedSweepAt = snapshot.At;

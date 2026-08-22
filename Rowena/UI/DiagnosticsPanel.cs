@@ -160,12 +160,14 @@ internal sealed class DiagnosticsPanel(
                     })),
             true);
 
+        var crafts = furnishings.Current;
+
         yield return (
-            "furnishing sweep",
-            furnishings.HasResults
-                ? $"{furnishings.State}, {furnishings.Shortlist.Count} shortlisted"
-                : $"{furnishings.State}, nothing yet",
-            furnishings.State != FurnishingSweep.Phase.Failed);
+            "craft sweep",
+            crafts.HasResults
+                ? $"{crafts.State}, {crafts.Shortlist.Count} shortlisted"
+                : $"{crafts.State}, nothing yet",
+            crafts.State != FurnishingSweep.Phase.Failed);
 
         var scan = vendors.Current;
 

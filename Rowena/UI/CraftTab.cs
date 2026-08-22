@@ -281,17 +281,21 @@ internal sealed class CraftTab
 
     private void DrawSweep(string buying, string selling)
     {
-        ImGui.TextUnformatted("Furnishings, ranked by what they would earn in a day");
+        // Read once. The whole point of the sweep publishing a snapshot is that a frame draws
+        // one run's numbers rather than half of two.
+        var scan = sweep.Current;
+
+        ImGui.TextUnformatted("Ranked by what they would earn in a day");
         ImGui.SameLine();
 
-        if (sweep.Running)
+        if (scan.Running)
         {
-            ImGui.TextColored(Palette.Dim, $"  {sweep.Detail}");
+            ImGui.TextColored(Palette.Dim, $"  {scan.Detail}");
 
             // The ranking below is the previous one, and stays up rather than being replaced by an
             // empty screen for the several minutes a run takes. Said out loud, because a table that
             // quietly refers to a different fetch than the line above it is the worse failure.
-            if (sweep.ReadyAt is { } previous)
+            if (scan.ReadyAt is { } previous)
             {
                 ImGui.TextColored(
                     Palette.Dim,
@@ -301,7 +305,7 @@ internal sealed class CraftTab
         }
         else
         {
-            if (ImGui.Button(sweep.ReadyAt is null ? "Sweep" : "Re-sweep"))
+            if (ImGui.Button(scan.ReadyAt is null ? "Sweep" : "Re-sweep"))
                 sweep.Start(buying, selling, config.FurnishingShortlist, config.SweepAge());
 
             ImGui.SameLine();
@@ -310,12 +314,12 @@ internal sealed class CraftTab
 
             // The sweep decides what is worth costing and that holds for hours; what those
             // things cost does not. Asking again is a few requests rather than a few minutes.
-            if (sweep.HasResults && ImGui.Button("Recheck prices"))
+            if (scan.HasResults && ImGui.Button("Recheck prices"))
                 recheck();
 
-            if (sweep.State == FurnishingSweep.Phase.Failed)
-                ImGui.TextColored(Palette.Bad, sweep.Detail);
-            else if (sweep.ReadyAt is null)
+            if (scan.State == FurnishingSweep.Phase.Failed)
+                ImGui.TextColored(Palette.Bad, scan.Detail);
+            else if (scan.ReadyAt is null)
                 // Said plainly, because it is minutes of small polite requests and should not start
                 // itself the first time the window happens to open.
                 ImGui.TextColored(
@@ -327,11 +331,11 @@ internal sealed class CraftTab
         // Which materials are doing the blocking. This is the evidence for whether following
         // recipes down to raw materials is worth building, so it belongs on screen and not
         // only in the log.
-        if (sweep.Blockers.Count > 0)
+        if (scan.Blockers.Count > 0)
         {
             var worst = string.Join(
                 ", ",
-                sweep.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
+                scan.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
 
             ImGui.TextColored(Palette.Dim, $"    blocked mostly by: {worst}");
         }
@@ -345,17 +349,19 @@ internal sealed class CraftTab
     /// </remarks>
     private void DrawFinished()
     {
+        var scan = sweep.Current;
+
         var current = model.Current;
 
-        var age = sweep.ReadyAt is { } at ? $"swept {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
+        var age = scan.ReadyAt is { } at ? $"swept {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
 
-        var incomplete = sweep.State == FurnishingSweep.Phase.Partial;
+        var incomplete = scan.State == FurnishingSweep.Phase.Partial;
 
         // Coloured when the run had holes in it, because "nothing was found" and "most of it never
         // arrived" must not look the same at a glance.
         ImGui.TextColored(
             incomplete ? Palette.Bad : Palette.Dim,
-            $"  {age}{sweep.Detail}"
+            $"  {age}{scan.Detail}"
             + (current.Crafts.Length > 0
                 ? $", showing {current.Crafts.Length} of {current.Ranked}"
                   + (current.Discarded > 0 ? $", {current.Discarded} unpriceable" : "")
@@ -532,12 +538,14 @@ internal sealed class CraftTab
     /// </remarks>
     private Model Build()
     {
-        if (!sweep.HasResults)
+        var scan = sweep.Current;
+
+        if (!scan.HasResults)
             return new Model([], 0, 0);
 
         var cap = config.CraftsPerDayCap > 0 ? config.CraftsPerDayCap : (double?)null;
         var ranked = ConversionRanking.ByGilPerDay(
-            sweep.Shortlist, boards.Buying, boards.Selling, boards.Tax, cap, boards.Vendor);
+            scan.Shortlist, boards.Buying, boards.Selling, boards.Tax, cap, boards.Vendor);
 
         var priceable = ranked.Where(earnings => earnings.Quote.IsExecutable).ToArray();
 
