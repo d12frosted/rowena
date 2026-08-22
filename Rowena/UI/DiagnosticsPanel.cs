@@ -128,9 +128,20 @@ internal sealed class DiagnosticsPanel(
         yield return (
             "tax rates",
             board.SellerRates is { Count: > 0 } rates
-                ? $"known, {rates.Values.Min():P0} to {rates.Values.Max():P0}, until {board.RatesValidUntil:HH:mm}"
-                : "not yet: open any market board once",
+                ? string.Join(", ", rates.OrderBy(entry => entry.Key)
+                    .Select(entry => $"{Cities.Name(entry.Key)} {entry.Value:P0}"))
+                : board.RatesValidUntil is { } expired
+                    ? $"expired at {expired:HH:mm}, assuming the worst until asked again"
+                    : "not yet: ask a retainer vocate, or open a retainer's sell list",
             board.SellerRates is { Count: > 0 });
+
+        yield return (
+            "my retainers",
+            board.RetainerTowns() is { Count: > 0 } towns
+                ? $"in {string.Join(", ", towns.Select(Cities.Name))}, so selling costs {board.Tax().SellerRate:P0}"
+                  + (board.RatesValidUntil is { } until ? $" until {until:HH:mm}" : "")
+                : "none known yet",
+            true);
 
         yield return (
             "my listings",

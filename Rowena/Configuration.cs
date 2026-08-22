@@ -141,6 +141,28 @@ public sealed class Configuration : IPluginConfiguration
     public int VendorCandidatesToCost { get; set; } = 120;
 
     /// <summary>
+    /// The world the vendor table is filtered to, or empty for all of them.
+    /// </summary>
+    /// <remarks>
+    /// Buying is per world, so a find on a world I will not travel to is not an opportunity.
+    /// Remembered because the answer to "which worlds do I bother with" changes rarely.
+    /// </remarks>
+    public string VendorWorld { get; set; } = "";
+
+    /// <summary>
+    /// The seller's cut per city, as the game last reported it, and when it stops being true.
+    /// </summary>
+    /// <remarks>
+    /// Kept because the game only says it when asked, at a retainer vocate or a retainer's sell
+    /// list, and it holds for hours. Without this, every reload went back to assuming the worst
+    /// until somebody went and asked again, which is a poor reason to be wrong about every net
+    /// figure on the screen.
+    /// </remarks>
+    public Dictionary<uint, double> SellerRates { get; set; } = [];
+
+    public long SellerRatesUntil { get; set; }
+
+    /// <summary>
     /// Whether to keep an account of what the plugin is doing where nothing is drawn.
     /// </summary>
     /// <remarks>

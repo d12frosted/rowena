@@ -79,7 +79,7 @@ public sealed class Plugin : IDalamudPlugin
             SummaryBatchSize = config.SurveyBatchSize,
         };
 
-        boardWatcher = new BoardWatcher(MarketBoard, diagnostics, Log);
+        boardWatcher = new BoardWatcher(MarketBoard, config, Save, diagnostics, Log);
         live = new LiveMarket(
             new MarketFeed(message => diagnostics.Note("live", message)),
             market, Framework, scope, new Worlds(DataManager, Log), config, diagnostics, Log);

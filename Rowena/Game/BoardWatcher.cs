@@ -39,30 +39,83 @@ internal readonly record struct MyListing(
 internal sealed class BoardWatcher : IDisposable
 {
     private readonly IMarketBoard board;
+    private readonly Configuration config;
+    private readonly Action save;
     private readonly Diagnostics diagnostics;
     private readonly IPluginLog log;
 
     private readonly Dictionary<uint, List<MyListing>> mine = [];
     private readonly object gate = new();
 
-    public BoardWatcher(IMarketBoard board, Diagnostics diagnostics, IPluginLog log)
+    private IReadOnlyList<uint> towns = [];
+    private DateTime townsReadAt;
+
+    public BoardWatcher(
+        IMarketBoard board,
+        Configuration config,
+        Action save,
+        Diagnostics diagnostics,
+        IPluginLog log)
     {
         this.board = board;
+        this.config = config;
+        this.save = save;
         this.diagnostics = diagnostics;
         this.log = log;
 
+        // What the game said last time, if it is still true. The rates hold for hours and are
+        // only offered when asked for, so throwing them away on every reload means assuming
+        // the worst for no reason.
+        if (config.SellerRates.Count > 0
+            && DateTimeOffset.FromUnixTimeSeconds(config.SellerRatesUntil) > DateTimeOffset.UtcNow)
+        {
+            reported = config.SellerRates;
+            RatesValidUntil = DateTimeOffset.FromUnixTimeSeconds(config.SellerRatesUntil);
+        }
+
         board.OfferingsReceived += OnOfferings;
         board.TaxRatesReceived += OnTaxRates;
+        board.HistoryReceived += OnHistory;
+        board.ItemPurchased += OnPurchased;
+
+        diagnostics.Note("board", "listening for market board packets");
     }
 
     public void Dispose()
     {
         board.OfferingsReceived -= OnOfferings;
         board.TaxRatesReceived -= OnTaxRates;
+        board.HistoryReceived -= OnHistory;
+        board.ItemPurchased -= OnPurchased;
     }
 
-    /// <summary>The seller's cut in each city, once the game has said. Null until it has.</summary>
-    public IReadOnlyDictionary<uint, double>? SellerRates { get; private set; }
+    /// <summary>
+    /// Noted only, for now.
+    /// </summary>
+    /// <remarks>
+    /// History carries what actually sold and for how much, which is the measured half of
+    /// every forecast here. It is not used yet because it has the same problem the offerings
+    /// have: a view carries no world, so it cannot be filed against a board. Listening now
+    /// says whether the packets arrive at all, which is the question in front of it.
+    /// </remarks>
+    private void OnHistory(IMarketBoardHistory history) =>
+        diagnostics.Note("board", $"history for item {history.ItemId}: {history.HistoryListings.Count} sales");
+
+    private void OnPurchased(IMarketBoardPurchase purchase) =>
+        diagnostics.Note("board", $"bought item {purchase.CatalogId} x{purchase.ItemQuantity}");
+
+    /// <summary>
+    /// The seller's cut in each city, once the game has said and while it still holds.
+    /// </summary>
+    /// <remarks>
+    /// A reduced rate is a promotion with an end on it, and the game says when: past that,
+    /// these are not rates, they are what the rates used to be. Null then, so everything falls
+    /// back to assuming the worst rather than quietly quoting yesterday's discount.
+    /// </remarks>
+    public IReadOnlyDictionary<uint, double>? SellerRates =>
+        RatesValidUntil > DateTimeOffset.UtcNow ? reported : null;
+
+    private IReadOnlyDictionary<uint, double>? reported;
 
     /// <summary>When the reported rates stop being trustworthy.</summary>
     public DateTimeOffset? RatesValidUntil { get; private set; }
@@ -88,21 +141,20 @@ internal sealed class BoardWatcher : IDisposable
     /// <remarks>
     /// The worst rather than the best, because which retainer a thing sells from is not known
     /// when it is priced, and a rate that flatters the answer is the failure mode this plugin
-    /// exists to avoid. Cities I have never listed from do not count: their rate is not an
-    /// option I am taking. With nothing seen yet, the maximum stands, as it always did.
+    /// exists to avoid. Cities I do not keep a retainer in do not count: their rate is not an
+    /// option I have. With nothing known yet, the maximum stands, as it always did.
+    ///
+    /// The cities come from the retainers themselves rather than from listings I have happened
+    /// to see on the board, so this is right from the moment the game says what the rates are
+    /// rather than waiting for me to look up something I am selling.
     /// </remarks>
     public MarketTax Tax()
     {
         if (SellerRates is not { Count: > 0 } rates)
             return MarketTax.Standard;
 
-        List<uint> cities;
-
-        lock (gate)
-            cities = [.. mine.Values.SelectMany(listings => listings).Select(listing => listing.CityId).Distinct()];
-
-        var worst = cities
-            .Select(city => rates.TryGetValue(city, out var rate) ? rate : (double?)null)
+        var worst = RetainerTowns()
+            .Select(town => rates.TryGetValue(town, out var rate) ? rate : (double?)null)
             .Where(rate => rate is not null)
             .Select(rate => rate!.Value)
             .DefaultIfEmpty(MarketTax.Standard.SellerRate)
@@ -111,9 +163,48 @@ internal sealed class BoardWatcher : IDisposable
         return MarketTax.Standard.WithSellerRate(worst);
     }
 
+    /// <summary>
+    /// The cities my retainers stand in, which is what decides the cut on anything they sell.
+    /// </summary>
+    /// <remarks>
+    /// Game memory, so it is read on the thread that draws and cached for a while: retainers
+    /// do not move without a trip to a bell, and this is asked several times a second.
+    /// </remarks>
+    public IReadOnlyList<uint> RetainerTowns()
+    {
+        if (DateTime.UtcNow - townsReadAt < TimeSpan.FromSeconds(30))
+            return towns;
+
+        townsReadAt = DateTime.UtcNow;
+        towns = ReadRetainerTowns();
+        return towns;
+    }
+
+    private unsafe IReadOnlyList<uint> ReadRetainerTowns()
+    {
+        var manager = RetainerManager.Instance();
+
+        if (manager is null || !manager->IsReady)
+            return towns;
+
+        var found = new List<uint>();
+
+        for (var index = 0u; index < manager->GetRetainerCount(); index++)
+        {
+            var retainer = manager->GetRetainerBySortedIndex(index);
+
+            if (retainer is not null && retainer->RetainerId != 0)
+                found.Add((uint)retainer->Town);
+        }
+
+        return [.. found.Distinct()];
+    }
+
     private void OnTaxRates(IMarketTaxRates rates)
     {
-        SellerRates = new Dictionary<uint, double>
+        diagnostics.Note("board", "tax rates packet arrived");
+
+        reported = new Dictionary<uint, double>
         {
             [1] = rates.LimsaLominsaTax / 100d,
             [2] = rates.GridaniaTax / 100d,
@@ -128,9 +219,14 @@ internal sealed class BoardWatcher : IDisposable
         RatesValidUntil = new DateTimeOffset(rates.ValidUntil.ToUniversalTime(), TimeSpan.Zero);
         log.Verbose($"Market tax rates received, valid until {RatesValidUntil}.");
 
+        config.SellerRates = new Dictionary<uint, double>(reported!);
+        config.SellerRatesUntil = RatesValidUntil.Value.ToUnixTimeSeconds();
+        save();
+
         diagnostics.Note(
             "board",
-            $"tax rates received, seller pays {SellerRates!.Values.Min():P0} to {SellerRates.Values.Max():P0}");
+            $"tax rates received, seller pays {reported!.Values.Min():P0} to {reported.Values.Max():P0}, "
+            + $"until {RatesValidUntil:HH:mm}");
     }
 
     /// <summary>
@@ -143,6 +239,8 @@ internal sealed class BoardWatcher : IDisposable
     /// </remarks>
     private void OnOfferings(IMarketBoardCurrentOfferings offerings)
     {
+        diagnostics.Note("board", $"offerings packet arrived: {offerings.ItemListings.Count} listings");
+
         try
         {
             var retainers = MyRetainers();

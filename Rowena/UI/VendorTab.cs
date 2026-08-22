@@ -160,6 +160,8 @@ internal sealed class VendorTab
             return;
         }
 
+        DrawWorlds(current);
+
         // These are underpriced by definition, so somebody else can see them too and they do
         // not last. Worth refetching the moment before travelling rather than trusting a
         // number the scan left behind.
@@ -184,7 +186,7 @@ internal sealed class VendorTab
         ImGui.TableSetupColumn("listed at", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 140);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 230);
         Cell.Headers(Help);
 
         foreach (var row in current.Finds)
@@ -211,6 +213,43 @@ internal sealed class VendorTab
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// Which world to bother with.
+    /// </summary>
+    /// <remarks>
+    /// Buying means travelling to whoever is selling, so a find on a world I will not visit is
+    /// not an opportunity at all. Picking one narrows the table to what is actually there and
+    /// recuts the numbers to that world alone: what one trip is worth, rather than what all
+    /// five would be.
+    /// </remarks>
+    private void DrawWorlds(Model current)
+    {
+        var chosen = config.VendorWorld;
+        var label = string.IsNullOrEmpty(chosen) ? "Any world" : chosen;
+
+        ImGui.SetNextItemWidth(200f);
+
+        if (!ImGui.BeginCombo("##vendor-world", label))
+            return;
+
+        if (ImGui.Selectable("Any world", string.IsNullOrEmpty(chosen)))
+        {
+            config.VendorWorld = "";
+            model.Invalidate();
+        }
+
+        foreach (var world in current.Worlds)
+        {
+            if (ImGui.Selectable(world, world == chosen))
+            {
+                config.VendorWorld = world;
+                model.Invalidate();
+            }
+        }
+
+        ImGui.EndCombo();
     }
 
     /// <summary>
@@ -254,9 +293,10 @@ internal sealed class VendorTab
         var scan = sweep.Current;
 
         if (!scan.HasResults)
-            return new Model([], 0, 0);
+            return new Model([], 0, 0, []);
 
         var found = new List<Find>();
+        var worlds = new SortedSet<string>(StringComparer.Ordinal);
         var hidden = 0;
 
         var uncosted = 0;
@@ -283,7 +323,22 @@ internal sealed class VendorTab
             if (arbitrage.Units == 0)
                 continue;
 
-            if (arbitrage.Profit < config.VendorFindFloor)
+            foreach (var world in arbitrage.ByWorld)
+                worlds.Add(world.World);
+
+            // Narrowed to one world, a find is only what stands on that world: the units and
+            // the gil of one trip, not of the five it would otherwise take.
+            var shares = string.IsNullOrEmpty(config.VendorWorld)
+                ? arbitrage.ByWorld
+                : [.. arbitrage.ByWorld.Where(share => share.World == config.VendorWorld)];
+
+            if (shares.Count == 0)
+                continue;
+
+            var units = shares.Sum(share => share.Units);
+            var profit = shares.Sum(share => share.Profit);
+
+            if (profit < config.VendorFindFloor)
             {
                 hidden++;
                 continue;
@@ -294,15 +349,15 @@ internal sealed class VendorTab
                 cells.Name(id),
                 vendorPrice,
                 book.Floor ?? 0,
-                arbitrage.Units,
-                arbitrage.Profit,
-                arbitrage.ByWorld,
+                units,
+                profit,
+                shares,
                 book.Listings.Count,
                 book.UnitsListed,
                 book.Retrieved));
         }
 
-        return new Model([.. found.OrderByDescending(find => find.Profit)], hidden, uncosted);
+        return new Model([.. found.OrderByDescending(find => find.Profit)], hidden, uncosted, [.. worlds]);
     }
 
     private sealed record Find(
@@ -319,5 +374,6 @@ internal sealed class VendorTab
 
     /// <param name="Hidden">Finds under the floor, counted rather than dropped silently.</param>
     /// <param name="Uncosted">Shortlisted items with no book yet, which is not the same as no find.</param>
-    private sealed record Model(Find[] Finds, int Hidden, int Uncosted);
+    /// <param name="Worlds">Every world any find stands on, for the filter to offer.</param>
+    private sealed record Model(Find[] Finds, int Hidden, int Uncosted, string[] Worlds);
 }
