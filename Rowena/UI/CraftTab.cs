@@ -38,6 +38,10 @@ internal sealed class CraftTab
         + "data centre: your retainer sells where it stands.",
         "Profit times sales a day, which is what the table is ranked by. A ceiling, not a\n"
         + "forecast: it assumes you take every sale at today's price.",
+        "What sort of market the product trades in, which is a different question from what it\n"
+        + "pays. Days of stock already listed against the rate it sells is most of it: two rows\n"
+        + "paying the same are not the same proposition when one has months of somebody else's\n"
+        + "stock in front of it.",
         null,
     ];
 
@@ -113,6 +117,9 @@ internal sealed class CraftTab
                     canMake = row.CanMake,
                     salesPerDay = row.SalesPerDay,
                     gilPerDay = row.GilPerDay,
+                    market = row.Nature.Character.ToString(),
+                    daysOfSupply = row.Nature.DaysOfSupply is { } d ? Math.Round(d, 1) : (double?)null,
+                    spread = row.Nature.Spread is { } sp ? Math.Round(sp, 2) : (double?)null,
                     inputs = row.Breakdown.Select(line => new
                     {
                         item = line.ItemId,
@@ -366,11 +373,11 @@ internal sealed class CraftTab
 
         if (!ImGui.BeginTable(
                 "crafts",
-                8,
+                9,
                 ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Sortable))
             return;
 
-        ImGui.TableSetupColumn("Furnishing", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
 
         // Nothing to learn from ordering by job, and the alternative reading of a click on it,
         // "show me only mine", is a filter rather than a sort.
@@ -382,6 +389,10 @@ internal sealed class CraftTab
         ImGui.TableSetupColumn("return", NumberColumn, 70);
         ImGui.TableSetupColumn("sales/day", NumberColumn, 75);
         ImGui.TableSetupColumn("gil/day", NumberColumn | ImGuiTableColumnFlags.DefaultSort, 100);
+
+        // What sort of market, which is a fact about the board rather than a number to rank on.
+        ImGui.TableSetupColumn(
+            "market", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 74);
 
         // The last column is a control, not a fact, so it has no name and no sort. Building
         // the list is what this table is for, and it should not live only in a menu.
@@ -434,7 +445,7 @@ internal sealed class CraftTab
                 // turnover, which you only earn by taking every sale from whoever has it now.
                 ImGui.SetTooltip(
                     "A ceiling, not a forecast: it assumes you take every sale at today's price.\n"
-                    + "Furnishings sit in thin books, often a wall of single units at a round\n"
+                    + "Many of these sit in thin books, often a wall of single units at a round\n"
                     + "number, so adding supply tends to move the price rather than join it.");
             }
 
@@ -547,12 +558,25 @@ internal sealed class CraftTab
                     earnings.Quote.ReturnOnOutlay,
                     earnings.RunsPerDay,
                     earnings.GilPerDay,
+                    Nature(made?.ItemId ?? 0),
                     Breakdown(earnings.Conversion));
             })
             .ToArray();
 
         return new Model(rows, priceable.Length, ranked.Count - priceable.Length);
     }
+
+    /// <summary>
+    /// What sort of market the product trades in, as opposed to what it pays.
+    /// </summary>
+    /// <remarks>
+    /// Read off the selling board rather than the buying one: what matters is the market the
+    /// thing goes back into, not the one its materials came from.
+    /// </remarks>
+    private MarketNature Nature(uint itemId) =>
+        boards.Selling(itemId) is { } book
+            ? MarketNature.Of(book.UnitsListed, book.SaleVelocityPerDay, book.RecentSales)
+            : default;
 
     /// <summary>What each material costs, for the tooltip.</summary>
     private ItemCells.MaterialLine[] Breakdown(Conversion conversion) =>
@@ -604,6 +628,7 @@ internal sealed class CraftTab
         double? Roi,
         double SalesPerDay,
         long GilPerDay,
+        MarketNature Nature,
         ItemCells.MaterialLine[] Breakdown);
 
     private sealed record Model(CraftRow[] Crafts, int Ranked, int Discarded);

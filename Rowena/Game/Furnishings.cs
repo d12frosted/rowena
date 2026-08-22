@@ -5,7 +5,7 @@ using Rowena.Core.Conversions;
 namespace Rowena.Game;
 
 /// <summary>
-/// Every craftable, tradable furnishing, as conversions.
+/// Every craftable, tradable thing, as conversions.
 /// </summary>
 /// <remarks>
 /// A craft is materials in and a product out at a fixed ratio, which is precisely a
@@ -13,16 +13,21 @@ namespace Rowena.Game;
 /// arithmetic: ingredients costed by walking the book, the product valued net of tax, absorption
 /// from its sale velocity, and unpriceable rows reported rather than guessed at.
 ///
-/// Furnishings are identified from HousingFurniture and HousingYardObject rather than by item
-/// category. Those two sheets are the game's own answer to "is this a furnishing", where the
-/// category route means hardcoding a list of category ids and hoping none are added.
+/// This was furnishings only, which was nine hundred of the nine and a half thousand things a
+/// crafter can sell. Furnishings are a good market and, measured, almost all of them come out
+/// the same way: thin books that sell about as fast as they are listed. That is one kind of
+/// market, and ranking inside it hid the others entirely.
+///
+/// The survey costs about ninety-five requests wide instead of nine, which is less than the
+/// vendor scan already spends. The expensive half is unchanged: only the shortlist has its
+/// materials priced, and how long that is remains a setting.
 ///
 /// Only direct ingredients. Following the tree down would find cheaper routes and rescue
 /// recipes whose intermediates are not traded, but pricing the ingredients as listed is a real
 /// executable route on its own: buy the lot. Whether the tree is worth building is a question
 /// the discard count answers, so it is measured rather than assumed.
 /// </remarks>
-internal sealed class Furnishings(IDataManager data, IPluginLog log)
+internal sealed class Furnishings(IDataManager data, Configuration config, IPluginLog log)
 {
     private IReadOnlyList<Conversion>? cached;
     private readonly Dictionary<string, Made> made = new(StringComparer.Ordinal);
@@ -56,11 +61,6 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
     private IReadOnlyList<Conversion> Build()
     {
         var housing = HousingItemIds();
-        if (housing.Count == 0)
-        {
-            log.Warning("No housing furnishings found in the sheets; the craft sweep will be empty.");
-            return [];
-        }
 
         var recipes = data.GetExcelSheet<Recipe>();
         var conversions = new List<Conversion>();
@@ -73,10 +73,18 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
         {
             var resultId = recipe.ItemResult.RowId;
 
-            if (resultId == 0 || !housing.Contains(resultId) || !seen.Add(resultId))
+            if (resultId == 0 || !seen.Add(resultId))
                 continue;
 
             if (recipe.ItemResult.ValueNullable is not { } product || product.IsUntradable)
+                continue;
+
+            // Only what the board will take. The rest are quest pieces and rewards, and a
+            // ranking cannot say anything about a thing that cannot be sold.
+            if (product.ItemSearchCategory.RowId == 0)
+                continue;
+
+            if (config.CraftFurnishingsOnly && !housing.Contains(resultId))
                 continue;
 
             var yield = Math.Max(1, (int)recipe.AmountResult);
@@ -105,7 +113,7 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
                 recipe.CraftType.ValueNullable?.Name.ExtractText() ?? "craft"));
         }
 
-        log.Information($"Found {conversions.Count} craftable tradable furnishings.");
+        log.Information($"Found {conversions.Count} craftable, sellable things.");
         return conversions;
     }
 

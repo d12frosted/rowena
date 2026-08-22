@@ -76,6 +76,13 @@ internal sealed class SettingsTab(
 
         Group("The furnishing sweep");
 
+        changed |= Toggle(
+            "Only look at furnishings", config.CraftFurnishingsOnly, value => config.CraftFurnishingsOnly = value,
+            "Off covers everything a crafter can sell, which is nine and a half thousand things\n"
+            + "rather than nine hundred. Furnishings are a good market and almost all of them are\n"
+            + "the same kind of market, so ranking inside them hid every other kind. On is a\n"
+            + "narrower, faster sweep. Takes effect on the next sweep.");
+
         changed |= Number(
             "Furnishings to cost", config.FurnishingShortlist, value => config.FurnishingShortlist = value,
             "How many survive the first pass and get their materials priced. The leaders are\n"

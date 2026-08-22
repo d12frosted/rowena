@@ -146,6 +146,17 @@ public sealed class Configuration : IPluginConfiguration
     public int FurnishingShortlist { get; set; } = 60;
 
     /// <summary>
+    /// Whether the craft sweep looks only at furnishings.
+    /// </summary>
+    /// <remarks>
+    /// Off, so it covers everything a crafter can sell. Furnishings are nine hundred of nine
+    /// and a half thousand and, measured, almost all of them are the same kind of market: thin
+    /// books that sell about as fast as they are listed. Ranking inside that hid every other
+    /// kind. On, for a narrower and faster sweep.
+    /// </remarks>
+    public bool CraftFurnishingsOnly { get; set; }
+
+    /// <summary>
     /// How old swept prices may be before a sweep is worth repeating.
     /// </summary>
     /// <remarks>

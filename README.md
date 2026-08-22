@@ -250,13 +250,24 @@ away. Under it, a tab per question:
   trades but has no price for is asked about instead, and only genuinely untradeable things
   are called for the vendor by default.
 
-- **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
+- **Craft.** The swept ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
   since the crafting itself happens in somebody else's window and a half-built list is easy
   to forget. Any column sorts, and the sort happens before the table is trimmed to
   twenty-five rows, so "by profit" means the best of all of them rather than the best of the
   ones that happened to survive the default ranking.
+
+  Every craftable thing rather than furnishings only. Furnishings are nine hundred of nine and
+  a half thousand and, measured, almost all of them are the same kind of market: thin books
+  that sell about as fast as they are listed. Ranking inside that hid every other kind, and
+  widening it put weaving, armoury and aspected materials above most of the furnishings.
+
+  Each row also says what sort of market it is, which is a different question from what it
+  pays. Two rows paying the same are not the same proposition when one sells as fast as it is
+  stocked and the other has months of somebody else's stock in front of it. Days of supply,
+  what is listed over what sells, carries most of that; a wide spread in recent prices says
+  the margin has an error bar rather than a promise.
 - **Settings.** The knobs, with a line under each saying what it does to the plugin rather
   than restating its name. The two that decide whether any other number is right, which
   boards to price against, used to be file-only, and Dalamud's settings gear used to open the
