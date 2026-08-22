@@ -96,7 +96,8 @@ public sealed class Plugin : IDalamudPlugin
         var vendorPrices = new VendorPrices(DataManager);
         var boards = new Boards(market, scope, vendorPrices, boardWatcher);
         vendorSweep = new VendorSweep(vendorPrices, market, diagnostics, Log);
-        var gatherables = new Gatherables(DataManager, Log);
+        var levels = new Levels(DataManager);
+        var gatherables = new Gatherables(DataManager, levels, Log);
         gatherSweep = new GatherSweep(gatherables, market, diagnostics, Log);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
@@ -108,7 +109,7 @@ public sealed class Plugin : IDalamudPlugin
             trades, boards, balances, cells, config, market, venues, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
-            sweep, furnishings, boards, cells, basket, config, diagnostics,
+            sweep, furnishings, boards, cells, basket, config, levels, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
         var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);

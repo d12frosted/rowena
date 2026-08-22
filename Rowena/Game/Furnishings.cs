@@ -34,7 +34,8 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
     /// game.
     /// </remarks>
     /// <param name="JobId">The ClassJob row, for its icon and abbreviation.</param>
-    internal readonly record struct Made(uint RecipeId, uint ItemId, uint JobId, string Job);
+    /// <param name="Level">The level the recipe asks of that job.</param>
+    internal readonly record struct Made(uint RecipeId, uint ItemId, uint JobId, string Job, int Level);
 
     /// <summary>
     /// CraftType 0 is Carpenter, which is ClassJob 8, and the eight run in step from there.
@@ -93,7 +94,8 @@ internal sealed class Furnishings(IDataManager data, IPluginLog log)
                 recipe.RowId,
                 resultId,
                 jobId,
-                data.GetExcelSheet<ClassJob>().GetRowOrDefault(jobId)?.Abbreviation.ExtractText() ?? "");
+                data.GetExcelSheet<ClassJob>().GetRowOrDefault(jobId)?.Abbreviation.ExtractText() ?? "",
+                recipe.RecipeLevelTable.ValueNullable?.ClassJobLevel ?? 0);
 
             conversions.Add(new Conversion(
                 $"craft-{recipe.RowId}",

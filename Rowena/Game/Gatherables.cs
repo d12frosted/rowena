@@ -40,7 +40,7 @@ internal readonly record struct Gatherable(
 /// things a market tool knows, and a table that ranked them beside a mining node would be
 /// promising an hour it cannot deliver.
 /// </remarks>
-internal sealed class Gatherables(IDataManager data, IPluginLog log)
+internal sealed class Gatherables(IDataManager data, Levels levels, IPluginLog log)
 {
     /// <summary>Mining and quarrying are the miner's; logging and harvesting the botanist's.</summary>
     private static readonly Dictionary<uint, uint> JobByType = new()
@@ -188,23 +188,6 @@ internal sealed class Gatherables(IDataManager data, IPluginLog log)
     /// <summary>Hours and minutes packed into one number, as plain minutes.</summary>
     private static int Clock(int packed) => packed / 100 * 60 + packed % 100;
 
-    /// <summary>
-    /// What level you are on a job, or zero when the game will not say.
-    /// </summary>
-    /// <remarks>
-    /// Game memory, so this is read on the framework thread. It exists so the table can stop
-    /// recommending a node you cannot stand at: a ranking full of things out of reach is a
-    /// ranking somebody has to filter in their head.
-    /// </remarks>
-    public unsafe int LevelOf(uint classJobId)
-    {
-        var state = PlayerState.Instance();
-
-        if (state is null)
-            return 0;
-
-        var index = data.GetExcelSheet<ClassJob>().GetRowOrDefault(classJobId)?.ExpArrayIndex ?? -1;
-
-        return index < 0 ? 0 : state->ClassJobLevels[index];
-    }
+    /// <summary>What level you are on a job, from the shared lookup.</summary>
+    public int LevelOf(uint classJobId) => levels.Of(classJobId);
 }

@@ -47,6 +47,7 @@ internal sealed class CraftTab
     private readonly ItemCells cells;
     private readonly CraftBasket basket;
     private readonly Configuration config;
+    private readonly Levels levels;
     private readonly Action<Conversion> refreshTrade;
     private readonly Action recheck;
 
@@ -62,6 +63,7 @@ internal sealed class CraftTab
         ItemCells cells,
         CraftBasket basket,
         Configuration config,
+        Levels levels,
         Diagnostics diagnostics,
         Action<Conversion> refreshTrade,
         Action recheck)
@@ -73,6 +75,7 @@ internal sealed class CraftTab
         this.cells = cells;
         this.basket = basket;
         this.config = config;
+        this.levels = levels;
         this.refreshTrade = refreshTrade;
 
         model = new Rebuilt<Model>("crafts", Build, diagnostics);
@@ -105,6 +108,9 @@ internal sealed class CraftTab
                     profit = row.Profit,
                     floor = boards.Selling(row.ItemId)?.Floor ?? 0,
                     credible = boards.Selling(row.ItemId)?.CredibleFloor(),
+                    job = row.Job,
+                    level = row.Level,
+                    canMake = row.CanMake,
                     salesPerDay = row.SalesPerDay,
                     gilPerDay = row.GilPerDay,
                     inputs = row.Breakdown.Select(line => new
@@ -394,6 +400,20 @@ internal sealed class CraftTab
             ImGui.TableNextColumn();
             cells.Job(row.JobId, row.Job);
 
+            if (!row.CanMake)
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(Palette.Bad, $"lv{row.Level}");
+
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(
+                        $"Your {row.Job} is {levels.Of(row.JobId)} and this wants {row.Level}.\n"
+                        + "Shown rather than hidden: it is still worth knowing what the money is,\n"
+                        + "and a levelling target with a price on it is a better reason than most.");
+                }
+            }
+
             ImGui.TableNextColumn();
             Cell.Right($"{row.Materials:N0}");
 
@@ -520,6 +540,8 @@ internal sealed class CraftTab
                     made?.RecipeId,
                     made?.JobId ?? 0,
                     made?.Job ?? "",
+                    made?.Level ?? 0,
+                    made is not { } recipe || levels.Of(recipe.JobId) >= recipe.Level,
                     earnings.Quote.GilOutlay,
                     earnings.Quote.Profit,
                     earnings.Quote.ReturnOnOutlay,
@@ -575,6 +597,8 @@ internal sealed class CraftTab
         uint? RecipeId,
         uint JobId,
         string Job,
+        int Level,
+        bool CanMake,
         long Materials,
         long Profit,
         double? Roi,
