@@ -1,6 +1,7 @@
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Rowena.Core.Market;
+using Rowena.UI;
 
 namespace Rowena.Game;
 
@@ -34,6 +35,8 @@ internal sealed class RetainerSales : IDisposable
     private readonly IFramework framework;
     private readonly Configuration config;
     private readonly SalesLog sales;
+    private readonly Items names;
+    private readonly Notices notices;
     private readonly Func<uint, MarketTax> taxFor;
     private readonly Action save;
     private readonly Diagnostics diagnostics;
@@ -45,6 +48,8 @@ internal sealed class RetainerSales : IDisposable
         IFramework framework,
         Configuration config,
         SalesLog sales,
+        Items names,
+        Notices notices,
         Func<uint, MarketTax> taxFor,
         Action save,
         Diagnostics diagnostics,
@@ -53,6 +58,8 @@ internal sealed class RetainerSales : IDisposable
         this.framework = framework;
         this.config = config;
         this.sales = sales;
+        this.names = names;
+        this.notices = notices;
         this.taxFor = taxFor;
         this.save = save;
         this.diagnostics = diagnostics;
@@ -148,13 +155,20 @@ internal sealed class RetainerSales : IDisposable
         foreach (var sale in found)
             sales.Record(sale.ItemId, sale.Quantity, sale.Net, announced: false);
 
-        if (found.Count > 0)
-        {
-            diagnostics.Note(
-                "sales",
-                $"retainer {id % 10_000}: {found.Count} sales found from the slots, "
-                + $"{found.Sum(sale => sale.Net):N0} gil");
-        }
+        if (found.Count == 0)
+            return;
+
+        // Said where it will be seen. A sale nobody was online to hear about is exactly the one
+        // that needs announcing, and burying it in the diagnostics made the whole feature
+        // impossible to notice working.
+        var takings = found.Sum(sale => sale.Net);
+
+        notices.Add(
+            found.Count == 1
+                ? $"Sold while you were away: {found[0].Quantity}x {names.Name(found[0].ItemId)} for {takings:N0} gil."
+                : $"Sold while you were away: {found.Count} things for {takings:N0} gil.");
+
+        diagnostics.Note("sales", $"retainer {id % 10_000}: {found.Count} sales off the slots, {takings:N0} gil");
     }
 
     private StoredRetainer? Stored(ulong id) =>
