@@ -32,8 +32,9 @@ internal sealed class GatherTab
         "Net times whichever is smaller, the sales a day the board makes or the number you\n"
         + "would actually gather in one. Ranked by this. Still a ceiling: it assumes every\n"
         + "one sells at today's price, and says nothing about how long the gathering takes.",
-        "Nodes that only appear on a clock. A different errand from one always standing\n"
-        + "there, and worth knowing before setting out.",
+        "Nodes that only appear on a clock, and whether that clock is favourable now. A game\n"
+        + "hour is under three minutes of yours, so a window said to last four hours is twelve\n"
+        + "minutes of your evening: these are things you walk to now or miss.",
     ];
 
     /// <summary>The same columns with a session in front of them, where two of them mean something else.</summary>
@@ -88,7 +89,7 @@ internal sealed class GatherTab
                 perHour = config.GatherPerHour,
                 horizon = config.SellingHorizon(),
                 plan = model.Current.Plan is { } plan
-                    ? new { aim = Aim.ToString(), capacity = plan.Capacity, units = plan.Units, worth = plan.Worth, minutes = plan.Minutes, things = plan.Take.Count }
+                    ? new { aim = Aim.ToString(), capacity = plan.Capacity, units = plan.Units, worth = plan.Worth, minutes = plan.Minutes, things = plan.Take.Count, timed = plan.Timed, shut = plan.Shut }
                     : null,
                 rows = model.Current.Rows.Take(12).Select(row => new
                 {
@@ -101,6 +102,9 @@ internal sealed class GatherTab
                     salesPerDay = row.SalesPerDay,
                     gilPerDay = row.GilPerDay,
                     timed = row.Timed,
+                    opensIn = Math.Round(row.OpensIn, 1),
+                    openFor = Math.Round(row.OpenFor, 1),
+                    windowIs = Math.Round(row.WindowIs, 1),
                     reachable = row.Reachable,
                     take = model.Current.Plan is { } take && take.Take.TryGetValue(row.ItemId, out var units) ? units : 0,
                 }),
@@ -393,22 +397,27 @@ internal sealed class GatherTab
 
         ImGui.TextColored(
             Palette.Dim,
-            $"    {Rows(plan)} across {plan.Minutes} of your {config.GatherSessionMinutes} minutes, "
+            $"    {Rows(plan)} in the order to do them, across {plan.Minutes} of your {config.GatherSessionMinutes} minutes, "
             + $"assuming {config.GatherPerHour} items an hour. "
             + (spare > 1
                 ? $"\n    The board runs out before you do: nothing is worth the last {spare} minutes, so a\n    shorter trip earns nearly the same."
                 : ""));
 
-        if (plan.Timed == 0)
-            return;
+        if (plan.Timed > 0)
+        {
+            ImGui.TextColored(
+                Palette.Good,
+                $"    {plan.Timed} of these are timed and their windows are open, or will be before you\n"
+                + "    are done. Take them first: a window is minutes, not hours.");
+        }
 
-        // Said out loud because the plan cannot check it. A windowful for the price of the
-        // detour is a bargain, which is why these come out on top, but a node on a clock is
-        // only there when the clock says so and Rowena does not yet read the clock.
-        ImGui.TextColored(
-            Palette.Bad,
-            $"    {plan.Timed} of these are timed, and this does not know which windows are open now.\n"
-            + "    Take the ones that are up. Untick timed nodes above for a trip you can do any time.");
+        if (plan.Shut > 0)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                $"    {plan.Shut} timed items are shut for longer than this trip, so they are left out of it.\n"
+                + "    They are still in the ranking with the time until they come round.");
+        }
     }
 
     private string Rows(Plan plan) =>
@@ -478,10 +487,46 @@ internal sealed class GatherTab
             Cell.Right(Palette.Good, $"{row.GilPerDay:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Timed ? Palette.Bad : Palette.Dim, row.Timed ? "timed" : "always");
+            DrawWindow(row);
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// Whether the clock is favourable, in minutes you can feel.
+    /// </summary>
+    /// <remarks>
+    /// In game hours a timed node reads as something to get round to. In real minutes it is a
+    /// four hour window that lasts twelve of them, which is the difference between a list you
+    /// can act on and one you cross-check somewhere else.
+    /// </remarks>
+    private void DrawWindow(Row row)
+    {
+        if (!row.Timed)
+        {
+            ImGui.TextColored(Palette.Dim, "always");
+            return;
+        }
+
+        if (row.OpensIn <= 0)
+        {
+            ImGui.TextColored(Palette.Good, $"{row.OpenFor:F0} min left");
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Open now. Go.");
+
+            return;
+        }
+
+        ImGui.TextColored(row.OpensIn <= 15 ? Palette.Plain : Palette.Dim, $"in {row.OpensIn:F0} min");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                $"Shut. Comes round in {row.OpensIn:F0} minutes and stays for {row.WindowIs:F0}.\n"
+                + "Game hours, so a window is minutes rather than an afternoon.");
+        }
     }
 
     /// <summary>What the shortlist is worth against the books the cache holds now.</summary>
@@ -493,6 +538,7 @@ internal sealed class GatherTab
             return new Model([], 0, null);
 
         var tax = boards.Tax;
+        var now = EorzeaClock.MinuteOfDay(DateTimeOffset.UtcNow);
         var byItem = gatherables.All().ToDictionary(gatherable => gatherable.ItemId);
         var levels = new Dictionary<uint, int>();
 
@@ -542,7 +588,10 @@ internal sealed class GatherTab
                 sale.Net,
                 book.SaleVelocityPerDay,
                 book.UnitsListed,
-                (long)(sale.Net * perDay)));
+                (long)(sale.Net * perDay),
+                gatherable.Windows.Count == 0 ? 0 : Real(EorzeaWindow.NextOpen(gatherable.Windows, now) ?? 0),
+                gatherable.Windows.Count == 0 ? 0 : Real(EorzeaWindow.LeftOf(gatherable.Windows, now)),
+                gatherable.Windows.Count == 0 ? 0 : Real(gatherable.Windows.Max(window => window.LengthMinutes))));
         }
 
         var ranked = rows.OrderByDescending(row => row.GilPerDay).ToArray();
@@ -573,8 +622,13 @@ internal sealed class GatherTab
         var perHour = Math.Max(1, config.GatherPerHour);
         var capacity = (int)Math.Round(perHour * (config.GatherSessionMinutes / 60d));
 
+        // A node on a clock is only worth planning around if the clock is favourable while you
+        // are out. Four game hours is under twelve real minutes, so most timed nodes are not
+        // "later today", they are now or not at all.
+        var reachable = ranked.Where(row => !row.Timed || row.OpensIn < config.GatherSessionMinutes).ToArray();
+
         var basket = GatherPlan.For(
-            ranked.Select(row => new GatherCandidate(row.ItemId, row.Each, row.SalesPerDay, row.Listed, row.Timed)),
+            reachable.Select(row => new GatherCandidate(row.ItemId, row.Each, row.SalesPerDay, row.Listed, row.Timed)),
             capacity,
             config.SellingHorizon(),
             Aim,
@@ -587,10 +641,28 @@ internal sealed class GatherTab
             GatherPlan.Worth(basket),
             basket.ToDictionary(portion => portion.ItemId, portion => portion.Units),
             (int)Math.Round(basket.Sum(portion => portion.Cost) / perHour * 60d),
-            basket.Count(portion => byItem[portion.ItemId].Timed));
+            basket.Count(portion => byItem[portion.ItemId].Timed),
+            ranked.Count(row => row.Timed) - reachable.Count(row => row.Timed));
 
-        return new Model([.. basket.Select(portion => byItem[portion.ItemId])], hidden, plan);
+        // Ordered by the clock rather than by worth, which turns a list into an itinerary: what
+        // is open now and closing soonest, then what comes round next, then the things standing
+        // there all day to fill the gaps between windows.
+        return new Model(
+            [.. basket.Select(portion => byItem[portion.ItemId]).OrderBy(Turn).ThenByDescending(row => row.Each)],
+            hidden,
+            plan);
     }
+
+    /// <summary>Where a row falls in the evening: open now, coming round, or any time at all.</summary>
+    private static (int Stage, double When) Turn(Row row) => row switch
+    {
+        { Timed: false } => (2, 0),
+        { OpensIn: <= 0 } => (0, row.OpenFor),
+        _ => (1, row.OpensIn),
+    };
+
+    /// <summary>A stretch of the game's clock, in minutes of ours.</summary>
+    private static double Real(int eorzeaMinutes) => EorzeaClock.ToReal(eorzeaMinutes).TotalMinutes;
 
     private GatherAim Aim =>
         Enum.IsDefined((GatherAim)config.GatherAim) ? (GatherAim)config.GatherAim : GatherAim.MostGil;
@@ -605,10 +677,20 @@ internal sealed class GatherTab
         long Each,
         double SalesPerDay,
         int Listed,
-        long GilPerDay);
+        long GilPerDay,
+        double OpensIn,
+        double OpenFor,
+        double WindowIs);
 
     /// <summary>A session's worth of gathering, and what it would come to.</summary>
-    private sealed record Plan(int Capacity, int Units, long Worth, Dictionary<uint, int> Take, int Minutes, int Timed);
+    private sealed record Plan(
+        int Capacity,
+        int Units,
+        long Worth,
+        Dictionary<uint, int> Take,
+        int Minutes,
+        int Timed,
+        int Shut);
 
     private sealed record Model(Row[] Rows, int Hidden, Plan? Plan);
 }

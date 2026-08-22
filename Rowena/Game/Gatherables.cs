@@ -1,4 +1,5 @@
 using Dalamud.Plugin.Services;
+using Rowena.Core.Market;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
 
@@ -10,7 +11,17 @@ namespace Rowena.Game;
 /// True when the only nodes yielding it appear on a clock, which is a different errand
 /// entirely from walking to a node that is always there.
 /// </param>
-internal readonly record struct Gatherable(uint ItemId, uint JobId, string Job, int Level, bool Timed);
+/// <param name="Windows">
+/// When the clock lets you at it, in game minutes past its midnight. Empty for anything
+/// standing there all day.
+/// </param>
+internal readonly record struct Gatherable(
+    uint ItemId,
+    uint JobId,
+    string Job,
+    int Level,
+    bool Timed,
+    IReadOnlyList<EorzeaWindow> Windows);
 
 /// <summary>
 /// Every marketable thing a miner or botanist can gather, with its level and job.
@@ -55,17 +66,28 @@ internal sealed class Gatherables(IDataManager data, IPluginLog log)
         // as well is not timed: the timed one is a bonus rather than the only way to it.
         var timedBases = new HashSet<uint>();
         var untimedBases = new HashSet<uint>();
+        var windowsByBase = new Dictionary<uint, HashSet<EorzeaWindow>>();
         var transient = data.GetExcelSheet<GatheringPointTransient>();
+        var popTimes = data.GetExcelSheet<GatheringRarePopTimeTable>();
 
         foreach (var point in data.GetExcelSheet<GatheringPoint>())
         {
             if (point.GatheringPointBase.RowId == 0)
                 continue;
 
-            var clock = transient.GetRowOrDefault(point.RowId) is { } times
-                && (times.EphemeralStartTime != 65535 || times.GatheringRarePopTimeTable.RowId != 0);
+            var times = transient.GetRowOrDefault(point.RowId);
+            var open = times is { } t ? Windows(t, popTimes) : [];
 
-            (clock ? timedBases : untimedBases).Add(point.GatheringPointBase.RowId);
+            (open.Count > 0 ? timedBases : untimedBases).Add(point.GatheringPointBase.RowId);
+
+            if (open.Count == 0)
+                continue;
+
+            if (!windowsByBase.TryGetValue(point.GatheringPointBase.RowId, out var set))
+                windowsByBase[point.GatheringPointBase.RowId] = set = [];
+
+            foreach (var window in open)
+                set.Add(window);
         }
 
         var found = new Dictionary<uint, Gatherable>();
@@ -103,13 +125,68 @@ internal sealed class Gatherables(IDataManager data, IPluginLog log)
                     jobId,
                     jobs.GetRowOrDefault(jobId)?.Abbreviation.ExtractText() ?? "",
                     pointBase.GatheringLevel,
-                    timed);
+                    timed,
+                    timed && windowsByBase.TryGetValue(pointBase.RowId, out var open) ? [.. open] : []);
             }
         }
 
-        log.Information($"Found {found.Count} marketable gatherables.");
+        log.Information(
+            $"Found {found.Count} marketable gatherables, "
+            + $"{found.Values.Count(g => g.Windows.Count > 0)} of them on a clock.");
         return [.. found.Values];
     }
+
+    /// <summary>
+    /// When one node is standing there, from whichever of the two schedules it keeps.
+    /// </summary>
+    /// <remarks>
+    /// Both are stored as hours and minutes packed into one number, so 900 is nine o'clock and
+    /// a length of 160 is an hour and sixty minutes rather than a hundred and sixty of them.
+    /// That reading is not a guess: taken this way every length in the game comes out as two,
+    /// three or four hours, and the tables whose windows sit four hours apart are exactly the
+    /// ones whose length is three. Read as plain minutes they would overlap each other.
+    ///
+    /// A start of nought paired with an end of nought is not a window at midnight, it is a
+    /// field nobody filled in, and it belongs to points that no base ever refers to.
+    /// </remarks>
+    private static List<EorzeaWindow> Windows(
+        GatheringPointTransient times,
+        Lumina.Excel.ExcelSheet<GatheringRarePopTimeTable> popTimes)
+    {
+        var windows = new List<EorzeaWindow>();
+
+        if (times.GatheringRarePopTimeTable.RowId != 0
+            && popTimes.GetRowOrDefault(times.GatheringRarePopTimeTable.RowId) is { } table)
+        {
+            for (var slot = 0; slot < table.StartTime.Count; slot++)
+            {
+                int start = table.StartTime[slot], length = table.Duration[slot];
+
+                if (start != 65535 && length != 0)
+                    windows.Add(new EorzeaWindow(Clock(start), Clock(length)));
+            }
+
+            return windows;
+        }
+
+        if (times.EphemeralStartTime == 65535
+            || (times.EphemeralStartTime == 0 && times.EphemeralEndTime == 0))
+        {
+            return windows;
+        }
+
+        var from = Clock(times.EphemeralStartTime);
+        var to = Clock(times.EphemeralEndTime);
+
+        windows.Add(new EorzeaWindow(
+            from,
+            ((to - from) % EorzeaClock.MinutesPerDay + EorzeaClock.MinutesPerDay) % EorzeaClock.MinutesPerDay));
+
+        return windows;
+    }
+
+    /// <summary>Hours and minutes packed into one number, as plain minutes.</summary>
+    private static int Clock(int packed) => packed / 100 * 60 + packed % 100;
 
     /// <summary>
     /// What level you are on a job, or zero when the game will not say.

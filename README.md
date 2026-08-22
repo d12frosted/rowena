@@ -155,6 +155,15 @@ away. Under it, a tab per question:
   windowful for the price of the trip is usually a bargain and that is the whole reason
   they are worth going out of your way for.
 
+  Timed nodes carry their windows, read off the game's own tables, and the tab counts them
+  down in minutes you can feel rather than the game's hours. That conversion is the point:
+  a window advertised as four hours lasts under twelve real minutes, and a two hour one under
+  six. Read in game hours a timed node looks like something to get round to; read properly it
+  is something you walk to now or miss. So a plan takes only the windows that are open, or
+  will be before you are done, and lists them in the order the clock opens them: what is
+  shutting soonest first, then what comes round next, with the all-day nodes last to fill the
+  gaps between.
+
   Three aims, because they pull against each other: the most gil is the most gil in one
   thing, which is also the most exposed when that one thing's price moves while you are
   still selling it. A mixed bag caps any one thing at a quarter of the trip and earns
