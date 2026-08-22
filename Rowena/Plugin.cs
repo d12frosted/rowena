@@ -50,6 +50,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly GatherSweep gatherSweep;
     private readonly SalesLog sales;
     private readonly RetainerSales retainerSales;
+    private readonly GatherClock gatherClock;
 
     public Plugin()
     {
@@ -114,7 +115,11 @@ public sealed class Plugin : IDalamudPlugin
             sweep, furnishings, boards, cells, basket, config, levels, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
-        var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);
+        gatherClock = new GatherClock(
+            Framework, GameGui, balances, gatherables, config, Save, diagnostics, Log);
+
+        var gatherTab = new GatherTab(
+            gatherSweep, gatherables, boards, cells, config, gatherClock, diagnostics);
 
         sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
 
@@ -140,7 +145,7 @@ public sealed class Plugin : IDalamudPlugin
             tab => mainWindow!.Show(tab));
 
         var settingsTab = new SettingsTab(
-            config, market, catalogFile, trades, boardWatcher, diagnosticsPanel,
+            config, gatherClock, market, catalogFile, trades, boardWatcher, diagnosticsPanel,
             () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
@@ -354,6 +359,7 @@ public sealed class Plugin : IDalamudPlugin
         warmup.Dispose();
         sales.Dispose();
         retainerSales.Dispose();
+        gatherClock.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

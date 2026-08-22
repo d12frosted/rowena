@@ -57,6 +57,7 @@ internal sealed class GatherTab
     private readonly Boards boards;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly GatherClock clock;
 
     private readonly Rebuilt<Model> model;
 
@@ -66,6 +67,7 @@ internal sealed class GatherTab
         Boards boards,
         ItemCells cells,
         Configuration config,
+        GatherClock clock,
         Diagnostics diagnostics)
     {
         this.sweep = sweep;
@@ -73,6 +75,7 @@ internal sealed class GatherTab
         this.boards = boards;
         this.cells = cells;
         this.config = config;
+        this.clock = clock;
 
         model = new Rebuilt<Model>("gather", Build, diagnostics);
     }
@@ -86,7 +89,10 @@ internal sealed class GatherTab
                 sellerRate = boards.Tax.SellerRate,
                 survey = sweep.Current.Detail,
                 session = config.GatherSessionMinutes,
-                perHour = config.GatherPerHour,
+                perHour = PerHour,
+                measured = Measured,
+                watchedMinutes = Math.Round(clock.Tally.Seconds / 60, 1),
+                watchedItems = clock.Tally.Items,
                 horizon = config.SellingHorizon(),
                 plan = model.Current.Plan is { } plan
                     ? new { aim = Aim.ToString(), capacity = plan.Capacity, units = plan.Units, worth = plan.Worth, minutes = plan.Minutes, things = plan.Take.Count, timed = plan.Timed, shut = plan.Shut }
@@ -417,8 +423,11 @@ internal sealed class GatherTab
                 "Turns the ranking into a shopping list with amounts on it: the dearest things the\n"
                 + "board still has room for, existing sellers counted, until the time is up.\n"
                 + "\n"
-                + $"Assumes {config.GatherPerHour} items an hour, which is a placeholder rather than a\n"
-                + "measurement. Settings has the knob.");
+                + (Measured
+                    ? $"Uses the {PerHour} items an hour you have actually been gathering, measured over\n"
+                      + $"{clock.Tally.Seconds / 60:F0} minutes of it."
+                    : $"Assumes {PerHour} items an hour. Nothing has been measured yet, so that is a guess;\n"
+                      + "it corrects itself once you have gathered for a while."));
         }
     }
 
@@ -448,7 +457,9 @@ internal sealed class GatherTab
         ImGui.TextColored(
             Palette.Dim,
             $"    {Rows(plan)} in the order to do them, across {plan.Minutes} of your {config.GatherSessionMinutes} minutes, "
-            + $"assuming {config.GatherPerHour} items an hour. "
+            + (Measured
+                ? $"at the {PerHour} items an hour you actually gather. "
+                : $"assuming {PerHour} items an hour, which is a guess. ")
             + (spare > 1
                 ? $"\n    The board runs out before you do: nothing is worth the last {spare} minutes, so a\n    shorter trip earns nearly the same."
                 : ""));
@@ -669,7 +680,7 @@ internal sealed class GatherTab
     private Model Planned(Row[] ranked, int hidden)
     {
         var byItem = ranked.ToDictionary(row => row.ItemId);
-        var perHour = Math.Max(1, config.GatherPerHour);
+        var perHour = PerHour;
         var capacity = (int)Math.Round(perHour * (config.GatherSessionMinutes / 60d));
 
         // A node on a clock is only worth planning around if the clock is favourable while you
@@ -713,6 +724,21 @@ internal sealed class GatherTab
 
     /// <summary>A stretch of the game's clock, in minutes of ours.</summary>
     private static double Real(int eorzeaMinutes) => EorzeaClock.ToReal(eorzeaMinutes).TotalMinutes;
+
+    /// <summary>
+    /// How many items an hour to plan with: what has been watched, or what was typed in.
+    /// </summary>
+    /// <remarks>
+    /// The measurement wins when there is one, because a reading of how you actually gather
+    /// beats a number somebody guessed. Until then the typed one stands, and the plan says
+    /// which it used.
+    /// </remarks>
+    private int PerHour =>
+        config.GatherUseMeasured && clock.PerHour is { } measured
+            ? Math.Max(1, (int)Math.Round(measured))
+            : Math.Max(1, config.GatherPerHour);
+
+    private bool Measured => config.GatherUseMeasured && clock.PerHour is not null;
 
     private GatherAim Aim =>
         Enum.IsDefined((GatherAim)config.GatherAim) ? (GatherAim)config.GatherAim : GatherAim.MostGil;

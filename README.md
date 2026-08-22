@@ -174,8 +174,12 @@ away. Under it, a tab per question:
   perhaps a third less on paper. Sells soonest is the same ranking over tomorrow rather
   than the week, so none of it is still sitting in a retainer when you next log in.
 
-  Two numbers in there are assumed rather than measured, how much an hour yields and what
-  a window is worth, so both are settings and everything scaled by them says so.
+  How much an hour yields is measured rather than assumed. What arrives in the bags while a
+  node is open is counted, and so is the time from one gather to the next: travel counts,
+  because an hour of gathering is mostly getting to the next node, and long gaps do not,
+  because standing about is not gathering. Ten minutes of it are wanted before a rate off it
+  is worth quoting, and the typed number stands until then. What a window is worth is still
+  assumed, so it stays a setting and everything scaled by it says so.
 
   The list goes over to GatherBuddyReborn in one paste, as a gather window preset. Its IPC
   offers a version, a name lookup and a switch for auto-gather and nothing for managing what
@@ -212,6 +216,14 @@ away. Under it, a tab per question:
   Room to raise is measured against the next listing rather than against past sales. A
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
   history, and raising it earns four gil.
+
+  Sales that happened while I was offline are worked out rather than missed. The game
+  announces a sale in chat only while you are logged in to hear it, so the rest come from the
+  retainer itself: its market listings are an ordinary container of twenty with the prices
+  beside them, and comparing that against how it was left says what went. What that cannot
+  say is why it went, since a listing that sold and one taken off the market look identical,
+  and the purse is what separates them. Those are marked as worked out rather than announced,
+  because one is what the game said and the other is what the numbers imply.
 
   One column there is not about the market at all. Every other number is a fact about other
   people; "you sold" is a fact about my own prices, and it is the answer to the question the

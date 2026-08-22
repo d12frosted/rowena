@@ -243,6 +243,21 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public int GatherPerHour { get; set; } = 300;
 
+    /// <summary>How many gatherable things have been watched arriving, ever.</summary>
+    public int GatheredItems { get; set; }
+
+    /// <summary>Over how many seconds of gathering, which is what makes the count a rate.</summary>
+    public double GatheredSeconds { get; set; }
+
+    /// <summary>
+    /// Whether to plan with the measured rate rather than the one typed in.
+    /// </summary>
+    /// <remarks>
+    /// On, because a measurement of how you actually gather beats a number somebody guessed,
+    /// and it falls back to the typed one until enough has been watched to say anything.
+    /// </remarks>
+    public bool GatherUseMeasured { get; set; } = true;
+
     /// <summary>What a session plan is trying to be good at. Indexes <c>GatherAim</c>.</summary>
     public int GatherAim { get; set; }
 

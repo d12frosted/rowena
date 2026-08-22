@@ -19,6 +19,7 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class SettingsTab(
     Configuration config,
+    GatherClock clock,
     MarketCache market,
     CatalogFile catalogue,
     Trades trades,
@@ -110,11 +111,20 @@ internal sealed class SettingsTab(
             + "turns over seventy-five thousand water crystals a day and nobody supplies them alone.\n"
             + "Your own hands are the tighter limit almost always.");
 
+        DrawGatherPace();
+
+        changed |= Toggle(
+            "Plan with the rate I actually gather at", config.GatherUseMeasured,
+            value => config.GatherUseMeasured = value,
+            "Counts what arrives in your bags while a node is open, and the time between one\n"
+            + "gather and the next. Travel counts, because an hour of gathering is mostly getting\n"
+            + "to the next node; long gaps do not, because standing about is not gathering.");
+
         changed |= Number(
             "Items you gather an hour", config.GatherPerHour, value => config.GatherPerHour = value,
-            "The only number a session plan assumes rather than knows, and the one everything in\n"
-            + "it scales by, so it is worth correcting once you have watched an hour go by. Nobody\n"
-            + "has measured this yet; three hundred is a placeholder, not a finding.");
+            "Used until enough has been watched to say better, and whenever the measurement is\n"
+            + "switched off. Everything in a session plan scales by whichever of the two is in use,\n"
+            + "and the plan says which.");
 
         changed |= Number(
             "A timed node is worth (items)", config.GatherWindowYield, value => config.GatherWindowYield = value,
@@ -228,6 +238,38 @@ internal sealed class SettingsTab(
         market.BookBatchSize = config.PriceBatchSize;
         market.SummaryBatchSize = config.SurveyBatchSize;
         save();
+    }
+
+    /// <summary>
+    /// What gathering has actually been measured at, if anything.
+    /// </summary>
+    /// <remarks>
+    /// Shown with how much it rests on, because a rate is only as good as the time behind it and
+    /// a number with no provenance invites more trust than it has earned.
+    /// </remarks>
+    private void DrawGatherPace()
+    {
+        if (clock.PerHour is not { } rate)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                $"    Nothing measured yet: {clock.Tally.Seconds / 60:F0} minutes of gathering watched so far,\n"
+                + "    and ten are wanted before a rate off it is worth quoting.");
+            return;
+        }
+
+        ImGui.TextColored(
+            Palette.Good,
+            $"    Measured: {rate:F0} items an hour, from {clock.Tally.Items:N0} items over "
+            + $"{clock.Tally.Seconds / 60:F0} minutes.");
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("Forget it"))
+            clock.Forget();
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("For when it stops describing how you gather: a new job, or better gear.");
     }
 
     /// <summary>
