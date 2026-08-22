@@ -48,6 +48,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
     private readonly GatherSweep gatherSweep;
+    private readonly SalesLog sales;
 
     public Plugin()
     {
@@ -112,8 +113,10 @@ public sealed class Plugin : IDalamudPlugin
             () => RecheckCrafts());
         var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);
 
+        sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
+
         var sellingTab = new SellingTab(
-            boardWatcher, boards, cells, config, diagnostics,
+            boardWatcher, boards, cells, config, diagnostics, sales,
             ids => market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive));
         var vendorTab = new VendorTab(
             vendorSweep, boards, cells, config, diagnostics,
@@ -154,6 +157,9 @@ public sealed class Plugin : IDalamudPlugin
                 ["survey"] = () => gatherSweep.Start(scope.Selling, config.GatherShortlist, config.SweepAge()),
                 ["gather"] = () => mainWindow.Show(MainWindow.Tab.Gather),
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
+                ["sales"] = () => Log.Information(
+                    $"Sales remembered: {sales.All().Count}. "
+                    + string.Join("; ", sales.All().Take(8).Select(one => $"{one.Quantity}x {one.ItemId} for {one.Gil:N0}"))),
                 ["plan 10"] = () => gatherTab.PlanFor(10),
                 ["plan 30"] = () => gatherTab.PlanFor(30),
                 ["plan 60"] = () => gatherTab.PlanFor(60),
@@ -318,6 +324,7 @@ public sealed class Plugin : IDalamudPlugin
         market.Persist(sweep.Snapshot());
 
         warmup.Dispose();
+        sales.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

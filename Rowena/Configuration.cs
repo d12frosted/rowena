@@ -25,6 +25,18 @@ public sealed class StoredListing
     public long SeenAt { get; set; }
 }
 
+/// <summary>One of my own sales, as it goes to the configuration file.</summary>
+public sealed class StoredSale
+{
+    public uint ItemId { get; set; }
+
+    public int Quantity { get; set; }
+
+    public long Gil { get; set; }
+
+    public long At { get; set; }
+}
+
 public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
@@ -233,6 +245,15 @@ public sealed class Configuration : IPluginConfiguration
     /// that item replaces it.
     /// </remarks>
     public List<StoredListing> MyListings { get; set; } = [];
+
+    /// <summary>
+    /// What my retainers have sold, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The game keeps no history a plugin can ask for, so this is the only record of it that
+    /// survives logging out.
+    /// </remarks>
+    public List<StoredSale> Sales { get; set; } = [];
 
     /// <summary>
     /// The seller's cut per city, as the game last reported it, and when it stops being true.

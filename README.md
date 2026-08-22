@@ -198,6 +198,13 @@ away. Under it, a tab per question:
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
   history, and raising it earns four gil.
 
+  One column there is not about the market at all. Every other number is a fact about other
+  people; "you sold" is a fact about my own prices, and it is the answer to the question the
+  market data cannot reach: not what this sells for, but whether mine sells. The game
+  announces every retainer sale in chat with the item attached as a link, so the item is
+  exact and only the numbers are read from the text. The wording is English, which is a real
+  limit: a client in another language records nothing rather than something wrong.
+
   Listings come from the game rather than Universalis, so they are exact: opening a board
   once says what you have out, and it is remembered after that. Each is netted at its own
   retainer's city rate rather than the worst of them, since that is a number the game has

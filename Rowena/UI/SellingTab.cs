@@ -37,6 +37,9 @@ internal sealed class SellingTab
         "What it has actually been changing hands for lately. The listings say what people\n"
         + "hope to get; this says what they got, and where the two disagree this is the one\n"
         + "worth believing.",
+        "How many of these your own retainers have sold lately, and what you got for one.\n"
+        + "Everything else here is a fact about other people; this is the only column that is\n"
+        + "a fact about your prices.",
         "How long until the last of yours goes, at the rate the board has been selling them:\n"
         + "the queue ahead plus your own stock, over sales a day.",
         "What matching the current floor would cost you per unit. Not a recommendation, a\n"
@@ -48,6 +51,7 @@ internal sealed class SellingTab
     private readonly Boards boards;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly SalesLog sales;
     private readonly Action<IReadOnlyList<uint>> refresh;
 
     private readonly Rebuilt<Model> model;
@@ -58,12 +62,14 @@ internal sealed class SellingTab
         ItemCells cells,
         Configuration config,
         Diagnostics diagnostics,
+        SalesLog sales,
         Action<IReadOnlyList<uint>> refresh)
     {
         this.board = board;
         this.boards = boards;
         this.cells = cells;
         this.config = config;
+        this.sales = sales;
         this.refresh = refresh;
 
         model = new Rebuilt<Model>("selling", Build, diagnostics);
@@ -92,6 +98,8 @@ internal sealed class SellingTab
                     haircut = row.Reading.Haircut,
                     typical = row.Reading.TypicalSale,
                     couldAsk = row.Reading.CouldAsk,
+                    soldUnits = row.Sold?.Units ?? 0,
+                    soldEach = row.Sold?.Each ?? 0,
                     call = row.Reading.Call.ToString(),
                     retainer = row.Retainer,
                 }),
@@ -149,11 +157,27 @@ internal sealed class SellingTab
         ImGui.TextColored(
             wanting == 0 ? Palette.Good : Palette.Bad,
             wanting == 0 ? "Nothing needs doing." : $"{wanting} worth a look.");
+
+        var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
+
+        if (recently.Count == 0)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                $"    Nothing of yours has sold in the {SinceDays} days this has been watching. Sales are\n"
+                + "    recorded as the game announces them, so this fills in as they happen.");
+            return;
+        }
+
+        ImGui.TextColored(
+            Palette.Dim,
+            $"    You have sold {recently.Sum(sale => sale.Quantity):N0} things for "
+            + $"{recently.Sum(sale => sale.Gil):N0} gil in the last {SinceDays} days.");
     }
 
     private void DrawTable(Model current)
     {
-        if (!ImGui.BeginTable("selling", 8, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("selling", 9, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
@@ -161,6 +185,7 @@ internal sealed class SellingTab
         ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, 50);
         ImGui.TableSetupColumn("ahead", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("sells for", ImGuiTableColumnFlags.WidthFixed, 90);
+        ImGui.TableSetupColumn("you sold", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("chasing costs", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 110);
@@ -195,6 +220,9 @@ internal sealed class SellingTab
             Cell.Right(Sold(reading), reading.TypicalSale is { } paid ? $"{paid:N0}" : "-");
 
             ImGui.TableNextColumn();
+            DrawMine(row);
+
+            ImGui.TableNextColumn();
             Cell.Right(
                 reading.DaysToClear is null ? Palette.Bad : Palette.Dim,
                 Phrases.Absorb(reading.DaysToClear));
@@ -221,6 +249,34 @@ internal sealed class SellingTab
         reading.TypicalSale is not { } paid || paid <= 0
             ? Palette.Dim
             : reading.Mine > paid ? Palette.Bad : Palette.Good;
+
+    /// <summary>
+    /// What my own retainers have managed with this lately.
+    /// </summary>
+    /// <remarks>
+    /// The only column here that is a fact about my prices rather than about other people's.
+    /// Recorded from the game's own announcements, so it is exact and costs nothing, and it is
+    /// the answer to the question the market data cannot reach: not what this sells for, but
+    /// whether mine sells.
+    /// </remarks>
+    private void DrawMine(Row row)
+    {
+        if (row.Sold is not { Units: > 0 } mine)
+        {
+            ImGui.TextColored(Palette.Dim, "     -");
+            return;
+        }
+
+        Cell.Right(Palette.Good, $"{mine.Units} @ {mine.Each:N0}");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                $"You have sold {mine.Units} of these in the last {SinceDays} days for {mine.Gil:N0} gil,\n"
+                + $"which is {mine.Each:N0} each after fees. The last went "
+                + $"{Phrases.Ago(DateTimeOffset.UtcNow - mine.Last)} ago.");
+        }
+    }
 
     private void DrawCall(Row row)
     {
@@ -301,6 +357,7 @@ internal sealed class SellingTab
     private Model Build()
     {
         var rows = new List<Row>();
+        var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
 
         foreach (var itemId in board.ListedItems())
         {
@@ -331,12 +388,30 @@ internal sealed class SellingTab
                     units,
                     group.Count() > 1 ? $"{group.Count()} retainers" : first.Retainer,
                     first.CityId,
-                    read));
+                    read,
+                    Sold(itemId, recently)));
             }
         }
 
         // Whatever wants a decision first, then whatever has the most gil resting on it.
         return new Model([.. rows.OrderBy(row => Urgency(row.Reading.Call)).ThenByDescending(row => row.Reading.NetHolding * row.Units)]);
+    }
+
+    /// <summary>How far back "lately" reaches when counting my own sales.</summary>
+    private const int SinceDays = 14;
+
+    /// <summary>My own sales of one item, folded into a total.</summary>
+    private static Mine? Sold(uint itemId, IReadOnlyList<Sale> recently)
+    {
+        var mine = recently.Where(sale => sale.ItemId == itemId).ToArray();
+
+        if (mine.Length == 0)
+            return null;
+
+        var units = mine.Sum(sale => sale.Quantity);
+        var gil = mine.Sum(sale => sale.Gil);
+
+        return new Mine(units, gil, units > 0 ? gil / units : gil, mine.Max(sale => sale.At));
     }
 
     private static int Urgency(ListingCall call) => call switch
@@ -363,13 +438,17 @@ internal sealed class SellingTab
             ? boards.Tax.WithSellerRate(rate)
             : boards.Tax;
 
+    /// <summary>What my own retainers have done with one item lately.</summary>
+    private readonly record struct Mine(int Units, long Gil, long Each, DateTimeOffset Last);
+
     private sealed record Row(
         uint ItemId,
         string Name,
         int Units,
         string Retainer,
         uint CityId,
-        ListingDiagnosis Reading);
+        ListingDiagnosis Reading,
+        Mine? Sold);
 
     private sealed record Model(Row[] Rows);
 }
