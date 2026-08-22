@@ -376,5 +376,20 @@ internal sealed class ItemCells(
     }
 
     /// <param name="Sourced">False when the board could not supply it, which is why a row has no price.</param>
-    internal readonly record struct MaterialLine(uint ItemId, string Name, int Quantity, long Cost, bool Sourced);
+    /// <param name="Print">
+    /// The book this cost was worked out against, taken at the same moment as the cost.
+    /// </param>
+    /// <remarks>
+    /// The print is carried rather than looked up later because a checker needs the book that
+    /// produced a number, not the book that happens to be in the cache when it asks. Read
+    /// afterwards it can describe a newer book than the cost it is meant to certify, which
+    /// makes a moved board look like an arithmetic fault of a gil or two.
+    /// </remarks>
+    internal readonly record struct MaterialLine(
+        uint ItemId,
+        string Name,
+        int Quantity,
+        long Cost,
+        bool Sourced,
+        string Print = "");
 }

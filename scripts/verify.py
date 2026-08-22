@@ -13,6 +13,7 @@ Ask the plugin for its numbers first (diagnostics must be on):
 then run this. It exits non-zero if anything disagrees.
 """
 
+import collections
 import hashlib
 import json
 import os
@@ -91,6 +92,32 @@ def cost_to_buy(listings, quantity, buyer_rate):
             left.append({**listing, "quantity": listing["quantity"] - taken})
 
     return spent + tax, filled, left
+
+
+def tie_slack(listings, quantity):
+    """How many gil two correct answers can differ by on this book.
+
+    The board floors its cut per listing, so what an order costs depends on how the units fall
+    across listings. Where several listings share a price the order between them is arbitrary,
+    and two fetches of the same book can hand them over in a different order: taking three then
+    one is a different number of gil from taking two then two, and both are right.
+
+    A tie group of k listings can therefore disagree by up to k-1 gil, since each listing loses
+    less than one to flooring. Below that there is nothing to find. This is a bound on what the
+    data can settle, not a tolerance for arithmetic being wrong: a real fault is a fault of
+    thousands, and this is single figures on millions.
+    """
+    taken = []
+    need = quantity
+
+    for listing in sorted(listings, key=lambda l: l["pricePerUnit"]):
+        if need <= 0:
+            break
+        taken.append(listing["pricePerUnit"])
+        need -= min(listing["quantity"], need)
+
+    groups = collections.Counter(taken)
+    return sum(n - 1 for n in groups.values() if n > 1)
 
 
 def cost_of_runs(listings, per_run, runs, buyer_rate):
@@ -192,9 +219,20 @@ def main():
             print(f"  SKIP  {row['trade']}: book moved for {', '.join(str(m) for m in moved)}")
             continue
 
-        ok = outlay == row["outlay"]
+        slack = sum(
+            tie_slack(board(buying, item["item"])["listings"], item["quantity"] * row["runs"])
+            for item in row["inputs"]
+        )
+
+        off = abs(outlay - row["outlay"])
+        ok = off <= slack
         failures += not ok and not short
+
         note = " (board moved since the dump)" if short else ""
+
+        if ok and off:
+            note += f" (within {slack} gil of tie slack)"
+
         print(f"  {'ok  ' if ok else 'FAIL'}  {row['trade']}: outlay {row['outlay']:,} vs {outlay:,}{note}")
 
     failures += verify_vendor(config, buyer)

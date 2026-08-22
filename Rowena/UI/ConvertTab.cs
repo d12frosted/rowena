@@ -177,7 +177,11 @@ internal sealed class ConvertTab
                         // different number of gil, and both are correct.
                         floor = boards.Buying(input.ItemId)?.Floor ?? 0,
                         listed = boards.Buying(input.ItemId)?.UnitsListed ?? 0,
-                        print = BookPrint.Of(boards.Buying(input.ItemId)),
+
+                        // Taken when the cost was, not now. Read here it can describe a newer
+                        // book than the outlay it is meant to certify, which turns a board that
+                        // moved between the two into an arithmetic fault of a gil or two.
+                        print = input.Print,
                     }),
                 }),
             },
@@ -875,14 +879,18 @@ internal sealed class ConvertTab
             .Where(input => input.Resource.Kind == ResourceKind.Item)
             .Select(input =>
             {
-                var quote = boards.Buying(input.Resource.Id)?.CostToBuy(input.Quantity, boards.Tax);
+                // The one book, read once: the cost and the print of what produced it have to
+                // come from the same moment or the print certifies the wrong thing.
+                var book = boards.Buying(input.Resource.Id);
+                var quote = book?.CostToBuy(input.Quantity, boards.Tax);
 
                 return new ItemCells.MaterialLine(
                     input.Resource.Id,
                     input.Resource.Name,
                     input.Quantity,
                     quote?.Total ?? 0,
-                    quote is { IsComplete: true });
+                    quote is { IsComplete: true },
+                    BookPrint.Of(book));
             }),
     ];
 
