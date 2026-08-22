@@ -89,6 +89,13 @@ internal sealed class SettingsTab(
             + "comfortably inside sixty.");
 
         changed |= Number(
+            "Of those, kept for quiet markets", config.CraftNicheSlots, value => config.CraftNicheSlots = value,
+            "Turnover is what a thing costs times how fast it sells, so ranking on it leans\n"
+            + "towards things that move. A market that turns over little because almost nobody\n"
+            + "wants it is also one almost nobody is supplying, and these slots are the only way\n"
+            + "such a thing is ever costed at all. Zero is the old behaviour.");
+
+        changed |= Number(
             "Re-sweep after (hours)", config.SweepMaxAgeHours, value => config.SweepMaxAgeHours = value,
             "Hours, not the minutes the price tables want. Choosing what to make needs a rough map,\n"
             + "not live depth, and treating the two the same means either a stale flip or a sweep you\n"

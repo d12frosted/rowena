@@ -89,7 +89,7 @@ public sealed class Plugin : IDalamudPlugin
             market, Framework, scope, new Worlds(DataManager, Log), config, diagnostics, Log);
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
         var furnishings = new Furnishings(DataManager, config, Log);
-        sweep = new FurnishingSweep(furnishings, market, Log);
+        sweep = new FurnishingSweep(furnishings, market, config, Log);
 
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(

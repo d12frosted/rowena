@@ -23,7 +23,11 @@ namespace Rowena.Market;
 /// reasoning as AutoKill's mob index: it is file-backed reference data, not client memory, and
 /// walking every recipe row has no business blocking a frame.
 /// </remarks>
-internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache market, IPluginLog log)
+internal sealed class FurnishingSweep(
+    Furnishings furnishings,
+    MarketCache market,
+    Configuration config,
+    IPluginLog log)
 {
     public enum Phase
     {
@@ -317,19 +321,46 @@ internal sealed class FurnishingSweep(Furnishings furnishings, MarketCache marke
     /// a year is not a business, and ranking on price alone would put it at the top of the queue
     /// for costing while something that quietly moves thirty a day never got looked at.
     /// </remarks>
-    private Conversion[] Shortlisted(IReadOnlyList<Conversion> candidates, int shortlistSize) =>
-    [
-        .. candidates
-            .Select(conversion => new
-            {
-                Conversion = conversion,
-                Revenue = Revenue(conversion),
-            })
-            .Where(candidate => candidate.Revenue > 0)
-            .OrderByDescending(candidate => candidate.Revenue)
-            .Take(Math.Max(1, shortlistSize))
-            .Select(candidate => candidate.Conversion),
-    ];
+    /// <summary>
+    /// Which candidates are worth the expensive half of the sweep.
+    /// </summary>
+    /// <remarks>
+    /// Mostly the busiest markets, with a slice set aside for the dearest quiet ones. Turnover
+    /// is floor times sale rate, so ranking on it alone leans towards things that move, and a
+    /// market that turns over little because almost nobody wants it is also one almost nobody
+    /// is supplying. The reserved slots are the only way those get costed at all.
+    /// </remarks>
+    private Conversion[] Shortlisted(IReadOnlyList<Conversion> candidates, int shortlistSize)
+    {
+        var byId = candidates.ToDictionary(conversion => conversion.Id, StringComparer.Ordinal);
+
+        var picked = CraftShortlist.Pick(
+            candidates.Select(conversion => new Candidate(
+                conversion.Id,
+                Revenue(conversion),
+                Cheapest(conversion),
+                Pace(conversion))),
+            Math.Max(1, shortlistSize),
+            Math.Max(0, config.CraftNicheSlots),
+            QuietPerDay);
+
+        return [.. picked.Select(id => byId[id])];
+    }
+
+    /// <summary>Below this many sales a day, a market is quiet enough to be worth a reserved slot.</summary>
+    private const double QuietPerDay = 2d;
+
+    /// <summary>What one of the product sells for, for judging a quiet market's worth.</summary>
+    private long Cheapest(Conversion conversion) =>
+        conversion.Outputs.Count == 0
+            ? 0
+            : market.Summary(SellingBoard, conversion.Outputs[0].Resource.Id)?.Floor ?? 0;
+
+    /// <summary>How fast the product moves, for telling a quiet market from a busy one.</summary>
+    private double Pace(Conversion conversion) =>
+        conversion.Outputs.Count == 0
+            ? 0
+            : market.Summary(SellingBoard, conversion.Outputs[0].Resource.Id)?.SaleVelocityPerDay ?? 0;
 
     /// <summary>
     /// Which materials are doing the blocking, counted across the shortlist.

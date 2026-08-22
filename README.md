@@ -263,6 +263,13 @@ away. Under it, a tab per question:
   that sell about as fast as they are listed. Ranking inside that hid every other kind, and
   widening it put weaving, armoury and aspected materials above most of the furnishings.
 
+  Some of the shortlist is set aside for quiet markets. Turnover is what a thing costs times
+  how fast it sells, so ranking on it leans towards things that move, and a market that turns
+  over little because almost nobody wants it is also one almost nobody is supplying. Those
+  slots have a lower bound as well as an upper one: ranked on price alone they fill with
+  parked items, since something listed at a billion gil that nobody has ever bought is the
+  dearest thing on the board and the least worth costing.
+
   Each row also says what sort of market it is, which is a different question from what it
   pays. Two rows paying the same are not the same proposition when one sells as fast as it is
   stocked and the other has months of somebody else's stock in front of it. Days of supply,

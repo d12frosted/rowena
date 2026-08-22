@@ -101,10 +101,13 @@ internal sealed class CraftTab
             new
             {
                 buying = boards.Scope.Buying,
+                costed = model.Current.Ranked + model.Current.Discarded,
+                priceable = model.Current.Ranked,
+                discarded = model.Current.Discarded,
                 selling = boards.Scope.Selling,
                 buyerRate = boards.Tax.BuyerRate,
                 sellerRate = boards.Tax.SellerRate,
-                crafts = model.Current.Crafts.Take(12).Select(row => new
+                crafts = model.Current.Crafts.Take(30).Select(row => new
                 {
                     name = row.Item,
                     item = row.ItemId,

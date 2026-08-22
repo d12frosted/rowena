@@ -157,6 +157,17 @@ public sealed class Configuration : IPluginConfiguration
     public bool CraftFurnishingsOnly { get; set; }
 
     /// <summary>
+    /// How much of the shortlist is set aside for quiet markets.
+    /// </summary>
+    /// <remarks>
+    /// Turnover is what a thing costs times how fast it sells, so ranking on it leans towards
+    /// things that move. A market that turns over little because almost nobody wants it is
+    /// also one almost nobody is supplying, and these slots are the only way such a thing is
+    /// ever costed.
+    /// </remarks>
+    public int CraftNicheSlots { get; set; } = 20;
+
+    /// <summary>
     /// How old swept prices may be before a sweep is worth repeating.
     /// </summary>
     /// <remarks>
