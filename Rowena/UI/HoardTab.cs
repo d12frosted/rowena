@@ -24,7 +24,9 @@ internal sealed class HoardTab
     private static readonly string?[] Help =
     [
         null,
-        "How many you are carrying, bags and saddlebags together.",
+        "How many you have, bags and saddlebags and retainers together.",
+        "Where they are. A retainer's pages are only readable while it is open, so what a\n"
+        + "retainer holds is remembered from the last look rather than asked for now.",
         "What one fetches on your world after the market's cut, and what a vendor hands over\n"
         + "for it. Whichever is larger is the one this counts.",
         "What the whole stack comes to at the better counter.",
@@ -34,6 +36,11 @@ internal sealed class HoardTab
     ];
 
     private readonly Balances balances;
+    /// <summary>A retainer's market slots. Twenty, always.</summary>
+    private const int SlotsEach = 20;
+
+    private readonly RetainerStock stock;
+    private readonly BoardWatcher board;
     private readonly Boards boards;
     private readonly MarketCache market;
     private readonly ItemCells cells;
@@ -45,6 +52,8 @@ internal sealed class HoardTab
 
     public HoardTab(
         Balances balances,
+        RetainerStock stock,
+        BoardWatcher board,
         Boards boards,
         MarketCache market,
         ItemCells cells,
@@ -53,6 +62,8 @@ internal sealed class HoardTab
         Func<IReadOnlySet<uint>> wanted)
     {
         this.balances = balances;
+        this.stock = stock;
+        this.board = board;
         this.boards = boards;
         this.market = market;
         this.cells = cells;
@@ -90,13 +101,25 @@ internal sealed class HoardTab
             {
                 selling = boards.Scope.Selling,
                 stacks = model.Current.Rows.Length,
+                slots = model.Current.Plan.Count,
+                slotsEarn = RetainerSlots.Earns(model.Current.Plan),
+                plan = model.Current.Plan.Take(8).Select(pick => new
+                {
+                    name = cells.Name(pick.ItemId),
+                    units = pick.Units,
+                    realised = pick.Realised,
+                    worth = pick.Worth,
+                }),
+                retainersKnown = stock.Seen.Known,
                 worth = model.Current.Worth,
                 unpriced = model.Current.Unpriced,
-                rows = model.Current.Rows.Take(15).Select(row => new
+                rows = model.Current.Rows.Take(40).Select(row => new
                 {
                     name = row.Name,
                     item = row.ItemId,
                     quantity = row.Quantity,
+                    inBags = row.InBags,
+                    inRetainers = row.InRetainers,
                     board = row.Verdict.EachOnBoard,
                     vendor = row.Verdict.EachAtVendor,
                     worth = row.Verdict.Worth,
@@ -110,7 +133,8 @@ internal sealed class HoardTab
     {
         var current = model.Current;
 
-        ImGui.TextUnformatted($"What your bags are holding, and what to do with it on {selling}");
+        ImGui.TextUnformatted($"What you are holding, and what to do with it on {selling}");
+        DrawReach();
 
         if (current.Rows.Length == 0)
         {
@@ -136,16 +160,20 @@ internal sealed class HoardTab
         }
 
         if (current.Rows.Length > 0)
+        {
+            DrawPlan(current);
             DrawTable(current);
+        }
     }
 
     private void DrawTable(Model current)
     {
-        if (!ImGui.BeginTable("hoard", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("hoard", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("held", ImGuiTableColumnFlags.WidthFixed, 60);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("board / vendor", ImGuiTableColumnFlags.WidthFixed, 130);
         ImGui.TableSetupColumn("worth", ImGuiTableColumnFlags.WidthFixed, 100);
         ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, 80);
@@ -163,6 +191,9 @@ internal sealed class HoardTab
 
             ImGui.TableNextColumn();
             Cell.Right(Palette.Dim, $"{row.Quantity:N0}");
+
+            ImGui.TableNextColumn();
+            DrawWhere(row);
 
             ImGui.TableNextColumn();
             Cell.Right(
@@ -220,19 +251,123 @@ internal sealed class HoardTab
             ImGui.SetTooltip(why);
     }
 
+    /// <summary>
+    /// What to put in the slots there are.
+    /// </summary>
+    /// <remarks>
+    /// A retainer has twenty market slots and there is always more worth selling than slots to
+    /// sell it from. Ranked on what a stack is worth, the big slow piles take every slot and sit
+    /// in them for months, so the slots are judged by what they turn over instead.
+    /// </remarks>
+    private void DrawPlan(Model current)
+    {
+        if (current.Plan is not { Count: > 0 } plan)
+            return;
+
+        ImGui.TextColored(
+            Palette.Good,
+            $"    Best use of {plan.Count} free {(plan.Count == 1 ? "slot" : "slots")}: "
+            + $"{RetainerSlots.Earns(plan):N0} gil over {config.SellingHorizon()} days, "
+            + $"starting with {cells.Name(plan[0].ItemId)}.");
+
+        if (!ImGui.IsItemHovered())
+            return;
+
+        ImGui.SetTooltip(
+            "A slot is a rate rather than a lump: what it earns is what sells while it holds\n"
+            + "something. A stack worth a fortune that takes four months to clear earns a week of\n"
+            + "a slot a fraction of its price, and a smaller one that goes by morning earns all of\n"
+            + "it and then frees the slot.\n"
+            + "\n"
+            + string.Join(
+                "\n",
+                plan.Take(12).Select(pick =>
+                    $"    {pick.Units}x {cells.Name(pick.ItemId)}: {pick.Realised:N0} of {pick.Worth:N0}")));
+    }
+
+    /// <summary>
+    /// How much of the pile this can actually see.
+    /// </summary>
+    /// <remarks>
+    /// Said plainly, because a total that quietly covers half of what I own is worse than one
+    /// that admits what it is missing. A retainer is only readable while it is open, so until
+    /// one has been opened it is not empty, it is unknown, and those are different answers.
+    /// </remarks>
+    private void DrawReach()
+    {
+        var (known, oldest) = stock.Seen;
+
+        if (known == 0)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                "    Bags and saddlebags only. Open a retainer once and what it holds is remembered\n"
+                + "    after that, which is the only way any of this is readable.");
+
+            return;
+        }
+
+        var age = oldest is { } at ? $", the oldest looked at {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago" : "";
+
+        ImGui.TextColored(
+            Palette.Dim,
+            $"    Bags, saddlebags and {known} {(known == 1 ? "retainer" : "retainers")}{age}.");
+    }
+
+    /// <summary>
+    /// Whether it is to hand or out with a retainer.
+    /// </summary>
+    /// <remarks>
+    /// Worth knowing before setting off. Something split across four retainers is four errands
+    /// even when the row says it is worth a hundred thousand.
+    /// </remarks>
+    private void DrawWhere(Row row)
+    {
+        if (row.InRetainers == 0)
+        {
+            ImGui.TextColored(Palette.Dim, "bags");
+            return;
+        }
+
+        var holders = stock.Where(row.ItemId);
+
+        ImGui.TextColored(
+            Palette.Plain,
+            row.InBags > 0
+                ? $"{row.InBags} here, {row.InRetainers} out"
+                : holders.Count == 1 ? holders[0].Retainer : $"{holders.Count} retainers");
+
+        if (!ImGui.IsItemHovered())
+            return;
+
+        var where = string.Join("\n", holders.Select(holder => $"    {holder.Quantity} with {holder.Retainer}"));
+
+        ImGui.SetTooltip(
+            (row.InBags > 0 ? $"    {row.InBags} in your bags\n" : "")
+            + where
+            + "\n\nWhat a retainer holds is remembered from the last time it was opened.");
+    }
+
     /// <summary>Prices the bags off the cheap summaries.</summary>
     private Model Build()
     {
         if (boards.Scope.Selling is not { } selling)
-            return new Model([], 0, 0, []);
+            return new Model([], 0, 0, [], []);
 
         var tax = boards.Tax;
         var needed = wanted();
         var rows = new List<Row>();
         var missing = new List<uint>();
 
-        foreach (var (itemId, quantity) in balances.Carrying())
+        var carried = balances.Carrying();
+        var stored = stock.Held();
+
+        foreach (var itemId in carried.Keys.Concat(stored.Keys).Distinct())
         {
+            var inBags = carried.GetValueOrDefault(itemId);
+            var inRetainers = stored.GetValueOrDefault(itemId);
+            var quantity = inBags + inRetainers;
+
             var vendor = boards.Vendor(itemId);
 
             // A full book when one has been fetched, the cheap summary otherwise. The book is
@@ -266,7 +401,7 @@ internal sealed class HoardTab
             if (verdict.Call == HoardCall.Worthless)
                 continue;
 
-            rows.Add(new Row(itemId, cells.Name(itemId), quantity, verdict));
+            rows.Add(new Row(itemId, cells.Name(itemId), quantity, inBags, inRetainers, verdict));
         }
 
         // The big survey runs against the board you buy on, and a bag is priced against the one
@@ -279,11 +414,23 @@ internal sealed class HoardTab
             market.RefreshInBackground(selling, fresh, false, FetchPriority.Background);
         }
 
+        // Twenty a retainer, less whatever is already out. Only what the board is the better
+        // counter for competes for a slot: a vendor needs no slot and no waiting.
+        var slots = Math.Max(0, stock.Seen.Known * SlotsEach - board.ListedItems().Count);
+
+        var plan = RetainerSlots.Fill(
+            rows.Where(row => row.Verdict.Call == HoardCall.List)
+                .Select(row => new SlotCandidate(
+                    row.ItemId, row.Quantity, row.Verdict.Worth, row.Verdict.DaysToSell)),
+            slots,
+            config.SellingHorizon());
+
         return new Model(
             [.. rows.OrderByDescending(row => row.Verdict.Worth)],
             rows.Sum(row => row.Verdict.Call == HoardCall.Keep ? 0 : row.Verdict.Worth),
             missing.Count,
-            [.. missing]);
+            [.. missing],
+            plan);
     }
 
     /// <summary>What a stack fetches and how fast, from whichever source has an answer.</summary>
@@ -304,7 +451,18 @@ internal sealed class HoardTab
                 ? new Priceable(summary.Floor, summary.SaleVelocityPerDay)
                 : null;
 
-    private sealed record Row(uint ItemId, string Name, int Quantity, HoardVerdict Verdict);
+    private sealed record Row(
+        uint ItemId,
+        string Name,
+        int Quantity,
+        int InBags,
+        int InRetainers,
+        HoardVerdict Verdict);
 
-    private sealed record Model(Row[] Rows, long Worth, int Unpriced, uint[] Missing);
+    private sealed record Model(
+        Row[] Rows,
+        long Worth,
+        int Unpriced,
+        uint[] Missing,
+        IReadOnlyList<SlotPick> Plan);
 }

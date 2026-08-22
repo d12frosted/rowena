@@ -52,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly RetainerSales retainerSales;
     private readonly GatherClock gatherClock;
     private readonly Watch watch;
+    private readonly RetainerStock retainerStock;
 
     public Plugin()
     {
@@ -144,8 +145,11 @@ public sealed class Plugin : IDalamudPlugin
         var diagnosticsPanel = new DiagnosticsPanel(
             diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
 
+        retainerStock = new RetainerStock(Framework, config, Save, diagnostics, Log);
+
         var hoardTab = new HoardTab(
-            balances, boards, market, cells, config, diagnostics, () => craftTab.Wants());
+            balances, retainerStock, boardWatcher, boards, market, cells, config, diagnostics,
+            () => craftTab.Wants());
 
         var overviewTab = new OverviewTab(
             convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, notices, sweep, config,
@@ -378,6 +382,7 @@ public sealed class Plugin : IDalamudPlugin
         retainerSales.Dispose();
         gatherClock.Dispose();
         watch.Dispose();
+        retainerStock.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

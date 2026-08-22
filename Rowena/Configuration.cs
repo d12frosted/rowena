@@ -70,6 +70,31 @@ public sealed class StoredRetainer
     public List<StoredSlot> Slots { get; set; } = [];
 }
 
+/// <summary>One stack in a retainer, as it goes to the configuration file.</summary>
+public sealed class StoredStack
+{
+    public uint ItemId { get; set; }
+
+    public int Quantity { get; set; }
+}
+
+/// <summary>What one retainer was holding when it was last looked at.</summary>
+/// <remarks>
+/// A retainer's pages are only readable while it is open, so this is remembered rather than
+/// asked for. An hour-old answer about a retainer is the best there is until it is opened
+/// again, and far better than pretending it is empty.
+/// </remarks>
+public sealed class StoredRetainerStock
+{
+    public ulong RetainerId { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public long SeenAt { get; set; }
+
+    public List<StoredStack> Items { get; set; } = [];
+}
+
 public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
@@ -327,6 +352,9 @@ public sealed class Configuration : IPluginConfiguration
 
     /// <summary>Each retainer as it was last seen, for working out what sold while away.</summary>
     public List<StoredRetainer> Retainers { get; set; } = [];
+
+    /// <summary>What each retainer was holding when it was last looked at.</summary>
+    public List<StoredRetainerStock> RetainerStock { get; set; } = [];
 
     /// <summary>
     /// The seller's cut per city, as the game last reported it, and when it stops being true.

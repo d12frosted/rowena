@@ -244,6 +244,20 @@ away. Under it, a tab per question:
   That last one is why the craft table gets a say. Telling somebody to vendor the materials
   for the thing it just recommended would be the worst advice in here.
 
+  Retainers are covered too. A retainer's pages are only readable while it is open, so what
+  each one holds is remembered from the last look and the tab says how old that answer is: an
+  hour-old reading of a retainer is the best there is until it is opened again, and far better
+  than pretending it is empty.
+
+  On top of the ranking, what to put in the market slots. There are twenty a retainer and
+  always more worth selling than slots to sell it from, and the obvious choice is wrong: ranked
+  on what a stack is worth, the big slow piles take every slot and sit in them for months. A
+  slot is a rate rather than a lump, so it is judged by what sells while it is occupied.
+  Measured, four hundred chocobo greens are the second largest pile I own at a hundred and
+  eighteen thousand gil and come seventh, because a week of that slot realises seven thousand
+  of it. That one change is also the portfolio: nothing has to impose a quota of fast movers
+  against slow ones, because pricing the slot by what it turns over prefers the mix on its own.
+
   A stack with no price yet is not a stack worth nothing. Priced as nothing, everything the
   sweep had not reached read as a confident "vendor it", which is this plugin's own founding
   mistake wearing a different hat: a missing number is not a small number. Anything the board
