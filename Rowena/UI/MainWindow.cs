@@ -33,10 +33,12 @@ internal sealed class MainWindow : Window
     private readonly PricingScope scope;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
+    private readonly GatherSweep gatherSweep;
     private readonly StatusStrip strip;
     private readonly ConvertTab convert;
     private readonly CraftTab crafts;
     private readonly VendorTab vendor;
+    private readonly GatherTab gather;
     private readonly SettingsTab settings;
     private readonly Configuration config;
     private readonly Action save;
@@ -57,9 +59,11 @@ internal sealed class MainWindow : Window
         Diagnostics diagnostics,
         FurnishingSweep sweep,
         VendorSweep vendorSweep,
+        GatherSweep gatherSweep,
         ConvertTab convert,
         CraftTab crafts,
         VendorTab vendor,
+        GatherTab gather,
         SettingsTab settings,
         Configuration config,
         Action save)
@@ -71,9 +75,11 @@ internal sealed class MainWindow : Window
         this.scope = scope;
         this.sweep = sweep;
         this.vendorSweep = vendorSweep;
+        this.gatherSweep = gatherSweep;
         this.convert = convert;
         this.crafts = crafts;
         this.vendor = vendor;
+        this.gather = gather;
         this.settings = settings;
         this.config = config;
         this.save = save;
@@ -106,6 +112,7 @@ internal sealed class MainWindow : Window
         market.RestoreOnce(config.SweepAge());
         RestoreSweepOnce(buying, selling);
         vendorSweep.RestoreOnce(buying, config.VendorCandidatesToCost);
+        gatherSweep.RestoreOnce(selling, config.GatherShortlist);
     }
 
     /// <summary>
@@ -184,6 +191,16 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Gather###gather", Selecting(Tab.Gather)))
+        {
+            if (selling is { } gatherSelling)
+                gather.Draw(gatherSelling);
+            else
+                NoBoard();
+
+            ImGui.EndTabItem();
+        }
+
         if (ImGui.BeginTabItem(crafts.Label, Selecting(Tab.Craft)))
         {
             if (buying is { } craftBuying && selling is { } craftSelling)
@@ -224,6 +241,7 @@ internal sealed class MainWindow : Window
         Sinks,
         Flips,
         Vendor,
+        Gather,
         Craft,
         Settings,
     }

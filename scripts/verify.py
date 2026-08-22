@@ -170,9 +170,46 @@ def main():
 
     failures += verify_vendor(config, buyer)
     failures += verify_craft(config, buyer, seller)
+    failures += verify_gather(config, seller)
 
     print(f"\n{failures} disagreements")
     return 1 if failures else 0
+
+
+def verify_gather(config, seller_rate):
+    """What a gatherable is worth: the floor on your own world, less the market's cut."""
+    path = os.path.join(config, "gather.json")
+
+    if not os.path.exists(path):
+        return 0
+
+    with open(path) as handle:
+        dump = json.load(handle)
+
+    if not dump["rows"]:
+        print("\ngather: nothing ranked")
+        return 0
+
+    print(f"\ngather ({dump['survey']})")
+    failures = 0
+
+    for row in dump["rows"]:
+        listings = board(dump["selling"], row["item"])["listings"]
+        floor = min((l["pricePerUnit"] for l in listings), default=None)
+
+        if floor is None or floor != row["floor"]:
+            print(f"  SKIP  {row['name']}: board moved (floor {row['floor']:,} -> {floor})")
+            continue
+
+        net = floor - int(floor * seller_rate)
+        ok = net == row["each"]
+        failures += not ok
+        print(
+            f"  {'ok  ' if ok else 'FAIL'}  {row['name']}: each {row['each']:,} vs {net:,}"
+            f"  [{row['job']} {row['level']}{', timed' if row['timed'] else ''}]"
+        )
+
+    return failures
 
 
 def verify_craft(config, buyer_rate, seller_rate):

@@ -138,6 +138,15 @@ away. Under it, a tab per question:
   takes to sell, and this one has no market risk in it at all. The scan finds which items
   are worth watching; what they are worth is computed from the cache, so a row is as fresh
   as the last fetch and a find somebody else has bought out simply stops being shown.
+- **Gather.** What to go and pick up, ranked by what a day of the board will pay for it. The
+  one table with no outlay in it: every other weighs gil spent against gil returned, and this
+  weighs an hour of your time. Seven hundred marketable gatherables is eight requests to
+  survey, so it costs seconds rather than the minutes a furnishing sweep does. Filtered to a
+  job and to what your levels can actually reach, since a list you have to filter in your
+  head is not a list, and nodes that only appear on a clock say so, because that is a
+  different errand. Fishing is deliberately absent: bait, weather and a cast that can fail
+  are not things a market tool knows, and ranking a fish beside a mining node would promise
+  an hour it cannot deliver.
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
@@ -384,6 +393,18 @@ would. And a row whose input is wanted by another row cannot be checked on its o
 the allocator gives the cheap listings to whichever pays most and prices the rest against
 what is left, so checking it in isolation disagrees by exactly the amount the allocator is
 right by. Those rows are skipped and say so.
+
+## Your hands, not the market's appetite
+
+Two tables rank on what a day would pay, and both have to answer the same objection: the
+market's appetite is not yours. The board turns over seventy-five thousand water crystals a
+day, so ranked on turnover alone a forty-six gil crystal beats four thousand gil flax and
+the list is useless. Both tables take a cap on what you would really do in a day, and rank
+on whichever runs out first, the board's appetite or your hands.
+
+It is a blunt instrument and says so. What it is standing in for is a measurement nobody
+has made yet: how much an hour of gathering actually yields, which is the number that would
+make these tables answer the real question rather than approximate it.
 
 ## A floor nobody is paying is not a price
 

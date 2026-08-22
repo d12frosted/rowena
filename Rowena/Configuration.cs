@@ -164,6 +164,29 @@ public sealed class Configuration : IPluginConfiguration
     public int VendorCandidatesToCost { get; set; } = 120;
 
     /// <summary>
+    /// How many of one thing you would realistically gather and list in a day.
+    /// </summary>
+    /// <remarks>
+    /// Zero lets the market decide, which flatters anything cheap that moves in bulk: the board
+    /// turns over seventy-five thousand water crystals a day and no one person supplies them, so
+    /// ranking on the market's appetite alone puts forty-six gil crystals above four thousand
+    /// gil flax. Your own hands are the tighter limit almost always, and this is them.
+    /// </remarks>
+    public int GatherPerDayCap { get; set; } = 500;
+
+    /// <summary>How many gatherables survive the survey and get their books fetched.</summary>
+    public int GatherShortlist { get; set; } = 80;
+
+    /// <summary>The job the gathering table is filtered to, or zero for either.</summary>
+    public uint GatherJob { get; set; }
+
+    /// <summary>Whether to hide nodes above your level on the job that gathers them.</summary>
+    public bool GatherReachableOnly { get; set; } = true;
+
+    /// <summary>Whether to include things only found on nodes that appear on a clock.</summary>
+    public bool GatherIncludeTimed { get; set; } = true;
+
+    /// <summary>
     /// The world the vendor table is filtered to, or empty for all of them.
     /// </summary>
     /// <remarks>

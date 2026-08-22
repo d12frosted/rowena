@@ -102,6 +102,19 @@ internal sealed class SettingsTab(
             "A hundred, comfortably. A summary carries no depth, which is why the first pass of a\n"
             + "sweep can be this wide and the second cannot.");
 
+        Group("Gathering");
+
+        changed |= Number(
+            "How many of one thing you gather a day", config.GatherPerDayCap, value => config.GatherPerDayCap = value,
+            "Zero lets the market decide, which flatters anything cheap that moves in bulk: the board\n"
+            + "turns over seventy-five thousand water crystals a day and nobody supplies them alone.\n"
+            + "Your own hands are the tighter limit almost always.");
+
+        changed |= Number(
+            "Gatherables to rank", config.GatherShortlist, value => config.GatherShortlist = value,
+            "How many survive the survey and get a full book fetched. The survey itself covers every\n"
+            + "marketable gatherable and costs about eight requests.");
+
         Group("The vendor scan");
 
         changed |= Number(

@@ -47,6 +47,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Warmup warmup;
     private readonly FurnishingSweep sweep;
     private readonly VendorSweep vendorSweep;
+    private readonly GatherSweep gatherSweep;
 
     public Plugin()
     {
@@ -94,6 +95,8 @@ public sealed class Plugin : IDalamudPlugin
         var vendorPrices = new VendorPrices(DataManager);
         var boards = new Boards(market, scope, vendorPrices, boardWatcher);
         vendorSweep = new VendorSweep(vendorPrices, market, diagnostics, Log);
+        var gatherables = new Gatherables(DataManager, Log);
+        gatherSweep = new GatherSweep(gatherables, market, diagnostics, Log);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
         places = new Places(
             PluginInterface, ClientState, Objects, GameGui, Framework, new Aetherytes(DataManager, Log), Log);
@@ -107,6 +110,7 @@ public sealed class Plugin : IDalamudPlugin
             sweep, furnishings, boards, cells, basket, config, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
+        var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);
         var vendorTab = new VendorTab(
             vendorSweep, boards, cells, config, diagnostics,
             ids => market.RefreshInBackground(scope.Buying, [.. ids], true, FetchPriority.Interactive));
@@ -119,7 +123,7 @@ public sealed class Plugin : IDalamudPlugin
 
         mainWindow = new MainWindow(
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
-            convertTab, craftTab, vendorTab, settingsTab, config, Save);
+            gatherSweep, convertTab, craftTab, vendorTab, gatherTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
         var headlines = new Headlines(trades, boards, balances, config);
@@ -143,6 +147,8 @@ public sealed class Plugin : IDalamudPlugin
                 ["refresh"] = () => mainWindow.RefreshPrices(),
                 ["sweep"] = () => sweep.Start(scope.Buying, scope.Selling, config.FurnishingShortlist, config.SweepAge()),
                 ["recraft"] = RecheckCrafts,
+                ["survey"] = () => gatherSweep.Start(scope.Selling, config.GatherShortlist, config.SweepAge()),
+                ["gather"] = () => mainWindow.Show(MainWindow.Tab.Gather),
                 ["scan"] = () => vendorSweep.Start(scope.Buying, config.VendorCandidatesToCost, config.SweepAge()),
                 ["brief"] = () => briefing.Now(),
                 ["open"] = () => mainWindow.IsOpen = true,
@@ -157,13 +163,20 @@ public sealed class Plugin : IDalamudPlugin
                     File.WriteAllText(Path.Combine(into, "dump.json"), convertTab.Dump());
                     File.WriteAllText(Path.Combine(into, "vendor.json"), vendorTab.Dump());
                     File.WriteAllText(Path.Combine(into, "craft.json"), craftTab.Dump());
+                    File.WriteAllText(Path.Combine(into, "gather.json"), gatherTab.Dump());
                 },
             },
             diagnosticsPanel.Report);
 
         warmup = new Warmup(
             Framework,
-            [mainWindow.RestoreAll, .. convertTab.Warmers, .. craftTab.Warmers, .. vendorTab.Warmers],
+            [
+                mainWindow.RestoreAll,
+                .. convertTab.Warmers,
+                .. craftTab.Warmers,
+                .. vendorTab.Warmers,
+                .. gatherTab.Warmers,
+            ],
             () => scope.Ready,
             diagnostics);
 
@@ -175,7 +188,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage =
                 "Open Rowena. What you are holding, and what it is worth turning into. "
-                + "Add sinks, flips, vendor, craft or settings to open on that tab; brief says the login "
+                + "Add sinks, flips, vendor, gather, craft or settings to open on that tab; brief says the login "
                 + "line again.",
         });
     }
@@ -258,6 +271,10 @@ public sealed class Plugin : IDalamudPlugin
                 mainWindow.Show(MainWindow.Tab.Vendor);
                 break;
 
+            case "gather" or "gathering":
+                mainWindow.Show(MainWindow.Tab.Gather);
+                break;
+
             case "craft" or "crafts":
                 mainWindow.Show(MainWindow.Tab.Craft);
                 break;
@@ -272,7 +289,7 @@ public sealed class Plugin : IDalamudPlugin
 
             default:
                 ChatGui.Print(
-                    $"Rowena has no \"{wanted}\" tab. Try sinks, flips, vendor, craft, settings or brief.");
+                    $"Rowena has no \"{wanted}\" tab. Try sinks, flips, vendor, gather, craft, settings or brief.");
                 break;
         }
     }
