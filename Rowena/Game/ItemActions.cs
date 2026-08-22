@@ -19,7 +19,6 @@ internal sealed class ItemActions(
     ArtisanIpc artisan,
     AllaganToolsIpc allaganTools,
     CraftBasket basket,
-    IChatGui chat,
     IPluginLog log)
 {
     /// <summary>Crafts waiting to be handed to Artisan as a list.</summary>
@@ -40,25 +39,6 @@ internal sealed class ItemActions(
     public void OpenCraftingLog(uint recipeId) => GameActions.OpenCraftingLog(recipeId, log);
 
     public void SearchMarketBoard(uint itemId) => GameActions.SearchMarketBoard(itemId, log);
-
-    /// <summary>
-    /// Prints the item into your own chat log as a link.
-    /// </summary>
-    /// <remarks>
-    /// The way to get the game's real item tooltip, with everything in it, rather than an
-    /// approximation drawn in ImGui. Local only, like an echo, so nobody else sees it.
-    /// </remarks>
-    public void LinkInChat(uint itemId)
-    {
-        try
-        {
-            chat.Print(new SeStringBuilder().AddItemLink(itemId, false).Build());
-        }
-        catch (Exception error)
-        {
-            log.Warning(error, $"Could not link item {itemId} in chat.");
-        }
-    }
 
     public void Craft(uint recipeId, int quantity) => artisan.Craft(recipeId, quantity);
 

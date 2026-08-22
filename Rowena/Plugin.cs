@@ -91,12 +91,13 @@ public sealed class Plugin : IDalamudPlugin
 
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
-            new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
+            new ArtisanIpc(PluginInterface, Log), allaganTools, basket, Log);
         var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope, boardWatcher);
         var vendorPrices = new VendorPrices(DataManager);
         var boards = new Boards(market, scope, vendorPrices, boardWatcher);
         vendorSweep = new VendorSweep(vendorPrices, market, diagnostics, Log);
         var levels = new Levels(DataManager);
+        var notices = new Notices();
         var gatherables = new Gatherables(DataManager, levels, Log);
         gatherSweep = new GatherSweep(gatherables, market, diagnostics, Log);
         var trades = new Trades(catalog, new SpecialShops(DataManager, new Vendors(DataManager, Log), Log));
@@ -129,7 +130,7 @@ public sealed class Plugin : IDalamudPlugin
             balances, boards, market, cells, config, diagnostics, () => craftTab.Wants());
 
         var overviewTab = new OverviewTab(
-            convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, sweep, config,
+            convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, notices, sweep, config,
             tab => mainWindow!.Show(tab));
 
         var settingsTab = new SettingsTab(
@@ -149,7 +150,7 @@ public sealed class Plugin : IDalamudPlugin
             () => mainWindow.Show(MainWindow.Tab.Flips));
 
         briefing = new Briefing(
-            ClientState, Framework, ChatGui, market, sweep, headlines, config, diagnostics,
+            ClientState, Framework, notices, market, sweep, headlines, config, diagnostics,
             () => gatherTab.OpenNow(),
             () => scope.Ready,
             () => mainWindow.RefreshPrices(FetchPriority.Background));
@@ -331,8 +332,9 @@ public sealed class Plugin : IDalamudPlugin
                 break;
 
             default:
-                ChatGui.Print(
-                    $"Rowena has no \"{wanted}\" tab. Try sinks, flips, vendor, gather, craft, settings or brief.");
+                // Opened rather than answered. Saying "no such tab" into the game would be this
+                // plugin writing into the world to report a typo, which is a poor trade.
+                mainWindow.Show(MainWindow.Tab.Overview);
                 break;
         }
     }

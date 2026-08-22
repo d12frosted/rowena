@@ -5,7 +5,7 @@ using Rowena.Market;
 namespace Rowena.UI;
 
 /// <summary>
-/// One line in chat when you log in, and a word when something changes that you would
+/// One line in the window when you log in, and a word when something changes that you would
 /// want to know about without having opened the window.
 /// </summary>
 /// <remarks>
@@ -16,7 +16,7 @@ namespace Rowena.UI;
 /// The alerts are narrow on purpose. A currency entering the last tenth of its cap, a flip
 /// whose return crosses the threshold, a sweep gone stale: each is said once when it
 /// becomes true and not again until it has stopped being true, so a slow tick cannot turn
-/// into a chat channel. Nothing here fetches; it reads what the cache has, on the same
+/// into a line. Nothing here fetches; it reads what the cache has, on the same
 /// few-second clock as the server bar. Undercuts are deliberately not here.
 /// </remarks>
 internal sealed class Briefing : IDisposable
@@ -26,7 +26,7 @@ internal sealed class Briefing : IDisposable
 
     private readonly IClientState client;
     private readonly IFramework framework;
-    private readonly IChatGui chat;
+    private readonly Notices notices;
     private readonly MarketCache market;
     private readonly FurnishingSweep sweep;
     private readonly Headlines headlines;
@@ -53,7 +53,7 @@ internal sealed class Briefing : IDisposable
     public Briefing(
         IClientState client,
         IFramework framework,
-        IChatGui chat,
+        Notices notices,
         MarketCache market,
         FurnishingSweep sweep,
         Headlines headlines,
@@ -63,11 +63,11 @@ internal sealed class Briefing : IDisposable
         Func<bool> boardsKnown,
         Action refreshPrices)
     {
+        this.notices = notices;
         this.diagnostics = diagnostics;
         this.openWindows = openWindows;
         this.client = client;
         this.framework = framework;
-        this.chat = chat;
         this.market = market;
         this.sweep = sweep;
         this.headlines = headlines;
@@ -256,17 +256,16 @@ internal sealed class Briefing : IDisposable
     }
 
     /// <summary>
-    /// Says something in chat, and records that it did.
+    /// Says something, where only the person running this will see it.
     /// </summary>
     /// <remarks>
-    /// Noted as well as printed because chat is the one output nothing else can see: an alert
-    /// that never fires and an alert that fires correctly look identical from a log, which
-    /// makes the only unprompted thing this plugin does the only thing it cannot show its
-    /// working for.
+    /// This used to print into the game's chat log, and no longer does. A line in chat is a
+    /// line in every screenshot, and nothing here is worth a plugin announcing itself in the
+    /// game world: the window is the place for it, and the diagnostics keep the record.
     /// </remarks>
     private void Say(string text)
     {
-        chat.Print(text, "Rowena");
-        diagnostics.Note("alert", text);
+        notices.Add(text);
+        diagnostics.Note("notice", text);
     }
 }

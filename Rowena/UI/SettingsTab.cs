@@ -156,8 +156,9 @@ internal sealed class SettingsTab(
 
         changed |= Toggle(
             "Brief me when I log in", config.BriefOnLogin, value => config.BriefOnLogin = value,
-            "One line in chat after the prices are refetched: what is near its cap, what the flips pay,\n"
-            + "how old the sweep is. /rowena brief says it again on demand.");
+            "One line on the Overview after the prices are refetched: what is near its cap, what the\n"
+            + "flips pay, how old the sweep is. Nothing is ever written into the game itself, so this\n"
+            + "waits in the window rather than arriving in your chat log. /rowena brief asks again.");
 
         changed |= Toggle(
             "Say when a currency nears its cap", config.AlertNearCap, value => config.AlertNearCap = value,
@@ -174,14 +175,14 @@ internal sealed class SettingsTab(
 
         changed |= Toggle(
             "Say when a timed node opens", config.AlertWindows, value => config.AlertWindows = value,
-            "The only thing here that will not still be true in ten minutes, which is what makes\n"
-            + "saying it unprompted the right thing rather than an interruption. A window\n"
-            + "advertised as four game hours is under twelve real minutes.");
+            "The only thing here that will not still be true in ten minutes. Noted on the Overview,\n"
+            + "like everything else: nothing this plugin has to say is worth writing into the game\n"
+            + "for. A window advertised as four game hours is under twelve real minutes.");
 
         changed |= Number(
             "Only for nodes paying at least", config.AlertWindowWorth, value => config.AlertWindowWorth = value,
-            "Gil a unit, net. Every window in the game opening in chat would be noise; the ones\n"
-            + "worth crossing a zone for are not.");
+            "Gil a unit, net. Every window in the game turning up on the Overview would be noise;\n"
+            + "the ones worth crossing a zone for are not.");
 
         Group("Hand-off");
 

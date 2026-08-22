@@ -155,9 +155,9 @@ away. Under it, a tab per question:
   windowful for the price of the trip is usually a bargain and that is the whole reason
   they are worth going out of your way for.
 
-  Optionally it says so in chat when a paying window opens. That is the only unprompted
-  thing in here, and it earns it by being the only thing that will not still be true in ten
-  minutes.
+  Optionally it notes when a paying window opens. That is the only unprompted thing in here,
+  and it earns it by being the only thing that will not still be true in ten minutes. It is
+  noted on the Overview rather than said in the game: see below.
 
   Timed nodes carry their windows, read off the game's own tables, and the tab counts them
   down in minutes you can feel rather than the game's hours. That conversion is the point:
@@ -354,7 +354,14 @@ interprets it. It is the link an activity will need in order to know what it pro
 
 ## Read without being opened
 
-Logging in earns one line in chat, once the prices have been refetched: what is near its
+## Nothing is written into the game
+
+Rowena never prints into the game: not a chat line, not a toast, not a link, not an error. It
+reads the client's own packets and its chat log, and everything it has to say it says inside
+its own window. A line in chat is a line in every screenshot, and none of this is worth a
+plugin announcing itself in the world for.
+
+Logging in earns one line on the Overview, once the prices have been refetched: what is near its
 cap, what the flips pay and which one pays most, how old the furnishing sweep is. The
 server info bar carries the single most urgent of those all the time, and opens the tab
 it came from when clicked. `/rowena brief` says the line again on demand.

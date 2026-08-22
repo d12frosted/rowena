@@ -27,6 +27,7 @@ internal sealed class OverviewTab(
     GatherTab gather,
     SellingTab selling,
     HoardTab hoard,
+    Notices notices,
     FurnishingSweep sweep,
     Configuration config,
     Action<MainWindow.Tab> show)
@@ -56,6 +57,36 @@ internal sealed class OverviewTab(
 
         foreach (var note in notes)
             Draw(note);
+
+        DrawNotices();
+    }
+
+    /// <summary>
+    /// What happened while you were not looking.
+    /// </summary>
+    /// <remarks>
+    /// These used to go to the game's chat log and no longer do. A line in chat is a line in
+    /// every screenshot, and nothing this plugin has to say is worth announcing itself in the
+    /// game world for. So they wait here instead, which is the only place they were ever
+    /// really wanted.
+    /// </remarks>
+    private void DrawNotices()
+    {
+        if (notices.All() is not { Count: > 0 } recent)
+            return;
+
+        ImGui.Spacing();
+        ImGui.TextColored(Palette.Dim, "While you were away");
+        ImGui.Indent();
+
+        foreach (var notice in recent)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                $"{Phrases.Ago(DateTimeOffset.UtcNow - notice.At)} ago: {notice.Text}");
+        }
+
+        ImGui.Unindent();
     }
 
     private void Draw(Note note)

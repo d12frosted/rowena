@@ -269,9 +269,6 @@ internal sealed class ItemCells(
                     if (ImGui.MenuItem("Search the market board"))
                         actions.SearchMarketBoard(material.ItemId);
 
-                    if (ImGui.MenuItem("Link in chat"))
-                        actions.LinkInChat(material.ItemId);
-
                     if (ImGui.MenuItem("Copy name"))
                         ImGui.SetClipboardText(material.Name);
 
@@ -283,9 +280,6 @@ internal sealed class ItemCells(
 
             ImGui.Separator();
         }
-
-        if (ImGui.MenuItem("Link in chat"))
-            actions.LinkInChat(itemId);
 
         // The item's own name, not the row's label: on a flip the label is the whole
         // transaction, and what gets pasted into a search box is the thing you sell.
