@@ -44,7 +44,7 @@ internal sealed class BoardWatcher : IDisposable
     private readonly Diagnostics diagnostics;
     private readonly IPluginLog log;
 
-    private readonly Dictionary<uint, List<MyListing>> mine = [];
+    private readonly Dictionary<uint, (int Request, List<MyListing> Listings)> mine = [];
     private readonly object gate = new();
 
     private IReadOnlyList<uint> towns = [];
@@ -124,14 +124,14 @@ internal sealed class BoardWatcher : IDisposable
     public IReadOnlyList<MyListing> Listed(uint itemId)
     {
         lock (gate)
-            return mine.TryGetValue(itemId, out var listings) ? [.. listings] : [];
+            return mine.TryGetValue(itemId, out var seen) ? [.. seen.Listings] : [];
     }
 
     /// <summary>Every item I have something listed for.</summary>
     public IReadOnlyCollection<uint> ListedItems()
     {
         lock (gate)
-            return [.. mine.Keys];
+            return [.. mine.Where(entry => entry.Value.Listings.Count > 0).Select(entry => entry.Key)];
     }
 
     /// <summary>
@@ -233,9 +233,11 @@ internal sealed class BoardWatcher : IDisposable
     /// Picks my own retainers' listings out of whatever board view just arrived.
     /// </summary>
     /// <remarks>
-    /// Only the items the view was about are touched. A view holding none of mine means I have
-    /// none listed for that item, which is news worth recording rather than an empty result to
-    /// ignore: it is how a sold-out listing stops being reported as still standing.
+    /// The board answers in pages, and each page is a page rather than the whole answer: asking
+    /// about one item produced ten listings holding four of mine and then two more holding none,
+    /// and treating the second as the truth threw the first away. Pages of one request are
+    /// gathered together, and a new request for the same item starts again, so a listing that
+    /// has sold does stop being reported.
     /// </remarks>
     private void OnOfferings(IMarketBoardCurrentOfferings offerings)
     {
@@ -266,16 +268,24 @@ internal sealed class BoardWatcher : IDisposable
                         (uint)listing.RetainerCityId))
                     .ToList();
 
+                int total;
+
                 lock (gate)
                 {
-                    if (listed.Count > 0)
-                        mine[group.Key] = listed;
+                    if (mine.TryGetValue(group.Key, out var seen) && seen.Request == offerings.RequestId)
+                        seen.Listings.AddRange(listed);
                     else
-                        mine.Remove(group.Key);
+                        mine[group.Key] = (offerings.RequestId, listed);
+
+                    total = mine[group.Key].Listings.Count;
                 }
 
                 if (listed.Count > 0)
-                    diagnostics.Note("board", $"item {group.Key}: {listed.Count} of the listings are mine");
+                {
+                    diagnostics.Note(
+                        "board",
+                        $"item {group.Key}: {listed.Count} of this page is mine, {total} so far");
+                }
             }
         }
         catch (Exception error)
