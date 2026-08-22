@@ -24,7 +24,7 @@ internal sealed class DiagnosticsPanel(
     MarketCache market,
     LiveMarket live,
     BoardWatcher board,
-    FurnishingSweep furnishings,
+    CraftSweep furnishings,
     VendorSweep vendors,
     Places places,
     Configuration config)
@@ -167,7 +167,7 @@ internal sealed class DiagnosticsPanel(
             crafts.HasResults
                 ? $"{crafts.State}, {crafts.Shortlist.Count} shortlisted"
                 : $"{crafts.State}, nothing yet",
-            crafts.State != FurnishingSweep.Phase.Failed);
+            crafts.State != CraftSweep.Phase.Failed);
 
         var scan = vendors.Current;
 

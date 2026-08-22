@@ -14,7 +14,7 @@ namespace Rowena.Game;
 /// from its sale velocity, and unpriceable rows reported rather than guessed at.
 ///
 /// This was furnishings only, which was nine hundred of the nine and a half thousand things a
-/// crafter can sell. Furnishings are a good market and, measured, almost all of them come out
+/// crafter can sell. Craftables are a good market and, measured, almost all of them come out
 /// the same way: thin books that sell about as fast as they are listed. That is one kind of
 /// market, and ranking inside it hid the others entirely.
 ///
@@ -27,7 +27,7 @@ namespace Rowena.Game;
 /// executable route on its own: buy the lot. Whether the tree is worth building is a question
 /// the discard count answers, so it is measured rather than assumed.
 /// </remarks>
-internal sealed class Furnishings(IDataManager data, Configuration config, IPluginLog log)
+internal sealed class Craftables(IDataManager data, Configuration config, IPluginLog log)
 {
     private IReadOnlyList<Conversion>? cached;
     private readonly Dictionary<string, Made> made = new(StringComparer.Ordinal);

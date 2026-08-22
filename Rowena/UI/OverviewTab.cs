@@ -28,7 +28,7 @@ internal sealed class OverviewTab(
     SellingTab selling,
     HoardTab hoard,
     Notices notices,
-    FurnishingSweep sweep,
+    CraftSweep sweep,
     Configuration config,
     Action<MainWindow.Tab> show)
 {
@@ -134,7 +134,7 @@ internal sealed class OverviewTab(
             yield return new Note(
                 Note.Housekeeping,
                 Palette.Dim,
-                "The furnishing sweep has gone stale",
+                "The craft sweep has gone stale",
                 $"Older than the {config.SweepMaxAgeHours} hours you asked for, so the craft table is "
                 + "ranking on prices that have moved.",
                 MainWindow.Tab.Craft);

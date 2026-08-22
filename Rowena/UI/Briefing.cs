@@ -28,7 +28,7 @@ internal sealed class Briefing : IDisposable
     private readonly IFramework framework;
     private readonly Notices notices;
     private readonly MarketCache market;
-    private readonly FurnishingSweep sweep;
+    private readonly CraftSweep sweep;
     private readonly Headlines headlines;
     private readonly Configuration config;
     private readonly Diagnostics diagnostics;
@@ -55,7 +55,7 @@ internal sealed class Briefing : IDisposable
         IFramework framework,
         Notices notices,
         MarketCache market,
-        FurnishingSweep sweep,
+        CraftSweep sweep,
         Headlines headlines,
         Configuration config,
         Diagnostics diagnostics,

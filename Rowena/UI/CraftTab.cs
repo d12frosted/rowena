@@ -45,8 +45,8 @@ internal sealed class CraftTab
         null,
     ];
 
-    private readonly FurnishingSweep sweep;
-    private readonly Furnishings furnishings;
+    private readonly CraftSweep sweep;
+    private readonly Craftables furnishings;
     private readonly Boards boards;
     private readonly ItemCells cells;
     private readonly CraftBasket basket;
@@ -61,8 +61,8 @@ internal sealed class CraftTab
     private bool sortDescending = true;
 
     public CraftTab(
-        FurnishingSweep sweep,
-        Furnishings furnishings,
+        CraftSweep sweep,
+        Craftables furnishings,
         Boards boards,
         ItemCells cells,
         CraftBasket basket,
@@ -317,7 +317,7 @@ internal sealed class CraftTab
             if (scan.HasResults && ImGui.Button("Recheck prices"))
                 recheck();
 
-            if (scan.State == FurnishingSweep.Phase.Failed)
+            if (scan.State == CraftSweep.Phase.Failed)
                 ImGui.TextColored(Palette.Bad, scan.Detail);
             else if (scan.ReadyAt is null)
                 // Said plainly, because it is minutes of small polite requests and should not start
@@ -355,7 +355,7 @@ internal sealed class CraftTab
 
         var age = scan.ReadyAt is { } at ? $"swept {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago, " : "";
 
-        var incomplete = scan.State == FurnishingSweep.Phase.Partial;
+        var incomplete = scan.State == CraftSweep.Phase.Partial;
 
         // Coloured when the run had holes in it, because "nothing was found" and "most of it never
         // arrived" must not look the same at a glance.

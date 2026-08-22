@@ -149,7 +149,7 @@ public sealed class Configuration : IPluginConfiguration
     /// Whether the craft sweep looks only at furnishings.
     /// </summary>
     /// <remarks>
-    /// Off, so it covers everything a crafter can sell. Furnishings are nine hundred of nine
+    /// Off, so it covers everything a crafter can sell. Craftables are nine hundred of nine
     /// and a half thousand and, measured, almost all of them are the same kind of market: thin
     /// books that sell about as fast as they are listed. Ranking inside that hid every other
     /// kind. On, for a narrower and faster sweep.

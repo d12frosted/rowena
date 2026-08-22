@@ -8,7 +8,7 @@ namespace Rowena.Game;
 /// Which recipe makes an item, for every craftable item in the game.
 /// </summary>
 /// <remarks>
-/// Wider than <see cref="Furnishings"/>, which only cares about things you can put in a house. A
+/// Wider than <see cref="Craftables"/>, which only cares about things you can put in a house. A
 /// wardrobe's steel hinges are not furnishings and still have to be found, so expanding a craft
 /// tree needs the whole sheet.
 ///

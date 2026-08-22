@@ -23,8 +23,8 @@ namespace Rowena.Market;
 /// reasoning as AutoKill's mob index: it is file-backed reference data, not client memory, and
 /// walking every recipe row has no business blocking a frame.
 /// </remarks>
-internal sealed class FurnishingSweep(
-    Furnishings furnishings,
+internal sealed class CraftSweep(
+    Craftables furnishings,
     MarketCache market,
     Configuration config,
     IPluginLog log)

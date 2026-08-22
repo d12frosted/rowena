@@ -45,7 +45,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Diagnostics diagnostics;
     private readonly DebugChannel debug;
     private readonly Warmup warmup;
-    private readonly FurnishingSweep sweep;
+    private readonly CraftSweep sweep;
     private readonly VendorSweep vendorSweep;
     private readonly GatherSweep gatherSweep;
     private readonly SalesLog sales;
@@ -88,8 +88,8 @@ public sealed class Plugin : IDalamudPlugin
             new MarketFeed(message => diagnostics.Note("live", message)),
             market, Framework, scope, new Worlds(DataManager, Log), config, diagnostics, Log);
         var gatherBuddy = new GatherBuddyIpc(PluginInterface, Log);
-        var furnishings = new Furnishings(DataManager, config, Log);
-        sweep = new FurnishingSweep(furnishings, market, config, Log);
+        var craftables = new Craftables(DataManager, config, Log);
+        sweep = new CraftSweep(craftables, market, config, Log);
 
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
@@ -112,7 +112,7 @@ public sealed class Plugin : IDalamudPlugin
             trades, boards, balances, cells, config, market, venues, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
-            sweep, furnishings, boards, cells, basket, config, levels, diagnostics,
+            sweep, craftables, boards, cells, basket, config, levels, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
         gatherClock = new GatherClock(
@@ -249,7 +249,7 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     /// <summary>
-    /// Refetches what the swept furnishings cost and fetch, without sweeping again.
+    /// Refetches what the swept crafts cost and fetch, without sweeping again.
     /// </summary>
     /// <remarks>
     /// The shortlist is hours of requests and stays useful; the prices under it are minutes

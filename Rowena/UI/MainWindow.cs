@@ -31,7 +31,7 @@ internal sealed class MainWindow : Window
     private readonly MarketCache market;
     private readonly Balances balances;
     private readonly PricingScope scope;
-    private readonly FurnishingSweep sweep;
+    private readonly CraftSweep sweep;
     private readonly VendorSweep vendorSweep;
     private readonly GatherSweep gatherSweep;
     private readonly StatusStrip strip;
@@ -60,7 +60,7 @@ internal sealed class MainWindow : Window
         Places places,
         LiveMarket live,
         Diagnostics diagnostics,
-        FurnishingSweep sweep,
+        CraftSweep sweep,
         VendorSweep vendorSweep,
         GatherSweep gatherSweep,
         ConvertTab convert,
