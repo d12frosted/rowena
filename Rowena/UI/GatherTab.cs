@@ -36,6 +36,21 @@ internal sealed class GatherTab
         + "there, and worth knowing before setting out.",
     ];
 
+    /// <summary>The same columns with a session in front of them, where two of them mean something else.</summary>
+    private static readonly string?[] PlannedHelp =
+    [
+        null,
+        "How many to bring back. The dearest things first, each capped at the room a new seller\n"
+        + "actually has: what the board turns over within the selling horizon, less what is\n"
+        + "already listed ahead of you. Then on to the next, until the session is full.",
+        Help[1],
+        Help[2],
+        Help[3],
+        "What a day of the board would pay, which is what the ranking used. The session's own\n"
+        + "figure is above the table.",
+        Help[5],
+    ];
+
     private readonly GatherSweep sweep;
     private readonly Gatherables gatherables;
     private readonly Boards boards;
@@ -69,6 +84,12 @@ internal sealed class GatherTab
                 selling = boards.Scope.Selling,
                 sellerRate = boards.Tax.SellerRate,
                 survey = sweep.Current.Detail,
+                session = config.GatherSessionMinutes,
+                perHour = config.GatherPerHour,
+                horizon = config.SellingHorizon(),
+                plan = model.Current.Plan is { } plan
+                    ? new { aim = Aim.ToString(), capacity = plan.Capacity, units = plan.Units, worth = plan.Worth, minutes = plan.Minutes, things = plan.Take.Count }
+                    : null,
                 rows = model.Current.Rows.Take(12).Select(row => new
                 {
                     name = row.Name,
@@ -81,9 +102,31 @@ internal sealed class GatherTab
                     gilPerDay = row.GilPerDay,
                     timed = row.Timed,
                     reachable = row.Reachable,
+                    take = model.Current.Plan is { } take && take.Take.TryGetValue(row.ItemId, out var units) ? units : 0,
                 }),
             },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+    /// <summary>Sets the session the table is planning for, for driving the window without a mouse.</summary>
+    public void PlanFor(int minutes)
+    {
+        config.GatherSessionMinutes = minutes;
+        model.Invalidate();
+    }
+
+    /// <summary>Sets what the session is aiming at, for driving the window without a mouse.</summary>
+    public void AimFor(GatherAim aim)
+    {
+        config.GatherAim = (int)aim;
+        model.Invalidate();
+    }
+
+    /// <summary>Includes or drops timed nodes, for driving the window without a mouse.</summary>
+    public void IncludeTimed(bool include)
+    {
+        config.GatherIncludeTimed = include;
+        model.Invalidate();
+    }
 
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
@@ -167,6 +210,16 @@ internal sealed class GatherTab
 
         ImGui.SameLine();
 
+        DrawSession();
+
+        if (config.GatherSessionMinutes > 0)
+        {
+            ImGui.SameLine();
+            DrawAim();
+        }
+
+        ImGui.SameLine();
+
         var timed = config.GatherIncludeTimed;
 
         if (ImGui.Checkbox("Include timed nodes", ref timed))
@@ -199,7 +252,10 @@ internal sealed class GatherTab
                     + "2. Open GatherBuddy, Gather Window tab.\n"
                     + "3. Press the import button.\n"
                     + "\n"
-                    + "Everything shown goes in, so filter first if you want less.");
+                    + (current.Plan is null
+                        ? "Everything shown goes in, so filter first if you want less."
+                        : "The plan goes in, in the order to gather it. How many of each is Rowena's\n"
+                          + "business rather than GatherBuddy's, so the amounts stay in this table."));
             }
 
             ImGui.SameLine();
@@ -211,6 +267,152 @@ internal sealed class GatherTab
                 ImGui.SetTooltip("The same list as plain names, one per line, for anything else.");
         }
     }
+
+    /// <summary>
+    /// How long you have, which turns the ranking into a list with amounts on it.
+    /// </summary>
+    /// <remarks>
+    /// The question a ranking cannot answer. "Worth gathering" is a property of an item; "worth
+    /// gathering this evening" is a property of an item, a market and an hour, and the last two
+    /// were missing.
+    /// </remarks>
+    /// <summary>
+    /// What the session is trying to be good at, since these pull against each other.
+    /// </summary>
+    /// <remarks>
+    /// A choice rather than a default because there is no right answer: the most gil is the most
+    /// gil in one thing, which is also the most exposed to that one thing's price moving, and the
+    /// first version of this planner filled every session from ten minutes to two hours with the
+    /// same single item.
+    /// </remarks>
+    private void DrawAim()
+    {
+        ImGui.SetNextItemWidth(150f);
+
+        if (ImGui.BeginCombo("##gather-aim", Aims[(int)Aim].Name))
+        {
+            foreach (var (aim, name, help) in Aims)
+            {
+                if (ImGui.Selectable(name, Aim == aim))
+                {
+                    config.GatherAim = (int)aim;
+                    model.Invalidate();
+                }
+
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(help);
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(Aims[(int)Aim].Help);
+    }
+
+    private static readonly (GatherAim Aim, string Name, string Help)[] Aims =
+    [
+        (GatherAim.MostGil, "Most gil",
+            "The dearest things the board has room for, however few that turns out to be.\n"
+            + "Often one thing, which is the most gil and the most exposed to that one thing's\n"
+            + "price moving while you are still selling it."),
+        (GatherAim.MixedBag, "A mixed bag",
+            "The same ranking, with nothing more than a quarter of the trip. Earns less on\n"
+            + "paper and does not hand the whole session to one price."),
+        (GatherAim.SellsSoonest, "Sells soonest",
+            "Only what tomorrow's board will take, rather than the week's. The same ranking on\n"
+            + "a shorter view: a smaller trip, and none of it still sitting in a retainer\n"
+            + "when you next log in."),
+    ];
+
+    private void DrawSession()
+    {
+        ImGui.SetNextItemWidth(130f);
+
+        var label = config.GatherSessionMinutes switch
+        {
+            0 => "Just rank them",
+            60 => "An hour",
+            var minutes => $"{minutes} minutes",
+        };
+
+        if (ImGui.BeginCombo("##gather-session", label))
+        {
+            foreach (var (minutes, name) in new (int, string)[]
+                     {
+                         (0, "Just rank them"),
+                         (10, "10 minutes"),
+                         (30, "30 minutes"),
+                         (60, "An hour"),
+                         (120, "120 minutes"),
+                     })
+            {
+                if (ImGui.Selectable(name, config.GatherSessionMinutes == minutes))
+                {
+                    config.GatherSessionMinutes = minutes;
+                    model.Invalidate();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                "Turns the ranking into a shopping list with amounts on it: the dearest things the\n"
+                + "board still has room for, existing sellers counted, until the time is up.\n"
+                + "\n"
+                + $"Assumes {config.GatherPerHour} items an hour, which is a placeholder rather than a\n"
+                + "measurement. Settings has the knob.");
+        }
+    }
+
+    /// <summary>
+    /// What the session comes to, and what it is assuming to say so.
+    /// </summary>
+    /// <remarks>
+    /// The assumption is stated every time rather than buried in the settings, because every
+    /// number beside it is scaled by a figure nobody has measured.
+    /// </remarks>
+    private void DrawPlan(Plan plan)
+    {
+        if (plan.Units == 0)
+        {
+            ImGui.TextColored(
+                Palette.Bad,
+                "    Nothing worth the trip: no item here has a board that would take any of it.");
+            return;
+        }
+
+        ImGui.TextColored(
+            Palette.Good,
+            $"    {plan.Units:N0} items, about {plan.Worth:N0} gil, selling over {config.SellingHorizon()} days.");
+
+        var spare = config.GatherSessionMinutes - plan.Minutes;
+
+        ImGui.TextColored(
+            Palette.Dim,
+            $"    {Rows(plan)} across {plan.Minutes} of your {config.GatherSessionMinutes} minutes, "
+            + $"assuming {config.GatherPerHour} items an hour. "
+            + (spare > 1
+                ? $"\n    The board runs out before you do: nothing is worth the last {spare} minutes, so a\n    shorter trip earns nearly the same."
+                : ""));
+
+        if (plan.Timed == 0)
+            return;
+
+        // Said out loud because the plan cannot check it. A windowful for the price of the
+        // detour is a bargain, which is why these come out on top, but a node on a clock is
+        // only there when the clock says so and Rowena does not yet read the clock.
+        ImGui.TextColored(
+            Palette.Bad,
+            $"    {plan.Timed} of these are timed, and this does not know which windows are open now.\n"
+            + "    Take the ones that are up. Untick timed nodes above for a trip you can do any time.");
+    }
+
+    private string Rows(Plan plan) =>
+        plan.Take.Count == 1 ? "One thing" : $"{plan.Take.Count} different things";
 
     private void DrawTable()
     {
@@ -227,16 +429,25 @@ internal sealed class GatherTab
         if (current.Hidden > 0)
             ImGui.TextColored(Palette.Dim, $"    {current.Hidden} more hidden by the filters.");
 
-        if (!ImGui.BeginTable("gather", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (current.Plan is { } plan)
+            DrawPlan(plan);
+
+        var columns = current.Plan is null ? 6 : 7;
+
+        if (!ImGui.BeginTable("gather", columns, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+
+        if (current.Plan is not null)
+            ImGui.TableSetupColumn("take", ImGuiTableColumnFlags.WidthFixed, 60);
+
         ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("each", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("node", ImGuiTableColumnFlags.WidthFixed, 70);
-        Cell.Headers(Help);
+        Cell.Headers(current.Plan is null ? Help : PlannedHelp);
 
         foreach (var row in current.Rows)
         {
@@ -244,6 +455,12 @@ internal sealed class GatherTab
 
             ImGui.TableNextColumn();
             cells.Draw(row.Name, row.ItemId);
+
+            if (current.Plan is { } take)
+            {
+                ImGui.TableNextColumn();
+                Cell.Right(Palette.Good, $"{take.Take[row.ItemId]:N0}");
+            }
 
             ImGui.TableNextColumn();
             ImGui.TextColored(row.Reachable ? Palette.Dim : Palette.Bad, $"{row.Job} {row.Level}");
@@ -273,7 +490,7 @@ internal sealed class GatherTab
         var scan = sweep.Current;
 
         if (!scan.HasResults)
-            return new Model([], 0);
+            return new Model([], 0, null);
 
         var tax = boards.Tax;
         var byItem = gatherables.All().ToDictionary(gatherable => gatherable.ItemId);
@@ -324,11 +541,59 @@ internal sealed class GatherTab
                 gatherable.Timed,
                 sale.Net,
                 book.SaleVelocityPerDay,
+                book.UnitsListed,
                 (long)(sale.Net * perDay)));
         }
 
-        return new Model([.. rows.OrderByDescending(row => row.GilPerDay).Take(RowsInTable)], hidden);
+        var ranked = rows.OrderByDescending(row => row.GilPerDay).ToArray();
+
+        return config.GatherSessionMinutes > 0
+            ? Planned(ranked, hidden)
+            : new Model([.. ranked.Take(RowsInTable)], hidden, null);
     }
+
+    /// <summary>
+    /// The ranking turned into a session: what to bring back from the time you have.
+    /// </summary>
+    /// <remarks>
+    /// The ranking answers what is worth gathering and leaves the harder question alone. An hour
+    /// is not a day, and the best hour is not the best row repeated until the hour is up: gather
+    /// two hundred of the top thing and most of the pile sits in a retainer for a fortnight,
+    /// because the board takes forty a day.
+    ///
+    /// Timed nodes are left out rather than ranked in. Every other item costs about the same
+    /// minute, which is what makes filling the session with the dearest ones the right answer;
+    /// a node on a clock does not cost minutes at all, it costs being there, and pretending
+    /// otherwise would have the plan cheerfully ask for two hundred of something that yields one
+    /// windowful. They stay in the ranking, which is where they are useful.
+    /// </remarks>
+    private Model Planned(Row[] ranked, int hidden)
+    {
+        var byItem = ranked.ToDictionary(row => row.ItemId);
+        var perHour = Math.Max(1, config.GatherPerHour);
+        var capacity = (int)Math.Round(perHour * (config.GatherSessionMinutes / 60d));
+
+        var basket = GatherPlan.For(
+            ranked.Select(row => new GatherCandidate(row.ItemId, row.Each, row.SalesPerDay, row.Listed, row.Timed)),
+            capacity,
+            config.SellingHorizon(),
+            Aim,
+            config.GatherWindowYield,
+            perHour * (config.GatherWindowMinutes / 60d));
+
+        var plan = new Plan(
+            capacity,
+            basket.Sum(portion => portion.Units),
+            GatherPlan.Worth(basket),
+            basket.ToDictionary(portion => portion.ItemId, portion => portion.Units),
+            (int)Math.Round(basket.Sum(portion => portion.Cost) / perHour * 60d),
+            basket.Count(portion => byItem[portion.ItemId].Timed));
+
+        return new Model([.. basket.Select(portion => byItem[portion.ItemId])], hidden, plan);
+    }
+
+    private GatherAim Aim =>
+        Enum.IsDefined((GatherAim)config.GatherAim) ? (GatherAim)config.GatherAim : GatherAim.MostGil;
 
     private sealed record Row(
         uint ItemId,
@@ -339,7 +604,11 @@ internal sealed class GatherTab
         bool Timed,
         long Each,
         double SalesPerDay,
+        int Listed,
         long GilPerDay);
 
-    private sealed record Model(Row[] Rows, int Hidden);
+    /// <summary>A session's worth of gathering, and what it would come to.</summary>
+    private sealed record Plan(int Capacity, int Units, long Worth, Dictionary<uint, int> Take, int Minutes, int Timed);
+
+    private sealed record Model(Row[] Rows, int Hidden, Plan? Plan);
 }

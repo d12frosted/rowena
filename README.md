@@ -147,6 +147,23 @@ away. Under it, a tab per question:
   different errand. Fishing is deliberately absent: bait, weather and a cast that can fail
   are not things a market tool knows, and ranking a fish beside a mining node would promise
   an hour it cannot deliver.
+  Given how long you actually have, the ranking becomes a list with amounts on it: the
+  dearest things the board still has room for, in the order to gather them. Room is the
+  board's throughput over the selling horizon less what is already listed, because a
+  hundred and thirty a day is the whole market and the people already selling are ahead of
+  you in it. Timed nodes are priced by what the detour costs rather than dropped, since a
+  windowful for the price of the trip is usually a bargain and that is the whole reason
+  they are worth going out of your way for.
+
+  Three aims, because they pull against each other: the most gil is the most gil in one
+  thing, which is also the most exposed when that one thing's price moves while you are
+  still selling it. A mixed bag caps any one thing at a quarter of the trip and earns
+  perhaps a third less on paper. Sells soonest is the same ranking over tomorrow rather
+  than the week, so none of it is still sitting in a retainer when you next log in.
+
+  Two numbers in there are assumed rather than measured, how much an hour yields and what
+  a window is worth, so both are settings and everything scaled by them says so.
+
   The list goes over to GatherBuddyReborn in one paste, as a gather window preset. Its IPC
   offers a version, a name lookup and a switch for auto-gather and nothing for managing what
   is in a list, but its own import takes a gzipped preset behind a version byte, so that is

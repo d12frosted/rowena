@@ -111,6 +111,23 @@ internal sealed class SettingsTab(
             + "Your own hands are the tighter limit almost always.");
 
         changed |= Number(
+            "Items you gather an hour", config.GatherPerHour, value => config.GatherPerHour = value,
+            "The only number a session plan assumes rather than knows, and the one everything in\n"
+            + "it scales by, so it is worth correcting once you have watched an hour go by. Nobody\n"
+            + "has measured this yet; three hundred is a placeholder, not a finding.");
+
+        changed |= Number(
+            "A timed node is worth (items)", config.GatherWindowYield, value => config.GatherWindowYield = value,
+            "With the next one, what lets a node on a clock be weighed against an ordinary one\n"
+            + "rather than dropped for not fitting the assumption. A windowful for the price of the\n"
+            + "detour is usually a bargain, which is why they are worth going out of your way for.");
+
+        changed |= Number(
+            "The detour to one costs (minutes)", config.GatherWindowMinutes, value => config.GatherWindowMinutes = value,
+            "Travel and waiting, not just the gathering. Raise it and timed nodes stop being worth\n"
+            + "a short trip, which is the honest behaviour when they are far away.");
+
+        changed |= Number(
             "Gatherables to rank", config.GatherShortlist, value => config.GatherShortlist = value,
             "How many survive the survey and get a full book fetched. The survey itself covers every\n"
             + "marketable gatherable and costs about eight requests.");

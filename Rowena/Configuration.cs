@@ -186,6 +186,34 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Whether to include things only found on nodes that appear on a clock.</summary>
     public bool GatherIncludeTimed { get; set; } = true;
 
+    /// <summary>How long the session you are planning for is, in minutes. Zero ranks instead of planning.</summary>
+    public int GatherSessionMinutes { get; set; }
+
+    /// <summary>
+    /// How many items an hour of gathering yields.
+    /// </summary>
+    /// <remarks>
+    /// The one number in a session plan that is assumed rather than known, so it is a setting
+    /// rather than a constant and everything built on it says it is scaled by it.
+    /// </remarks>
+    public int GatherPerHour { get; set; } = 300;
+
+    /// <summary>What a session plan is trying to be good at. Indexes <c>GatherAim</c>.</summary>
+    public int GatherAim { get; set; }
+
+    /// <summary>
+    /// How many items one visit to a timed node is worth.
+    /// </summary>
+    /// <remarks>
+    /// With <see cref="GatherWindowMinutes"/>, this is what lets a node on a clock be compared
+    /// against an ordinary one instead of being dropped for not fitting the assumption. Both are
+    /// assumed rather than measured, which is why they are settings.
+    /// </remarks>
+    public int GatherWindowYield { get; set; } = 40;
+
+    /// <summary>How long the detour to a timed node costs, in minutes.</summary>
+    public int GatherWindowMinutes { get; set; } = 5;
+
     /// <summary>
     /// The world the vendor table is filtered to, or empty for all of them.
     /// </summary>
