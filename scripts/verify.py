@@ -169,8 +169,20 @@ def verify_vendor(config, buyer_rate):
         # nature: they are underpriced and somebody else can see them too. A book whose floor
         # has moved is not the book the plugin costed, so there is nothing to compare.
         live_floor = min((l["pricePerUnit"] for l in listings), default=None)
-        if live_floor != find["cheapest"]:
-            print(f"  SKIP  {find['name']}: board moved (floor {find['cheapest']:,} -> {live_floor:,})")
+
+        # Floor and listing count can both survive a change: somebody buys from the middle of
+        # the book and somebody else lists. Units are the sensitive part, and these items are
+        # underpriced by definition, so they churn.
+        live_units = sum(l["quantity"] for l in listings)
+
+        if (live_floor != find["cheapest"]
+                or len(listings) != find["listings"]
+                or live_units != find["unitsListed"]):
+            print(
+                f"  SKIP  {find['name']}: board moved since the dump "
+                f"({find['unitsListed']} units in {find['listings']} listings at {find['cheapest']:,} "
+                f"-> {live_units} in {len(listings)} at {live_floor:,})"
+            )
             continue
 
         units = profit = 0

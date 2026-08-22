@@ -24,6 +24,7 @@ internal sealed class VendorTab
     private readonly Boards boards;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly Action<IReadOnlyList<uint>> recheck;
 
     private readonly Rebuilt<Model> model;
 
@@ -40,12 +41,19 @@ internal sealed class VendorTab
         + "several trips: the one holding most of it is named, and the rest are on hover.",
     ];
 
-    public VendorTab(VendorSweep sweep, Boards boards, ItemCells cells, Configuration config, Diagnostics diagnostics)
+    public VendorTab(
+        VendorSweep sweep,
+        Boards boards,
+        ItemCells cells,
+        Configuration config,
+        Diagnostics diagnostics,
+        Action<IReadOnlyList<uint>> recheck)
     {
         this.sweep = sweep;
         this.boards = boards;
         this.cells = cells;
         this.config = config;
+        this.recheck = recheck;
 
         model = new Rebuilt<Model>("vendor", Build, diagnostics);
     }
@@ -73,6 +81,9 @@ internal sealed class VendorTab
                     cheapest = find.Cheapest,
                     units = find.Units,
                     profit = find.Profit,
+                    listings = find.Listings,
+                    unitsListed = find.UnitsListed,
+                    seenAt = find.SeenAt,
                     byWorld = find.ByWorld.Select(share => new
                     {
                         world = share.World,
@@ -148,6 +159,19 @@ internal sealed class VendorTab
 
             return;
         }
+
+        // These are underpriced by definition, so somebody else can see them too and they do
+        // not last. Worth refetching the moment before travelling rather than trusting a
+        // number the scan left behind.
+        if (ImGui.Button("Recheck these"))
+            recheck([.. current.Finds.Select(find => find.ItemId)]);
+
+        ImGui.SameLine();
+
+        var oldest = current.Finds.Min(find => find.SeenAt);
+        ImGui.TextColored(
+            Palette.Dim,
+            oldest == default ? "  " : $"  prices {Phrases.Ago(DateTimeOffset.UtcNow - oldest)} old");
 
         if (current.Hidden > 0)
             ImGui.TextColored(Palette.Dim, $"    {current.Hidden} more under {config.VendorFindFloor:N0} gil, hidden.");
@@ -272,7 +296,10 @@ internal sealed class VendorTab
                 book.Floor ?? 0,
                 arbitrage.Units,
                 arbitrage.Profit,
-                arbitrage.ByWorld));
+                arbitrage.ByWorld,
+                book.Listings.Count,
+                book.UnitsListed,
+                book.Retrieved));
         }
 
         return new Model([.. found.OrderByDescending(find => find.Profit)], hidden, uncosted);
@@ -285,7 +312,10 @@ internal sealed class VendorTab
         long Cheapest,
         int Units,
         long Profit,
-        IReadOnlyList<VendorArbitrage.WorldShare> ByWorld);
+        IReadOnlyList<VendorArbitrage.WorldShare> ByWorld,
+        int Listings,
+        int UnitsListed,
+        DateTimeOffset SeenAt);
 
     /// <param name="Hidden">Finds under the floor, counted rather than dropped silently.</param>
     /// <param name="Uncosted">Shortlisted items with no book yet, which is not the same as no find.</param>

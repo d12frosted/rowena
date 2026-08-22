@@ -106,7 +106,9 @@ public sealed class Plugin : IDalamudPlugin
         var craftTab = new CraftTab(
             sweep, furnishings, boards, cells, basket, config, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
-        var vendorTab = new VendorTab(vendorSweep, boards, cells, config, diagnostics);
+        var vendorTab = new VendorTab(
+            vendorSweep, boards, cells, config, diagnostics,
+            ids => market.RefreshInBackground(scope.Buying, [.. ids], true, FetchPriority.Interactive));
         var diagnosticsPanel = new DiagnosticsPanel(
             diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
 
