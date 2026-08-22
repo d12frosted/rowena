@@ -164,6 +164,15 @@ def verify_vendor(config, buyer_rate):
 
     for find in dump["finds"]:
         listings = board(dump["buying"], find["item"])["listings"]
+
+        # These are the finds most likely to be bought out from under the dump, by their
+        # nature: they are underpriced and somebody else can see them too. A book whose floor
+        # has moved is not the book the plugin costed, so there is nothing to compare.
+        live_floor = min((l["pricePerUnit"] for l in listings), default=None)
+        if live_floor != find["cheapest"]:
+            print(f"  SKIP  {find['name']}: board moved (floor {find['cheapest']:,} -> {live_floor:,})")
+            continue
+
         units = profit = 0
 
         # Whole listings only, cheapest first, while each still pays after the buyer's cut.
@@ -178,9 +187,12 @@ def verify_vendor(config, buyer_rate):
 
         ok = units == find["units"] and profit == find["profit"]
         failures += not ok
+
+        # Buying is per world, so a find is only one errand if it sits on one world.
+        worlds = " ".join(f"{s['world']}:{s['units']}" for s in find["byWorld"])
         print(
             f"  {'ok  ' if ok else 'FAIL'}  {find['name']}: "
-            f"{find['units']}u/{find['profit']:,} vs {units}u/{profit:,}"
+            f"{find['units']}u/{find['profit']:,} vs {units}u/{profit:,}  [{worlds}]"
         )
 
     return failures

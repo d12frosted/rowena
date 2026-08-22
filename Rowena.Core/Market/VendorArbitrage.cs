@@ -13,7 +13,17 @@ public static class VendorArbitrage
 {
     /// <param name="Units">How many can be bought at a gain.</param>
     /// <param name="Profit">What vendoring them pays over what they cost, tax included.</param>
-    public readonly record struct Found(int Units, long Profit);
+    /// <param name="ByWorld">
+    /// The same, split by the world the listings stand on, most units first.
+    /// </param>
+    public readonly record struct Found(int Units, long Profit, IReadOnlyList<WorldShare> ByWorld)
+    {
+        /// <summary>The world holding most of it, which is the one trip worth making.</summary>
+        public WorldShare? Best => ByWorld.Count == 0 ? null : ByWorld[0];
+    }
+
+    /// <summary>What one world holds of a find.</summary>
+    public readonly record struct WorldShare(string World, int Units, long Profit);
 
     /// <summary>
     /// Whether a book whose cheapest unit costs <paramref name="minListing"/> could hold any
@@ -34,10 +44,17 @@ public static class VendorArbitrage
     public static Found Find(OrderBook book, long vendorPrice, MarketTax tax)
     {
         if (vendorPrice <= 0)
-            return new Found(0, 0);
+            return new Found(0, 0, []);
 
         var units = 0;
         long profit = 0;
+
+        // Split by world, because buying is per world: the board is read across the data
+        // centre but bought from by travelling to whoever is selling. A find of two hundred
+        // units spread over five worlds is five trips, and reporting only the world holding
+        // the single cheapest listing said one, which was the wrong number of journeys and
+        // sometimes the wrong world entirely.
+        var worlds = new Dictionary<string, (int Units, long Profit)>(StringComparer.Ordinal);
 
         foreach (var listing in book.Listings)
         {
@@ -50,8 +67,19 @@ public static class VendorArbitrage
 
             units += listing.Quantity;
             profit += gain;
+
+            var world = string.IsNullOrWhiteSpace(listing.World) ? "unknown" : listing.World;
+            var share = worlds.GetValueOrDefault(world);
+            worlds[world] = (share.Units + listing.Quantity, share.Profit + gain);
         }
 
-        return new Found(units, profit);
+        return new Found(
+            units,
+            profit,
+            [
+                .. worlds
+                    .Select(entry => new WorldShare(entry.Key, entry.Value.Units, entry.Value.Profit))
+                    .OrderByDescending(share => share.Units),
+            ]);
     }
 }

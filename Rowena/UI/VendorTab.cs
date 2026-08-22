@@ -36,7 +36,8 @@ internal sealed class VendorTab
         "How many units are listed cheaply enough to still pay once the board's 5% buyer's\n"
         + "cut is added.",
         "What buying those units and selling them to a vendor leaves, tax included.",
-        "The world holding the cheapest listing. You have to travel there to buy it.",
+        "Where the units actually are. Buying is per world, so a find spread over several is\n"
+        + "several trips: the one holding most of it is named, and the rest are on hover.",
     ];
 
     public VendorTab(VendorSweep sweep, Boards boards, ItemCells cells, Configuration config, Diagnostics diagnostics)
@@ -72,7 +73,12 @@ internal sealed class VendorTab
                     cheapest = find.Cheapest,
                     units = find.Units,
                     profit = find.Profit,
-                    world = find.World,
+                    byWorld = find.ByWorld.Select(share => new
+                    {
+                        world = share.World,
+                        units = share.Units,
+                        profit = share.Profit,
+                    }),
                 }),
             },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -177,10 +183,45 @@ internal sealed class VendorTab
             Cell.Right(Palette.Good, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, row.World);
+            DrawWhere(row);
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// Which worlds the units are on, since a trip is per world.
+    /// </summary>
+    /// <remarks>
+    /// The world of the cheapest listing used to be the whole answer, and it was often the
+    /// wrong one: a find of a hundred and ninety-seven units named the world holding five of
+    /// them. What is named now is the world holding most, with the rest counted beside it, so
+    /// a find that is really five errands does not read as one.
+    /// </remarks>
+    private static void DrawWhere(Find row)
+    {
+        if (row.ByWorld is not [var best, ..])
+        {
+            ImGui.TextColored(Palette.Dim, "unknown");
+            return;
+        }
+
+        var others = row.ByWorld.Count - 1;
+
+        ImGui.TextColored(
+            Palette.Dim,
+            others == 0
+                ? $"{best.World} (all {best.Units})"
+                : $"{best.World} {best.Units} of {row.Units}, +{others} more");
+
+        if (!ImGui.IsItemHovered())
+            return;
+
+        ImGui.SetTooltip(
+            "Buying is per world, so each of these is its own trip:\n"
+            + string.Join(
+                "\n",
+                row.ByWorld.Select(share => $"  {share.World}: {share.Units} units, {share.Profit:N0} gil")));
     }
 
     /// <summary>What the shortlist is worth against the books the cache holds now.</summary>
@@ -231,7 +272,7 @@ internal sealed class VendorTab
                 book.Floor ?? 0,
                 arbitrage.Units,
                 arbitrage.Profit,
-                book.Listings[0].World));
+                arbitrage.ByWorld));
         }
 
         return new Model([.. found.OrderByDescending(find => find.Profit)], hidden, uncosted);
@@ -244,7 +285,7 @@ internal sealed class VendorTab
         long Cheapest,
         int Units,
         long Profit,
-        string World);
+        IReadOnlyList<VendorArbitrage.WorldShare> ByWorld);
 
     /// <param name="Hidden">Finds under the floor, counted rather than dropped silently.</param>
     /// <param name="Uncosted">Shortlisted items with no book yet, which is not the same as no find.</param>

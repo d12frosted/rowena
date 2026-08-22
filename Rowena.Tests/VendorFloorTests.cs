@@ -125,6 +125,29 @@ public class VendorFloorTests
     }
 
     [Fact]
+    public void AFindIsSplitByTheWorldItStandsOn()
+    {
+        // Buying happens per world, by travelling to whoever is selling. A find spread over
+        // three worlds is three trips, and the world holding the cheapest listing can hold
+        // almost none of it: measured on a live board, one find showed five units on the
+        // world it named and a hundred and forty-seven on another.
+        var book = OrderBook.Create(1, [
+            new Listing(10, 5, "Raiden"),
+            new Listing(11, 147, "Lich"),
+            new Listing(12, 20, "Phoenix"),
+        ]);
+
+        var found = VendorArbitrage.Find(book, vendorPrice: 100, MarketTax.None);
+
+        Assert.Equal(172, found.Units);
+        Assert.Equal("Lich", found.Best!.Value.World);
+        Assert.Equal(147, found.Best!.Value.Units);
+        Assert.Equal(3, found.ByWorld.Count);
+        Assert.Equal(found.Profit, found.ByWorld.Sum(share => share.Profit));
+        Assert.Equal(found.Units, found.ByWorld.Sum(share => share.Units));
+    }
+
+    [Fact]
     public void NoArbitrageWhenTheBoardIsDearer()
     {
         var book = OrderBook.Create(1, [new Listing(120, 3, "Phoenix")]);
