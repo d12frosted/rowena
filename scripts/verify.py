@@ -171,6 +171,7 @@ def main():
     failures += verify_vendor(config, buyer)
     failures += verify_craft(config, buyer, seller)
     failures += verify_gather(config, seller)
+    failures += verify_selling(config)
 
     print(f"\n{failures} disagreements")
     return 1 if failures else 0
@@ -207,6 +208,62 @@ def verify_gather(config, seller_rate):
         print(
             f"  {'ok  ' if ok else 'FAIL'}  {row['name']}: each {row['each']:,} vs {net:,}"
             f"  [{row['job']} {row['level']}{', timed' if row['timed'] else ''}]"
+        )
+
+    return failures
+
+
+def verify_selling(config):
+    """What my own listings are sitting in: the queue below me, and what the thing really sells for.
+
+    The queue is the whole point of the tab, so it is the thing worth checking against the
+    live board. It is also the number a stale cache gets wrong most visibly: a floor can be
+    right while everything underneath it has moved.
+    """
+    path = os.path.join(config, "selling.json")
+
+    if not os.path.exists(path):
+        return 0
+
+    with open(path) as handle:
+        dump = json.load(handle)
+
+    if not dump["rows"]:
+        print("\nselling: nothing listed, or no prices for it yet")
+        return 0
+
+    print(f"\nselling ({dump['listed']} items the game has told us about)")
+    failures = 0
+
+    for row in dump["rows"]:
+        live = board(dump["selling"], row["item"])
+        listings = live["listings"]
+
+        if not listings:
+            print(f"  SKIP  {row['name']}: nothing listed now")
+            continue
+
+        ahead = sum(l["quantity"] for l in listings if l["pricePerUnit"] < row["mine"])
+        sales = sorted(e["pricePerUnit"] for e in live.get("recentHistory", []))
+        typical = sales[len(sales) // 2] if sales else None
+
+        # Recent history is a rolling window, so it is checked for agreement in scale rather
+        # than to the gil: a verdict that turns on it should not flip because one sale aged out.
+        drifted = (
+            typical is not None
+            and row["typical"] is not None
+            and not 0.5 <= row["typical"] / typical <= 2.0
+        )
+
+        if ahead != row["ahead"]:
+            print(f"  SKIP  {row['name']}: queue moved ({row['ahead']} -> {ahead} ahead)")
+            continue
+
+        ok = not drifted
+        failures += not ok
+        print(
+            f"  {'ok  ' if ok else 'FAIL'}  {row['name']}: {row['ahead']} ahead, "
+            f"sells for {row['typical']} vs {typical} -> {row['call']}"
         )
 
     return failures

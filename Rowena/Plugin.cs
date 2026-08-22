@@ -111,6 +111,10 @@ public sealed class Plugin : IDalamudPlugin
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
         var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);
+
+        var sellingTab = new SellingTab(
+            boardWatcher, boards, cells, config, diagnostics,
+            ids => market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive));
         var vendorTab = new VendorTab(
             vendorSweep, boards, cells, config, diagnostics,
             ids => market.RefreshInBackground(scope.Buying, [.. ids], true, FetchPriority.Interactive));
@@ -123,7 +127,7 @@ public sealed class Plugin : IDalamudPlugin
 
         mainWindow = new MainWindow(
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
-            gatherSweep, convertTab, craftTab, vendorTab, gatherTab, settingsTab, config, Save);
+            gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
         var headlines = new Headlines(trades, boards, balances, config);
@@ -149,6 +153,7 @@ public sealed class Plugin : IDalamudPlugin
                 ["recraft"] = RecheckCrafts,
                 ["survey"] = () => gatherSweep.Start(scope.Selling, config.GatherShortlist, config.SweepAge()),
                 ["gather"] = () => mainWindow.Show(MainWindow.Tab.Gather),
+                ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["plan 10"] = () => gatherTab.PlanFor(10),
                 ["plan 30"] = () => gatherTab.PlanFor(30),
                 ["plan 60"] = () => gatherTab.PlanFor(60),
@@ -174,6 +179,7 @@ public sealed class Plugin : IDalamudPlugin
                     File.WriteAllText(Path.Combine(into, "vendor.json"), vendorTab.Dump());
                     File.WriteAllText(Path.Combine(into, "craft.json"), craftTab.Dump());
                     File.WriteAllText(Path.Combine(into, "gather.json"), gatherTab.Dump());
+                    File.WriteAllText(Path.Combine(into, "selling.json"), sellingTab.Dump());
                 },
             },
             diagnosticsPanel.Report);
@@ -186,6 +192,7 @@ public sealed class Plugin : IDalamudPlugin
                 .. craftTab.Warmers,
                 .. vendorTab.Warmers,
                 .. gatherTab.Warmers,
+                .. sellingTab.Warmers,
             ],
             () => scope.Ready,
             diagnostics);

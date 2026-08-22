@@ -170,6 +170,29 @@ away. Under it, a tab per question:
   the hand-off: this decides what is worth gathering, and the plugin that gathers gathers it.
   A format rather than an interface, so the shape is pinned by a test that takes the string
   apart again.
+- **Selling.** What is already sitting on a retainer, which is where a good deal of gil
+  quietly is not. Every other tab asks what to acquire; this one reads what you have out.
+
+  Not an undercut tool, deliberately. Undercutting is the one move the board makes easy and
+  it is usually the wrong one: the question is never "is somebody cheaper than me" but "how
+  long until the board has eaten through everyone cheaper than me". Three units ahead on a
+  board selling ten a day are gone this afternoon, and dropping your price to jump them is a
+  haircut for nothing. So each row shows the queue, what the thing actually changes hands
+  for, and what chasing the floor would cost, then says what it thinks and shows its working.
+
+  What it sells for is the number worth having beside what you are asking. Measured: ten
+  Mozzarella listed at 389,994 on a board where every listing sits at that level and
+  everything that actually trades goes for under 1,500. A wall of listings nobody takes is
+  not a market, and being at the front of it is not a position.
+
+  Room to raise is measured against the next listing rather than against past sales. A
+  nugget at 895 with the next at 900 reads as a third under the going rate if you go by
+  history, and raising it earns four gil.
+
+  Listings come from the game rather than Universalis, so they are exact: opening a board
+  once says what you have out, and it is remembered after that. Each is netted at its own
+  retainer's city rate rather than the worst of them, since that is a number the game has
+  actually said.
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
