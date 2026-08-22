@@ -164,6 +164,14 @@ internal sealed class ConvertTab
                         quantity = input.Quantity,
                         cost = input.Cost,
                         sourced = input.Sourced,
+
+                        // What the book looked like when this number was worked out. Without
+                        // it a checker cannot tell a stale book from a wrong answer, and a
+                        // moved board reads as a failure: an input priced before someone
+                        // bought the cheapest listing is a different question, not a bad
+                        // answer to this one.
+                        floor = boards.Buying(input.ItemId)?.Floor ?? 0,
+                        listed = boards.Buying(input.ItemId)?.UnitsListed ?? 0,
                     }),
                 }),
             },

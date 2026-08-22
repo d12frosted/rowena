@@ -158,11 +158,27 @@ def main():
 
         outlay = 0
         short = False
+        moved = []
         for item in row["inputs"]:
             listings = board(buying, item["item"])["listings"]
             cost, filled = cost_of_runs(listings, item["quantity"], row["runs"], buyer)
             short |= filled < item["quantity"] * row["runs"]
             outlay += cost
+
+            # A book that has moved since the dump is a different question, not a wrong answer
+            # to this one. Priced against a floor that has since gone, an input is stale by
+            # definition, and calling that a failure taught me to distrust the checker instead
+            # of the number: this cried wolf on a flip whose only fault was a queue that had
+            # drained while the fetch was still catching up.
+            floor = min((l["pricePerUnit"] for l in listings), default=0)
+            units = sum(l["quantity"] for l in listings)
+            if (floor, units) != (item.get("floor", floor), item.get("listed", units)):
+                moved.append(item["item"])
+
+        if moved:
+            print(f"  SKIP  {row['trade']}: book moved for {', '.join(str(m) for m in moved)}")
+            continue
+
         ok = outlay == row["outlay"]
         failures += not ok and not short
         note = " (board moved since the dump)" if short else ""
