@@ -26,6 +26,7 @@ internal sealed class OverviewTab(
     VendorTab vendor,
     GatherTab gather,
     SellingTab selling,
+    HoardTab hoard,
     FurnishingSweep sweep,
     Configuration config,
     Action<MainWindow.Tab> show)
@@ -85,7 +86,10 @@ internal sealed class OverviewTab(
         foreach (var note in convert.Headlines())
             yield return note;
 
-        foreach (var note in new[] { gather.Headline(), selling.Headline(), vendor.Headline(), crafts.Headline() })
+        foreach (var note in new[]
+                 {
+                     gather.Headline(), selling.Headline(), vendor.Headline(), crafts.Headline(), hoard.Headline(),
+                 })
         {
             if (note is { } one)
                 yield return one;

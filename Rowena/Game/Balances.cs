@@ -114,6 +114,65 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
         return null;
     }
 
+    /// <summary>The containers a pile of materials actually lives in.</summary>
+    /// <remarks>
+    /// Bags and saddlebags only. The armoury and what you are wearing are equipment rather than
+    /// stock, and a tool that offered to vendor the axe in your hand would deserve everything it
+    /// got.
+    /// </remarks>
+    private static readonly InventoryType[] Bags =
+    [
+        InventoryType.Inventory1,
+        InventoryType.Inventory2,
+        InventoryType.Inventory3,
+        InventoryType.Inventory4,
+        InventoryType.SaddleBag1,
+        InventoryType.SaddleBag2,
+        InventoryType.PremiumSaddleBag1,
+        InventoryType.PremiumSaddleBag2,
+    ];
+
+    /// <summary>
+    /// Everything in the bags, stack by stack, folded together by item.
+    /// </summary>
+    /// <remarks>
+    /// The counting methods answer "how many of this do I have" and cannot answer "what have I
+    /// got", which is the question a full retainer actually asks. Read on the framework thread,
+    /// like everything else that touches game memory.
+    ///
+    /// High quality is folded in with the rest deliberately. It is a different price and the
+    /// same decision, and splitting the rows would double a table whose whole purpose is to be
+    /// short enough to act on.
+    /// </remarks>
+    public unsafe IReadOnlyDictionary<uint, int> Carrying()
+    {
+        var held = new Dictionary<uint, int>();
+        var manager = InventoryManager.Instance();
+
+        if (manager is null)
+            return held;
+
+        foreach (var bag in Bags)
+        {
+            var container = manager->GetInventoryContainer(bag);
+
+            if (container is null || !container->IsLoaded)
+                continue;
+
+            for (var slot = 0; slot < container->Size; slot++)
+            {
+                var item = container->GetInventorySlot(slot);
+
+                if (item is null || item->ItemId == 0 || item->Quantity <= 0)
+                    continue;
+
+                held[item->ItemId] = held.GetValueOrDefault(item->ItemId) + item->Quantity;
+            }
+        }
+
+        return held;
+    }
+
     /// <summary>Ordinary items, counted across bags, armoury and what you are wearing.</summary>
     private unsafe long InBags(uint itemId)
     {

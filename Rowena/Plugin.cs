@@ -124,8 +124,11 @@ public sealed class Plugin : IDalamudPlugin
         var diagnosticsPanel = new DiagnosticsPanel(
             diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
 
+        var hoardTab = new HoardTab(
+            balances, boards, market, cells, config, diagnostics, () => craftTab.Wants());
+
         var overviewTab = new OverviewTab(
-            convertTab, craftTab, vendorTab, gatherTab, sellingTab, sweep, config,
+            convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, sweep, config,
             tab => mainWindow!.Show(tab));
 
         var settingsTab = new SettingsTab(
@@ -134,7 +137,7 @@ public sealed class Plugin : IDalamudPlugin
 
         mainWindow = new MainWindow(
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
-            gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, overviewTab, settingsTab, config, Save);
+            gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, overviewTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
 
         var headlines = new Headlines(trades, boards, balances, config);
@@ -162,6 +165,7 @@ public sealed class Plugin : IDalamudPlugin
                 ["gather"] = () => mainWindow.Show(MainWindow.Tab.Gather),
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
+                ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
                 ["sales"] = () => Log.Information(
                     $"Sales remembered: {sales.All().Count}. "
                     + string.Join("; ", sales.All().Take(8).Select(one => $"{one.Quantity}x {one.ItemId} for {one.Gil:N0}"))),
@@ -192,6 +196,7 @@ public sealed class Plugin : IDalamudPlugin
                     File.WriteAllText(Path.Combine(into, "gather.json"), gatherTab.Dump());
                     File.WriteAllText(Path.Combine(into, "selling.json"), sellingTab.Dump());
                     File.WriteAllText(Path.Combine(into, "overview.json"), overviewTab.Dump());
+                    File.WriteAllText(Path.Combine(into, "hoard.json"), hoardTab.Dump());
                 },
             },
             diagnosticsPanel.Report);
@@ -205,6 +210,7 @@ public sealed class Plugin : IDalamudPlugin
                 .. vendorTab.Warmers,
                 .. gatherTab.Warmers,
                 .. sellingTab.Warmers,
+                .. hoardTab.Warmers,
             ],
             () => scope.Ready,
             diagnostics);

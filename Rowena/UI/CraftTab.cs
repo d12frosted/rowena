@@ -134,6 +134,19 @@ internal sealed class CraftTab
             MainWindow.Tab.Craft);
     }
 
+    /// <summary>
+    /// Every material the current ranking wants, so nothing offers to sell them.
+    /// </summary>
+    /// <remarks>
+    /// Reads the shortlist that is already built rather than costing anything again. Telling
+    /// somebody to vendor the materials for the thing this tab just told them to make would be
+    /// the worst advice in the plugin.
+    /// </remarks>
+    public IReadOnlySet<uint> Wants() =>
+        model.Current.Crafts
+            .SelectMany(craft => craft.Breakdown.Select(line => line.ItemId))
+            .ToHashSet();
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 

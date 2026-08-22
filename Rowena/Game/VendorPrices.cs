@@ -33,6 +33,18 @@ internal sealed class VendorPrices(IDataManager data)
             .Select(item => item.RowId),
     ];
 
+    /// <summary>
+    /// Whether the board would even take it.
+    /// </summary>
+    /// <remarks>
+    /// The difference between "a vendor is the only buyer" and "no price has been fetched yet",
+    /// which look identical from a missing summary and are opposite answers. Saying the first
+    /// when it is the second is how a table reads as a confident loss until the fetch arrives.
+    /// </remarks>
+    public bool Marketable(uint itemId) =>
+        data.GetExcelSheet<Lumina.Excel.Sheets.Item>().GetRowOrDefault(itemId)
+            is { } item && item.ItemSearchCategory.RowId > 0;
+
     public long For(uint itemId)
     {
         if (cache.TryGetValue(itemId, out var known))

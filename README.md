@@ -220,6 +220,20 @@ away. Under it, a tab per question:
   once says what you have out, and it is remembered after that. Each is netted at its own
   retainer's city rate rather than the worst of them, since that is a number the game has
   actually said.
+- **Bags.** What to do with the pile. Materials accumulate faster than anybody decides about
+  them, and the decision is dull enough that the pile wins. It is not a hard question, only a
+  repetitive one: for each stack, does the board pay more than a vendor, will the board take
+  it in any reasonable time, and is it wanted for something anyway.
+
+  That last one is why the craft table gets a say. Telling somebody to vendor the materials
+  for the thing it just recommended would be the worst advice in here.
+
+  A stack with no price yet is not a stack worth nothing. Priced as nothing, everything the
+  sweep had not reached read as a confident "vendor it", which is this plugin's own founding
+  mistake wearing a different hat: a missing number is not a small number. Anything the board
+  trades but has no price for is asked about instead, and only genuinely untradeable things
+  are called for the vendor by default.
+
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,

@@ -26,6 +26,9 @@ internal sealed class Boards(MarketCache market, PricingScope scope, VendorPrice
     /// <summary>The floor under every sale: what a vendor pays, wherever you are.</summary>
     public Func<uint, long> Vendor => vendors.For;
 
+    /// <summary>Whether the board would take it at all, as opposed to having no price yet.</summary>
+    public Func<uint, bool> Marketable => vendors.Marketable;
+
     /// <summary>
     /// The cut to price with: the buyer's flat five percent, and the seller's rate the game
     /// has actually reported for the cities I sell from.

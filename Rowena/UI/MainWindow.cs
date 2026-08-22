@@ -41,6 +41,7 @@ internal sealed class MainWindow : Window
     private readonly GatherTab gather;
     private readonly SellingTab selling;
     private readonly OverviewTab overview;
+    private readonly HoardTab hoard;
     private readonly SettingsTab settings;
     private readonly Configuration config;
     private readonly Action save;
@@ -67,6 +68,7 @@ internal sealed class MainWindow : Window
         VendorTab vendor,
         GatherTab gather,
         SellingTab selling,
+        HoardTab hoard,
         OverviewTab overview,
         SettingsTab settings,
         Configuration config,
@@ -85,6 +87,7 @@ internal sealed class MainWindow : Window
         this.vendor = vendor;
         this.gather = gather;
         this.selling = selling;
+        this.hoard = hoard;
         this.overview = overview;
         this.settings = settings;
         this.config = config;
@@ -227,6 +230,16 @@ internal sealed class MainWindow : Window
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Bags###hoard", Selecting(Tab.Hoard)))
+        {
+            if (selling is { } bagsOn)
+                hoard.Draw(bagsOn);
+            else
+                NoBoard();
+
+            ImGui.EndTabItem();
+        }
+
         if (ImGui.BeginTabItem(crafts.Label, Selecting(Tab.Craft)))
         {
             if (buying is { } craftBuying && selling is { } craftSelling)
@@ -270,6 +283,7 @@ internal sealed class MainWindow : Window
         Vendor,
         Gather,
         Selling,
+        Hoard,
         Craft,
         Settings,
     }
