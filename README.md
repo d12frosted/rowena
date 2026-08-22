@@ -356,10 +356,14 @@ interprets it. It is the link an activity will need in order to know what it pro
 
 ## Nothing is written into the game
 
-Rowena never prints into the game: not a chat line, not a toast, not a link, not an error. It
-reads the client's own packets and its chat log, and everything it has to say it says inside
-its own window. A line in chat is a line in every screenshot, and none of this is worth a
-plugin announcing itself in the world for.
+Rowena never speaks into the game unprompted: no login line, no alerts, no toasts, no error
+replies. It reads the client's own packets and its chat log, and everything it has to say it
+says inside its own window. A line in chat is a line in every screenshot, and none of this is
+worth a plugin announcing itself in the world for.
+
+The single exception is "Link in chat" on the right-click menu, which puts an item link in
+your own log so you can read the game's real tooltip. Nothing reaches the log unless you
+picked it off a menu, and linking an item is a thing people do by hand all day.
 
 Logging in earns one line on the Overview, once the prices have been refetched: what is near its
 cap, what the flips pay and which one pays most, how old the furnishing sweep is. The

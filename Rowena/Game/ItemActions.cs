@@ -19,6 +19,7 @@ internal sealed class ItemActions(
     ArtisanIpc artisan,
     AllaganToolsIpc allaganTools,
     CraftBasket basket,
+    IChatGui chat,
     IPluginLog log)
 {
     /// <summary>Crafts waiting to be handed to Artisan as a list.</summary>
@@ -39,6 +40,30 @@ internal sealed class ItemActions(
     public void OpenCraftingLog(uint recipeId) => GameActions.OpenCraftingLog(recipeId, log);
 
     public void SearchMarketBoard(uint itemId) => GameActions.SearchMarketBoard(itemId, log);
+
+    /// <summary>
+    /// Puts the item into your own chat log as a link.
+    /// </summary>
+    /// <remarks>
+    /// The way to get the game's real tooltip, with everything in it, rather than an
+    /// approximation drawn in ImGui.
+    ///
+    /// The one thing here that writes into the game, and the exception is deliberate: nothing
+    /// reaches the log unless somebody picked it off a menu, and linking an item is a thing
+    /// people do by hand all day. What the rule is really about is this plugin talking
+    /// unprompted, which nothing here does.
+    /// </remarks>
+    public void LinkInChat(uint itemId)
+    {
+        try
+        {
+            chat.Print(new SeStringBuilder().AddItemLink(itemId, false).Build());
+        }
+        catch (Exception error)
+        {
+            log.Warning(error, $"Could not link item {itemId} in chat.");
+        }
+    }
 
     public void Craft(uint recipeId, int quantity) => artisan.Craft(recipeId, quantity);
 
