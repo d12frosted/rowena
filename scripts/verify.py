@@ -13,6 +13,7 @@ Ask the plugin for its numbers first (diagnostics must be on):
 then run this. It exits non-zero if anything disagrees.
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -56,6 +57,15 @@ def board(scope, item):
             time.sleep(2 * (attempt + 1))
 
     raise RuntimeError("unreachable")
+
+
+def book_print(listings):
+    """The same short digest of a book that the plugin records beside its numbers."""
+    joined = "|".join(
+        f"{l['pricePerUnit']}:{l['quantity']}"
+        for l in sorted(listings, key=lambda l: (l["pricePerUnit"], l["quantity"]))
+    )
+    return hashlib.sha256(joined.encode()).hexdigest()[:12]
 
 
 def cost_to_buy(listings, quantity, buyer_rate):
@@ -170,9 +180,12 @@ def main():
             # definition, and calling that a failure taught me to distrust the checker instead
             # of the number: this cried wolf on a flip whose only fault was a queue that had
             # drained while the fetch was still catching up.
-            floor = min((l["pricePerUnit"] for l in listings), default=0)
-            units = sum(l["quantity"] for l in listings)
-            if (floor, units) != (item.get("floor", floor), item.get("listed", units)):
+            # The split, not just the totals. The board floors its cut per listing, so the
+            # same units divided differently across a run of equally priced listings buy for a
+            # different number of gil and both are right: a hundred Mount Tokens off thirteen
+            # listings all asking 55,525 came to a gil more here than in the plugin, with
+            # nothing wrong with either.
+            if book_print(listings) != item.get("print", book_print(listings)):
                 moved.append(item["item"])
 
         if moved:

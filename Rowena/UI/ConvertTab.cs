@@ -170,8 +170,14 @@ internal sealed class ConvertTab
                         // moved board reads as a failure: an input priced before someone
                         // bought the cheapest listing is a different question, not a bad
                         // answer to this one.
+                        //
+                        // The print covers the split and not just the totals, because the
+                        // board's cut is floored per listing: the same units divided
+                        // differently across a run of equally priced listings buy for a
+                        // different number of gil, and both are correct.
                         floor = boards.Buying(input.ItemId)?.Floor ?? 0,
                         listed = boards.Buying(input.ItemId)?.UnitsListed ?? 0,
+                        print = BookPrint.Of(boards.Buying(input.ItemId)),
                     }),
                 }),
             },
