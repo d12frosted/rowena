@@ -35,6 +35,39 @@ public sealed class StoredSale
     public long Gil { get; set; }
 
     public long At { get; set; }
+
+    /// <summary>False when it was read off a retainer's slots rather than announced in chat.</summary>
+    public bool Announced { get; set; } = true;
+}
+
+/// <summary>One of a retainer's market slots, as it goes to the configuration file.</summary>
+public sealed class StoredSlot
+{
+    public uint ItemId { get; set; }
+
+    public int Quantity { get; set; }
+
+    public long UnitPrice { get; set; }
+
+    public bool IsHq { get; set; }
+}
+
+/// <summary>
+/// A retainer as it was last seen: what it had listed, and what was in its purse.
+/// </summary>
+/// <remarks>
+/// Both halves are needed. The slots say what went and the purse says whether it sold or was
+/// simply taken back.
+/// </remarks>
+public sealed class StoredRetainer
+{
+    public ulong RetainerId { get; set; }
+
+    public long Gil { get; set; }
+
+    public long SeenAt { get; set; }
+
+    public List<StoredSlot> Slots { get; set; } = [];
 }
 
 public sealed class Configuration : IPluginConfiguration
@@ -254,6 +287,9 @@ public sealed class Configuration : IPluginConfiguration
     /// survives logging out.
     /// </remarks>
     public List<StoredSale> Sales { get; set; } = [];
+
+    /// <summary>Each retainer as it was last seen, for working out what sold while away.</summary>
+    public List<StoredRetainer> Retainers { get; set; } = [];
 
     /// <summary>
     /// The seller's cut per city, as the game last reported it, and when it stops being true.

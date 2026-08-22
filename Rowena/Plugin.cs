@@ -49,6 +49,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly VendorSweep vendorSweep;
     private readonly GatherSweep gatherSweep;
     private readonly SalesLog sales;
+    private readonly RetainerSales retainerSales;
 
     public Plugin()
     {
@@ -116,6 +117,11 @@ public sealed class Plugin : IDalamudPlugin
         var gatherTab = new GatherTab(gatherSweep, gatherables, boards, cells, config, diagnostics);
 
         sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
+
+        // Chat only reports what sold while somebody was online to hear it. The rest is read
+        // off the retainer itself, whenever one is open.
+        retainerSales = new RetainerSales(
+            Framework, config, sales, boardWatcher.TaxFor, Save, diagnostics, Log);
 
         var sellingTab = new SellingTab(
             boardWatcher, boards, cells, config, diagnostics, sales,
@@ -347,6 +353,7 @@ public sealed class Plugin : IDalamudPlugin
 
         warmup.Dispose();
         sales.Dispose();
+        retainerSales.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

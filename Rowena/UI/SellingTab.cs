@@ -193,10 +193,13 @@ internal sealed class SellingTab
             return;
         }
 
+        var inferred = recently.Count(sale => !sale.Announced);
+
         ImGui.TextColored(
             Palette.Dim,
             $"    You have sold {recently.Sum(sale => sale.Quantity):N0} things for "
-            + $"{recently.Sum(sale => sale.Gil):N0} gil in the last {SinceDays} days.");
+            + $"{recently.Sum(sale => sale.Gil):N0} gil in the last {SinceDays} days."
+            + (inferred > 0 ? $" {inferred} of those were worked out rather than announced." : ""));
     }
 
     private void DrawTable(Model current)
@@ -298,7 +301,11 @@ internal sealed class SellingTab
             ImGui.SetTooltip(
                 $"You have sold {mine.Units} of these in the last {SinceDays} days for {mine.Gil:N0} gil,\n"
                 + $"which is {mine.Each:N0} each after fees. The last went "
-                + $"{Phrases.Ago(DateTimeOffset.UtcNow - mine.Last)} ago.");
+                + $"{Phrases.Ago(DateTimeOffset.UtcNow - mine.Last)} ago."
+                + (mine.Inferred > 0
+                    ? $"\n\n{mine.Inferred} of these were not announced in chat: the game only says so while\n"
+                      + "you are online, so they were read off the retainer's slots and purse instead."
+                    : ""));
         }
     }
 
@@ -435,7 +442,12 @@ internal sealed class SellingTab
         var units = mine.Sum(sale => sale.Quantity);
         var gil = mine.Sum(sale => sale.Gil);
 
-        return new Mine(units, gil, units > 0 ? gil / units : gil, mine.Max(sale => sale.At));
+        return new Mine(
+            units,
+            gil,
+            units > 0 ? gil / units : gil,
+            mine.Max(sale => sale.At),
+            mine.Count(sale => !sale.Announced));
     }
 
     private static int Urgency(ListingCall call) => call switch
@@ -463,7 +475,7 @@ internal sealed class SellingTab
             : boards.Tax;
 
     /// <summary>What my own retainers have done with one item lately.</summary>
-    private readonly record struct Mine(int Units, long Gil, long Each, DateTimeOffset Last);
+    private readonly record struct Mine(int Units, long Gil, long Each, DateTimeOffset Last, int Inferred);
 
     private sealed record Row(
         uint ItemId,

@@ -8,7 +8,11 @@ using Rowena.Core.Market;
 namespace Rowena.Game;
 
 /// <summary>One of my own sales, as it happened.</summary>
-internal readonly record struct Sale(uint ItemId, int Quantity, long Gil, DateTimeOffset At)
+/// <param name="Announced">
+/// True when the game said so in chat, false when it was worked out from a retainer's slots
+/// and purse. The two are kept apart because one is a fact and the other is a reading.
+/// </param>
+internal readonly record struct Sale(uint ItemId, int Quantity, long Gil, DateTimeOffset At, bool Announced = true)
 {
     /// <summary>What one of them fetched, net of the fees the message has already taken off.</summary>
     public long Each => Quantity > 0 ? Gil / Quantity : Gil;
@@ -64,13 +68,47 @@ internal sealed class SalesLog : IDisposable
                 stored.ItemId,
                 stored.Quantity,
                 stored.Gil,
-                DateTimeOffset.FromUnixTimeSeconds(stored.At))),
+                DateTimeOffset.FromUnixTimeSeconds(stored.At),
+                stored.Announced)),
         ];
 
         chat.ChatMessage += OnMessage;
     }
 
     public void Dispose() => chat.ChatMessage -= OnMessage;
+
+    /// <summary>
+    /// Remembers one sale, however it was learned of.
+    /// </summary>
+    /// <remarks>
+    /// Announced sales come from chat and are exact. Inferred ones are read off a retainer's
+    /// slots and purse when nobody was online to be told, and they are marked as such rather
+    /// than folded in: one is what the game said, the other is what the numbers imply.
+    /// </remarks>
+    public void Record(uint itemId, int quantity, long gil, bool announced)
+    {
+        lock (gate)
+        {
+            sales.Insert(0, new Sale(itemId, quantity, gil, DateTimeOffset.UtcNow, announced));
+
+            if (sales.Count > Keep)
+                sales.RemoveRange(Keep, sales.Count - Keep);
+
+            config.Sales =
+            [
+                .. sales.Select(one => new StoredSale
+                {
+                    ItemId = one.ItemId,
+                    Quantity = one.Quantity,
+                    Gil = one.Gil,
+                    At = one.At.ToUnixTimeSeconds(),
+                    Announced = one.Announced,
+                }),
+            ];
+        }
+
+        save();
+    }
 
     /// <summary>Everything remembered, newest first.</summary>
     public IReadOnlyList<Sale> All()
@@ -128,28 +166,7 @@ internal sealed class SalesLog : IDisposable
                 return;
             }
 
-            var sale = new Sale(item.ItemId, sold.Quantity, sold.Gil, DateTimeOffset.UtcNow);
-
-            lock (gate)
-            {
-                sales.Insert(0, sale);
-
-                if (sales.Count > Keep)
-                    sales.RemoveRange(Keep, sales.Count - Keep);
-
-                config.Sales =
-                [
-                    .. sales.Select(one => new StoredSale
-                    {
-                        ItemId = one.ItemId,
-                        Quantity = one.Quantity,
-                        Gil = one.Gil,
-                        At = one.At.ToUnixTimeSeconds(),
-                    }),
-                ];
-            }
-
-            save();
+            Record(item.ItemId, sold.Quantity, sold.Gil, announced: true);
             diagnostics.Note("sales", $"sold {sold.Quantity}x {item.ItemId} for {sold.Gil:N0}");
         }
         catch (Exception error)

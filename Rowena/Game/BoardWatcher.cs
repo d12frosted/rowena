@@ -163,6 +163,19 @@ internal sealed class BoardWatcher : IDisposable
     /// to see on the board, so this is right from the moment the game says what the rates are
     /// rather than waiting for me to look up something I am selling.
     /// </remarks>
+    /// <summary>
+    /// The cut for one city, when the game has said what it is.
+    /// </summary>
+    /// <remarks>
+    /// For pricing something that has already sold from a known retainer, where the city is a
+    /// fact rather than a guess. <see cref="Tax"/> assumes the worst of the cities you have
+    /// retainers in, because it is pricing something not yet sold.
+    /// </remarks>
+    public MarketTax TaxFor(uint cityId) =>
+        SellerRates is { } rates && rates.TryGetValue(cityId, out var rate)
+            ? Tax().WithSellerRate(rate)
+            : Tax();
+
     public MarketTax Tax()
     {
         if (SellerRates is not { Count: > 0 } rates)
