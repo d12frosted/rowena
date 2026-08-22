@@ -369,7 +369,15 @@ The plugin writes what it is showing; the script fetches the same items from Uni
 and recomputes each row in another language, then complains if the two disagree. Measured
 against a live board, they do not: outlays and net proceeds match to the gil.
 
-Two things it taught rather than confirmed. Buying three runs of a trade is not the same as
+Three links in that chain cannot be checked from outside, and were checked in the game
+instead. The buyer's cut: a purchase dialog offering one item for 156,567 gil with a fee of
+7,455 is a sticker of 149,112 and five percent of it floored, which is what the book walk
+charges. The seller's cut: a retainer vocate listing three cities as normal and five as
+reduced matches the rates the plugin captured, city for city. And a generated trade at its
+counter: the purple scrip exchange charges ten scrips for a Mozzarella, which is what the
+sheets said and what the table shows.
+
+Two things the script taught rather than confirmed. Buying three runs of a trade is not the same as
 buying three times the quantity, because the board floors its cut per listing per purchase
 and three runs are three purchases, so the script has to buy the way the plugin says you
 would. And a row whose input is wanted by another row cannot be checked on its own at all:
