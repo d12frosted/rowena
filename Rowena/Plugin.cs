@@ -149,7 +149,8 @@ public sealed class Plugin : IDalamudPlugin
             () => mainWindow.Show(MainWindow.Tab.Flips));
 
         briefing = new Briefing(
-            ClientState, Framework, ChatGui, market, sweep, headlines, config,
+            ClientState, Framework, ChatGui, market, sweep, headlines, config, diagnostics,
+            () => gatherTab.OpenNow(),
             () => scope.Ready,
             () => mainWindow.RefreshPrices(FetchPriority.Background));
 
@@ -167,6 +168,12 @@ public sealed class Plugin : IDalamudPlugin
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
                 ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
+                ["alert windows"] = () =>
+                {
+                    config.AlertWindows = !config.AlertWindows;
+                    Save();
+                    Log.Information($"Window alerts are now {(config.AlertWindows ? "on" : "off")}.");
+                },
                 ["sales"] = () => Log.Information(
                     $"Sales remembered: {sales.All().Count}. "
                     + string.Join("; ", sales.All().Take(8).Select(one => $"{one.Quantity}x {one.ItemId} for {one.Gil:N0}"))),

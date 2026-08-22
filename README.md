@@ -155,6 +155,10 @@ away. Under it, a tab per question:
   windowful for the price of the trip is usually a bargain and that is the whole reason
   they are worth going out of your way for.
 
+  Optionally it says so in chat when a paying window opens. That is the only unprompted
+  thing in here, and it earns it by being the only thing that will not still be true in ten
+  minutes.
+
   Timed nodes carry their windows, read off the game's own tables, and the tab counts them
   down in minutes you can feel rather than the game's hours. That conversion is the point:
   a window advertised as four hours lasts under twelve real minutes, and a two hour one under

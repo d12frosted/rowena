@@ -304,6 +304,19 @@ public sealed class Configuration : IPluginConfiguration
     public bool AlertStaleSweep { get; set; } = true;
 
     /// <summary>
+    /// Whether to say when a timed gathering node opens.
+    /// </summary>
+    /// <remarks>
+    /// The only thing this plugin knows that will not still be true in ten minutes, which is
+    /// what makes saying it unprompted the right thing rather than an interruption. A window
+    /// advertised as four game hours is under twelve real minutes.
+    /// </remarks>
+    public bool AlertWindows { get; set; }
+
+    /// <summary>How much one has to be worth before a window is worth mentioning.</summary>
+    public int AlertWindowWorth { get; set; } = 1_000;
+
+    /// <summary>
     /// The currency the sink table was last looking at, by item id. Zero for "whichever comes first".
     /// </summary>
     /// <remarks>

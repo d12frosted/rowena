@@ -172,6 +172,17 @@ internal sealed class SettingsTab(
             "Say when the sweep goes stale", config.AlertStaleSweep, value => config.AlertStaleSweep = value,
             "Once, when the furnishing sweep passes its re-sweep age.");
 
+        changed |= Toggle(
+            "Say when a timed node opens", config.AlertWindows, value => config.AlertWindows = value,
+            "The only thing here that will not still be true in ten minutes, which is what makes\n"
+            + "saying it unprompted the right thing rather than an interruption. A window\n"
+            + "advertised as four game hours is under twelve real minutes.");
+
+        changed |= Number(
+            "Only for nodes paying at least", config.AlertWindowWorth, value => config.AlertWindowWorth = value,
+            "Gil a unit, net. Every window in the game opening in chat would be noise; the ones\n"
+            + "worth crossing a zone for are not.");
+
         Group("Hand-off");
 
         changed |= Text(

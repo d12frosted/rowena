@@ -31,6 +31,8 @@ internal sealed class Briefing : IDisposable
     private readonly FurnishingSweep sweep;
     private readonly Headlines headlines;
     private readonly Configuration config;
+    private readonly Diagnostics diagnostics;
+    private readonly Func<IReadOnlyList<GatherTab.OpenWindow>> openWindows;
     private readonly Func<bool> boardsKnown;
     private readonly Action refreshPrices;
 
@@ -45,6 +47,7 @@ internal sealed class Briefing : IDisposable
     // What has already been said, so it is not said again while still true.
     private readonly HashSet<uint> cappedSaid = [];
     private readonly HashSet<string> flipsSaid = [];
+    private readonly HashSet<uint> windowsSaid = [];
     private bool staleSaid;
 
     public Briefing(
@@ -55,9 +58,13 @@ internal sealed class Briefing : IDisposable
         FurnishingSweep sweep,
         Headlines headlines,
         Configuration config,
+        Diagnostics diagnostics,
+        Func<IReadOnlyList<GatherTab.OpenWindow>> openWindows,
         Func<bool> boardsKnown,
         Action refreshPrices)
     {
+        this.diagnostics = diagnostics;
+        this.openWindows = openWindows;
         this.client = client;
         this.framework = framework;
         this.chat = chat;
@@ -207,6 +214,24 @@ internal sealed class Briefing : IDisposable
             }
         }
 
+        if (config.AlertWindows)
+        {
+            var open = openWindows().Where(window => window.Each >= config.AlertWindowWorth).ToArray();
+            var ids = open.Select(window => window.ItemId).ToHashSet();
+
+            foreach (var window in open)
+            {
+                if (windowsSaid.Add(window.ItemId))
+                {
+                    Say($"{window.Name} is up for {window.Minutes:F0} more minutes, "
+                        + $"{window.Each:N0} a unit. Game hours are minutes here.");
+                }
+            }
+
+            // Shut again, so the next time it comes round is news again.
+            windowsSaid.RemoveWhere(id => !ids.Contains(id));
+        }
+
         if (config.AlertStaleSweep)
         {
             var stale = sweep.ReadyAt is { } at && DateTimeOffset.UtcNow - at > config.SweepAge() && !sweep.Running;
@@ -230,5 +255,18 @@ internal sealed class Briefing : IDisposable
         return $"{inputs} -> {outputs}";
     }
 
-    private void Say(string text) => chat.Print(text, "Rowena");
+    /// <summary>
+    /// Says something in chat, and records that it did.
+    /// </summary>
+    /// <remarks>
+    /// Noted as well as printed because chat is the one output nothing else can see: an alert
+    /// that never fires and an alert that fires correctly look identical from a log, which
+    /// makes the only unprompted thing this plugin does the only thing it cannot show its
+    /// working for.
+    /// </remarks>
+    private void Say(string text)
+    {
+        chat.Print(text, "Rowena");
+        diagnostics.Note("alert", text);
+    }
 }

@@ -163,6 +163,25 @@ internal sealed class GatherTab
             MainWindow.Tab.Gather);
     }
 
+    /// <summary>
+    /// Which timed nodes are standing there right now, worth most first.
+    /// </summary>
+    /// <remarks>
+    /// For the alerts, which are the only place in this plugin where being told something
+    /// unprompted is clearly right: everything else here waits until it is asked, because
+    /// everything else here will still be true in ten minutes.
+    /// </remarks>
+    public IReadOnlyList<OpenWindow> OpenNow() =>
+    [
+        .. model.Current.Rows
+            .Where(row => row is { Timed: true, OpensIn: <= 0 })
+            .OrderByDescending(row => row.Each)
+            .Select(row => new OpenWindow(row.ItemId, row.Name, row.Each, row.OpenFor)),
+    ];
+
+    /// <summary>A timed node that is up, and how long for.</summary>
+    internal readonly record struct OpenWindow(uint ItemId, string Name, long Each, double Minutes);
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 
