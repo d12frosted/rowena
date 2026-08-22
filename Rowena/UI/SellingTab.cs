@@ -75,6 +75,30 @@ internal sealed class SellingTab
         model = new Rebuilt<Model>("selling", Build, diagnostics);
     }
 
+    /// <summary>What the overview should say about what is already listed.</summary>
+    public Note? Headline()
+    {
+        var wanting = model.Current.Rows
+            .Where(row => row.Reading.Call is not (ListingCall.Hold or ListingCall.Wait))
+            .ToArray();
+
+        if (wanting.Length == 0)
+            return null;
+
+        var worst = wanting[0];
+
+        return new Note(
+            Note.AtRisk,
+            Palette.Bad,
+            wanting.Length == 1
+                ? $"{worst.Name} is listed at a price it will not sell at"
+                : $"{wanting.Length} of your listings want a decision",
+            $"{worst.Name}: asking {worst.Reading.Mine:N0}, "
+            + (worst.Reading.TypicalSale is { } paid ? $"sells for {paid:N0}." : "nothing has sold lately.")
+            + $" {wanting.Sum(row => row.Reading.NetHolding * row.Units):N0} gil is sitting behind these.",
+            MainWindow.Tab.Selling);
+    }
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 

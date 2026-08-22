@@ -178,6 +178,44 @@ internal sealed class ConvertTab
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
+    /// <summary>
+    /// What the overview should say about flips and about spending bound currency.
+    /// </summary>
+    /// <remarks>
+    /// Two, because they are two questions. Gil buys anything and can wait; a scrip buys one
+    /// thing and stops accruing at its cap, so a full currency is an income already being
+    /// thrown away rather than an opportunity not yet taken.
+    /// </remarks>
+    public IEnumerable<Note> Headlines()
+    {
+        if (sinks.Current.Selected is { Best: { } best and > 0 } group)
+        {
+            var full = balances.CapOf(group.Currency) is { } cap && cap > 0 && group.Held >= cap * 0.9;
+
+            yield return new Note(
+                full ? Note.Expiring : Note.Waiting,
+                full ? Palette.Bad : Palette.Plain,
+                full
+                    ? $"Your {group.Currency.Name} is nearly capped and earning nothing"
+                    : $"{group.Held:N0} {group.Unit} is worth {best:N0} gil spent well",
+                $"Best is {group.Rows.FirstOrDefault(row => row.Banks == best)?.Trade ?? "?"}."
+                + (full ? " Anything gathered past a cap is thrown away." : ""),
+                MainWindow.Tab.Sinks);
+        }
+
+        if (flips.Current is { TotalFlipProfit: > 0 } flip)
+        {
+            yield return new Note(
+                Note.Waiting,
+                Palette.Good,
+                $"{flip.TotalFlipProfit:N0} gil in flips your balance covers",
+                flip.Flips.FirstOrDefault() is { } top
+                    ? $"Best is {top.Trade}: {top.Outlay:N0} out, {top.Profit:N0} back."
+                    : "Spread across several trades.",
+                MainWindow.Tab.Flips);
+        }
+    }
+
     /// <summary>The Sinks tab: what a bound currency in your pockets is worth spending.</summary>
     public void DrawSinks()
     {

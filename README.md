@@ -179,6 +179,17 @@ away. Under it, a tab per question:
   the hand-off: this decides what is worth gathering, and the plugin that gathers gathers it.
   A format rather than an interface, so the shape is pinned by a test that takes the string
   apart again.
+- **Overview.** What to do first, which is the only question worth a window on logging in.
+  Five tabs each answer a good question and none of them answered that one.
+
+  Ordered by what expires rather than by what pays. A flip worth ten million will still be
+  there in ten minutes and a gathering window worth a hundred and sixty thousand will not, so
+  the window goes first. That is the one ordering nobody does well in their head, because the
+  big number is the one that catches the eye.
+
+  It says nothing new: every line is another tab's own answer phrased shorter, which is what
+  keeps it from becoming a sixth thing to maintain and a sixth thing to disagree with the
+  others.
 - **Selling.** What is already sitting on a retainer, which is where a good deal of gil
   quietly is not. Every other tab asks what to acquire; this one reads what you have out.
 

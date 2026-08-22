@@ -40,6 +40,7 @@ internal sealed class MainWindow : Window
     private readonly VendorTab vendor;
     private readonly GatherTab gather;
     private readonly SellingTab selling;
+    private readonly OverviewTab overview;
     private readonly SettingsTab settings;
     private readonly Configuration config;
     private readonly Action save;
@@ -66,6 +67,7 @@ internal sealed class MainWindow : Window
         VendorTab vendor,
         GatherTab gather,
         SellingTab selling,
+        OverviewTab overview,
         SettingsTab settings,
         Configuration config,
         Action save)
@@ -83,6 +85,7 @@ internal sealed class MainWindow : Window
         this.vendor = vendor;
         this.gather = gather;
         this.selling = selling;
+        this.overview = overview;
         this.settings = settings;
         this.config = config;
         this.save = save;
@@ -160,6 +163,16 @@ internal sealed class MainWindow : Window
 
         if (!ImGui.BeginTabBar("rowena-tabs"))
             return;
+
+        if (ImGui.BeginTabItem("Overview###overview", Selecting(Tab.Overview)))
+        {
+            if (buying is null || selling is null)
+                NoBoard();
+            else
+                overview.Draw();
+
+            ImGui.EndTabItem();
+        }
 
         // The label carries the tab's identity in ImGui unless it is told otherwise, so every one of
         // these pins its own id after ###. Without that, a label that counts something would hand the
@@ -251,6 +264,7 @@ internal sealed class MainWindow : Window
 
     internal enum Tab
     {
+        Overview,
         Sinks,
         Flips,
         Vendor,

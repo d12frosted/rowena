@@ -118,6 +118,22 @@ internal sealed class CraftTab
             },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
+    /// <summary>What the overview should say about crafting.</summary>
+    public Note? Headline()
+    {
+        if (model.Current.Crafts is not { Length: > 0 } crafts)
+            return null;
+
+        var best = crafts[0];
+
+        return new Note(
+            Note.Waiting,
+            Palette.Plain,
+            $"{best.Item} is the best thing to make: {best.Profit:N0} a run",
+            $"{best.Materials:N0} in materials, about {best.GilPerDay:N0} a day at what the board takes.",
+            MainWindow.Tab.Craft);
+    }
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 

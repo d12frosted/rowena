@@ -132,6 +132,37 @@ internal sealed class GatherTab
         model.Invalidate();
     }
 
+    /// <summary>
+    /// What the overview should say about gathering, which is only ever about the clock.
+    /// </summary>
+    /// <remarks>
+    /// The one thing in this plugin that actually expires. A flip worth two million will still
+    /// be there in ten minutes; a node worth eighty thousand will not, and that is the whole
+    /// reason this outranks bigger numbers on the overview.
+    /// </remarks>
+    public Note? Headline()
+    {
+        var open = model.Current.Rows.Where(row => row is { Timed: true, OpensIn: <= 0 }).ToArray();
+
+        if (open.Length == 0)
+            return null;
+
+        // Ordered rather than MinBy so the first element is a row rather than a maybe-row: the
+        // list is known not to be empty a line above, and saying so twice is worse than not
+        // asking.
+        var soonest = open.OrderBy(row => row.OpenFor).First();
+
+        return new Note(
+            Note.Expiring,
+            Palette.Good,
+            open.Length == 1
+                ? $"{soonest.Name} is up, {soonest.OpenFor:F0} minutes left"
+                : $"{open.Length} timed nodes are up, the first shuts in {soonest.OpenFor:F0} minutes",
+            $"Worth {open.Sum(row => row.Each * 40):N0} if you fill a window of each. "
+            + "Game hours are minutes here.",
+            MainWindow.Tab.Gather);
+    }
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 

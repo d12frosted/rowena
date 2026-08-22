@@ -62,6 +62,24 @@ internal sealed class VendorTab
     public string Label =>
         model.Current.Finds.Length == 0 ? "Vendor###vendor" : $"Vendor ({model.Current.Finds.Length})###vendor";
 
+    /// <summary>What the overview should say about the vendor scan.</summary>
+    public Note? Headline()
+    {
+        var finds = model.Current.Finds;
+
+        if (finds.Length == 0)
+            return null;
+
+        var best = finds[0];
+
+        return new Note(
+            Note.Waiting,
+            Palette.Good,
+            $"{finds.Sum(find => find.Profit):N0} gil listed below what a vendor pays",
+            $"Best is {best.Name}: {best.Units} units, {best.Profit:N0} gil, no market risk at all.",
+            MainWindow.Tab.Vendor);
+    }
+
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
 
