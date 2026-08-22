@@ -444,11 +444,19 @@ internal sealed class MarketCache : IDisposable
     {
         var now = DateTimeOffset.UtcNow;
 
+        var withHistory = 0;
+
         foreach (var itemId in requested)
         {
             var book = fetched.TryGetValue(itemId, out var found) ? found : OrderBook.Empty(itemId);
+
+            if (book.RecentSales.Count > 0)
+                withHistory++;
+
             books[(scope, itemId)] = new BookSnapshot(WithSurveyedVelocity(scope, book), now);
         }
+
+        diagnostics.Note("fetch", $"stored {requested.Count} books on {scope}, {withHistory} with sale history");
 
         return true;
     }

@@ -66,6 +66,21 @@ internal sealed class BoardWatcher : IDisposable
         // What the game said last time, if it is still true. The rates hold for hours and are
         // only offered when asked for, so throwing them away on every reload means assuming
         // the worst for no reason.
+        foreach (var group in config.MyListings.GroupBy(listing => listing.ItemId))
+        {
+            mine[group.Key] = (
+                0,
+                [
+                    .. group.Select(listing => new MyListing(
+                        listing.ItemId,
+                        listing.UnitPrice,
+                        listing.Quantity,
+                        listing.IsHq,
+                        listing.Retainer,
+                        listing.CityId)),
+                ]);
+        }
+
         if (config.SellerRates.Count > 0
             && DateTimeOffset.FromUnixTimeSeconds(config.SellerRatesUntil) > DateTimeOffset.UtcNow)
         {
@@ -286,12 +301,39 @@ internal sealed class BoardWatcher : IDisposable
                         "board",
                         $"item {group.Key}: {listed.Count} of this page is mine, {total} so far");
                 }
+
+                Remember();
             }
         }
         catch (Exception error)
         {
             log.Warning(error, "Could not read the board offerings.");
         }
+    }
+
+    /// <summary>
+    /// Writes what is listed out, so a reload does not mean going and looking again.
+    /// </summary>
+    private void Remember()
+    {
+        lock (gate)
+        {
+            config.MyListings =
+            [
+                .. mine.SelectMany(entry => entry.Value.Listings).Select(listing => new StoredListing
+                {
+                    ItemId = listing.ItemId,
+                    UnitPrice = listing.UnitPrice,
+                    Quantity = listing.Quantity,
+                    IsHq = listing.IsHq,
+                    Retainer = listing.Retainer,
+                    CityId = listing.CityId,
+                    SeenAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                }),
+            ];
+        }
+
+        save();
     }
 
     /// <summary>My retainers' ids, so a listing can be recognised as mine.</summary>

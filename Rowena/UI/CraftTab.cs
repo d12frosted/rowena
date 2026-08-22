@@ -48,6 +48,7 @@ internal sealed class CraftTab
     private readonly CraftBasket basket;
     private readonly Configuration config;
     private readonly Action<Conversion> refreshTrade;
+    private readonly Action recheck;
 
     private readonly Rebuilt<Model> model;
 
@@ -62,8 +63,10 @@ internal sealed class CraftTab
         CraftBasket basket,
         Configuration config,
         Diagnostics diagnostics,
-        Action<Conversion> refreshTrade)
+        Action<Conversion> refreshTrade,
+        Action recheck)
     {
+        this.recheck = recheck;
         this.sweep = sweep;
         this.furnishings = furnishings;
         this.boards = boards;
@@ -84,6 +87,36 @@ internal sealed class CraftTab
     /// keeps the tab the same tab as it changes.
     /// </remarks>
     public string Label => basket.Count == 0 ? "Craft###craft" : $"Craft ({basket.Count})###craft";
+
+    /// <summary>What the ranking is claiming, for checking it against the board.</summary>
+    public string Dump() =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                buying = boards.Scope.Buying,
+                selling = boards.Scope.Selling,
+                buyerRate = boards.Tax.BuyerRate,
+                sellerRate = boards.Tax.SellerRate,
+                crafts = model.Current.Crafts.Take(12).Select(row => new
+                {
+                    name = row.Item,
+                    item = row.ItemId,
+                    materials = row.Materials,
+                    profit = row.Profit,
+                    floor = boards.Selling(row.ItemId)?.Floor ?? 0,
+                    credible = boards.Selling(row.ItemId)?.CredibleFloor(),
+                    salesPerDay = row.SalesPerDay,
+                    gilPerDay = row.GilPerDay,
+                    inputs = row.Breakdown.Select(line => new
+                    {
+                        item = line.ItemId,
+                        quantity = line.Quantity,
+                        cost = line.Cost,
+                        sourced = line.Sourced,
+                    }),
+                }),
+            },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
     /// <inheritdoc cref="ConvertTab.Warmers"/>
     public IReadOnlyList<Action> Warmers => [() => _ = model.Current];
@@ -227,6 +260,13 @@ internal sealed class CraftTab
                 sweep.Start(buying, selling, config.FurnishingShortlist, config.SweepAge());
 
             ImGui.SameLine();
+
+            ImGui.SameLine();
+
+            // The sweep decides what is worth costing and that holds for hours; what those
+            // things cost does not. Asking again is a few requests rather than a few minutes.
+            if (sweep.HasResults && ImGui.Button("Recheck prices"))
+                recheck();
 
             if (sweep.State == FurnishingSweep.Phase.Failed)
                 ImGui.TextColored(Palette.Bad, sweep.Detail);

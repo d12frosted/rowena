@@ -143,11 +143,21 @@ internal sealed class DiagnosticsPanel(
                 : "none known yet",
             true);
 
+        var listed = board.ListedItems();
+
         yield return (
             "my listings",
-            board.ListedItems() is { Count: > 0 } listed
-                ? $"{listed.Count} items seen at the board"
-                : "none seen: open the board for something you have listed",
+            listed.Count == 0
+                ? "none seen: open the board for something you have listed"
+                : string.Join(
+                    "; ",
+                    listed.Select(item =>
+                    {
+                        var mine = board.Listed(item);
+                        var units = mine.Sum(listing => listing.Quantity);
+                        var cheapest = mine.Min(listing => listing.UnitPrice);
+                        return $"item {item}: {units} units, cheapest {cheapest:N0}";
+                    })),
             true);
 
         yield return (

@@ -33,7 +33,9 @@ public static class VendorFloor
 
         var vendor = vendorPrice > 0 ? vendorPrice * quantity : (long?)null;
 
-        if (book.Floor is not { } floor)
+        // The floor only counts when somebody could be paying it. A book nobody is really
+        // selling into is not a price, and a vendor will still take the thing.
+        if (book.CredibleFloor() is not { } floor)
             return vendor is { } only ? new Sale(only, only, true) : null;
 
         var gross = floor * quantity;

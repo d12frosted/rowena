@@ -2,6 +2,29 @@ using Dalamud.Configuration;
 
 namespace Rowena;
 
+/// <summary>One of my retainer's listings, as it goes to the configuration file.</summary>
+/// <remarks>
+/// A plain class rather than the record the rest of the plugin passes around, because this one
+/// has to survive being written to disk and read back by a serializer that knows nothing about
+/// it.
+/// </remarks>
+public sealed class StoredListing
+{
+    public uint ItemId { get; set; }
+
+    public long UnitPrice { get; set; }
+
+    public int Quantity { get; set; }
+
+    public bool IsHq { get; set; }
+
+    public string Retainer { get; set; } = "";
+
+    public uint CityId { get; set; }
+
+    public long SeenAt { get; set; }
+}
+
 public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
@@ -148,6 +171,17 @@ public sealed class Configuration : IPluginConfiguration
     /// Remembered because the answer to "which worlds do I bother with" changes rarely.
     /// </remarks>
     public string VendorWorld { get; set; } = "";
+
+    /// <summary>
+    /// What my retainers had listed when the board last said so.
+    /// </summary>
+    /// <remarks>
+    /// Kept because the game only says it when I happen to look up something I am selling, and
+    /// that is not something to have to do again after every reload. Stale by nature: a listing
+    /// can sell while the game is closed, so each carries when it was seen and the next look at
+    /// that item replaces it.
+    /// </remarks>
+    public List<StoredListing> MyListings { get; set; } = [];
 
     /// <summary>
     /// The seller's cut per city, as the game last reported it, and when it stops being true.

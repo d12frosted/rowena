@@ -123,3 +123,71 @@ public class CompletenessTests
         Assert.True(fromGame.Complete);
     }
 }
+
+public class CredibleFloorTests
+{
+    private static OrderBook Listed(long price, params long[] sales) =>
+        OrderBook.Create(1, [new Listing(price, 1, "Phoenix")], recentSales: sales);
+
+    [Fact]
+    public void AFloorNobodyCouldBePayingIsNotAPrice()
+    {
+        // Measured: one Hanya Mask listed at 999,999,999 against recent sales between
+        // 120,000 and 450,000. Taken at face value it made the craft ranking claim eight
+        // hundred million gil a day and put it top of the table.
+        var parked = Listed(999_999_999, 450_000, 139_000, 120_000, 120_000, 119_999);
+
+        Assert.Equal(999_999_999, parked.Floor);
+        Assert.Null(parked.CredibleFloor());
+    }
+
+    [Fact]
+    public void AnOrdinaryFloorIsLeftAlone()
+    {
+        var normal = Listed(130_000, 140_000, 120_000, 125_000);
+
+        Assert.Equal(130_000, normal.CredibleFloor());
+    }
+
+    [Fact]
+    public void ABargainIsNotSuspicious()
+    {
+        // Cheap is the thing this plugin is looking for. Only the other direction is a lie.
+        var cheap = Listed(1_000, 140_000, 120_000, 125_000);
+
+        Assert.Equal(1_000, cheap.CredibleFloor());
+    }
+
+    [Fact]
+    public void WithNothingToJudgeAgainstTheFloorStands()
+    {
+        // No history is not evidence of a fantasy price, and refusing to price anything that
+        // has not sold recently would throw away every quiet market.
+        Assert.Equal(500_000, Listed(500_000).CredibleFloor());
+    }
+
+    [Fact]
+    public void OneSillySaleDoesNotDragTheJudgementWithIt()
+    {
+        // The middle sale rather than the average, so somebody paying a silly price once does
+        // not make the next silly listing look reasonable.
+        var mostlyNormal = Listed(900_000, 999_999_999, 120_000, 125_000, 130_000, 118_000);
+
+        Assert.Null(mostlyNormal.CredibleFloor());
+    }
+}
+
+public class RecentSalesTests
+{
+    [Fact]
+    public void ARecordedResponseCarriesWhatItSoldFor()
+    {
+        // The evidence that a listed price is one anybody pays. Pinned against a recorded
+        // response so a change upstream shows up here rather than as a fantasy floor being
+        // quietly believed.
+        var book = UniversalisJson.ParseItem(Fixtures.Read(Fixtures.MountToken));
+
+        Assert.NotEmpty(book.RecentSales);
+        Assert.All(book.RecentSales, price => Assert.True(price > 0));
+    }
+}

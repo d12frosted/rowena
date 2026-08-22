@@ -25,7 +25,8 @@ public sealed class OrderBook
         double saleVelocityPerDay,
         DateTimeOffset retrieved,
         bool complete,
-        MarketSource source)
+        MarketSource source,
+        IReadOnlyList<long> recentSales)
     {
         ItemId = itemId;
         Listings = listings;
@@ -33,6 +34,7 @@ public sealed class OrderBook
         Retrieved = retrieved;
         Complete = complete;
         Source = source;
+        RecentSales = recentSales;
     }
 
     public uint ItemId { get; }
@@ -62,6 +64,45 @@ public sealed class OrderBook
     /// <summary>Where these listings came from.</summary>
     public MarketSource Source { get; }
 
+    /// <summary>What the item actually changed hands for lately, newest first.</summary>
+    public IReadOnlyList<long> RecentSales { get; }
+
+    /// <summary>
+    /// The floor, when anybody could plausibly be paying it.
+    /// </summary>
+    /// <remarks>
+    /// A book holding one listing at 999,999,999 gil is not a market, it is somebody parking an
+    /// item, and the floor of it is not a price. Measured: a Hanya Mask listed at a billion,
+    /// against recent sales between 120,000 and 450,000, made the craft ranking report eight
+    /// hundred million gil a day and put it top of the table.
+    ///
+    /// Recent sales are the evidence, since they are what somebody actually paid. A floor far
+    /// above all of them is not evidence of anything, and is worth refusing rather than
+    /// quoting: this library exists to say the floor is a bad summary of a market, and a
+    /// fantasy floor is that failure at its worst.
+    ///
+    /// Only ever refuses. A floor below recent sales is an ordinary bargain, not a mistake, and
+    /// a book with no history to judge against is left alone.
+    /// </remarks>
+    public long? CredibleFloor(double factor = 5d)
+    {
+        if (Floor is not { } floor)
+            return null;
+
+        if (RecentSales.Count == 0)
+            return floor;
+
+        var typical = Median(RecentSales);
+
+        return typical > 0 && floor > typical * factor ? null : floor;
+    }
+
+    private static long Median(IReadOnlyList<long> values)
+    {
+        var sorted = values.Order().ToArray();
+        return sorted.Length == 0 ? 0 : sorted[sorted.Length / 2];
+    }
+
     /// <summary>
     /// Builds a book, sorting defensively. Universalis happens to return listings in
     /// price order, but nothing in the arithmetic below should depend on a remote
@@ -73,10 +114,11 @@ public sealed class OrderBook
         double saleVelocityPerDay = 0d,
         DateTimeOffset retrieved = default,
         bool complete = true,
-        MarketSource source = MarketSource.Universalis)
+        MarketSource source = MarketSource.Universalis,
+        IReadOnlyList<long>? recentSales = null)
     {
         var sorted = listings.OrderBy(listing => listing.UnitPrice).ToArray();
-        return new OrderBook(itemId, sorted, saleVelocityPerDay, retrieved, complete, source);
+        return new OrderBook(itemId, sorted, saleVelocityPerDay, retrieved, complete, source, recentSales ?? []);
     }
 
     /// <summary>An empty book, which is different from an absent one: nothing is for sale.</summary>
@@ -92,11 +134,11 @@ public sealed class OrderBook
     /// ranking it on another. This exists so a single source can be imposed on everything.
     /// </remarks>
     public OrderBook WithVelocity(double saleVelocityPerDay) =>
-        new(ItemId, Listings, saleVelocityPerDay, Retrieved, Complete, Source);
+        new(ItemId, Listings, saleVelocityPerDay, Retrieved, Complete, Source, RecentSales);
 
     /// <summary>The same listings, said to be all of them or not.</summary>
     public OrderBook WithCompleteness(bool complete) =>
-        new(ItemId, Listings, SaleVelocityPerDay, Retrieved, complete, Source);
+        new(ItemId, Listings, SaleVelocityPerDay, Retrieved, complete, Source, RecentSales);
 
     /// <summary>Total units listed.</summary>
     public int UnitsListed => Listings.Sum(listing => listing.Quantity);
@@ -177,7 +219,7 @@ public sealed class OrderBook
             toDrop = 0;
         }
 
-        return Create(ItemId, remaining, SaleVelocityPerDay, Retrieved, Complete, Source);
+        return Create(ItemId, remaining, SaleVelocityPerDay, Retrieved, Complete, Source, RecentSales);
     }
 
     /// <summary>

@@ -148,6 +148,19 @@ public static class UniversalisJson
         // is, and it errs towards doubt, which is the safe direction.
         var complete = requested <= 0 || listings.Count < requested;
 
-        return OrderBook.Create(itemId, listings, velocity, retrieved, complete);
+        // What it actually changed hands for, which is the only evidence that a listed price
+        // is one anybody pays.
+        var sales = new List<long>();
+
+        if (item.TryGetProperty("recentHistory", out var history))
+        {
+            foreach (var sale in history.EnumerateArray())
+            {
+                if (sale.TryGetProperty("pricePerUnit", out var paid) && paid.ValueKind == JsonValueKind.Number)
+                    sales.Add(paid.GetInt64());
+            }
+        }
+
+        return OrderBook.Create(itemId, listings, velocity, retrieved, complete, MarketSource.Universalis, sales);
     }
 }

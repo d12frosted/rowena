@@ -385,6 +385,22 @@ the allocator gives the cheap listings to whichever pays most and prices the res
 what is left, so checking it in isolation disagrees by exactly the amount the allocator is
 right by. Those rows are skipped and say so.
 
+## A floor nobody is paying is not a price
+
+The premise here is that the cheapest listing is a bad summary of a market. The worst case
+of that is not depth, it is fiction: a Hanya Mask listed at 999,999,999 gil, alone in its
+book, against recent sales between 120,000 and 450,000. Taken at face value it made the
+craft ranking claim eight hundred and sixty-eight million gil a day and put it top of the
+table, above everything real.
+
+So a floor has to be one somebody could be paying, and what people actually paid is the
+only evidence of that. A floor far above every recent sale is refused rather than quoted,
+and the row is treated as unpriceable, which it is.
+
+It only ever refuses. A floor below recent sales is a bargain, which is the thing this
+plugin is looking for, and a book with no sales to judge against is left alone rather than
+thrown away: quiet markets are still markets.
+
 ## What the numbers do not know
 
 A fetch asks for at most so many listings, and Universalis counts `listingsCount` and

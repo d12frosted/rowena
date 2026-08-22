@@ -13,7 +13,9 @@ namespace Rowena.Market;
 /// <param name="C">Whether the book was known to hold every listing there is.</param>
 /// <param name="P">Where it came from, as <see cref="MarketSource"/>.</param>
 /// <param name="W">The world each listing stands on, alongside L.</param>
-internal sealed record StoredBook(string S, uint I, long T, double V, long[][] L, bool C, int P, string[] W);
+/// <param name="H">What it recently sold for, which is how a fantasy floor is spotted.</param>
+internal sealed record StoredBook(
+    string S, uint I, long T, double V, long[][] L, bool C, int P, string[] W, long[] H);
 
 internal sealed record StoredSweep(long At, int Candidates, string[] Shortlist);
 
@@ -70,7 +72,8 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         [.. entry.Book.Listings.Select(listing => new[] { listing.UnitPrice, listing.Quantity })],
                         entry.Book.Complete,
                         (int)entry.Book.Source,
-                        [.. entry.Book.Listings.Select(listing => listing.World)])),
+                        [.. entry.Book.Listings.Select(listing => listing.World)],
+                        [.. entry.Book.RecentSales])),
                 ],
                 [
                     .. summaries.Select(entry => new StoredSummary(
@@ -150,7 +153,8 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         book.V,
                         fetched,
                         book.C,
-                        (MarketSource)book.P),
+                        (MarketSource)book.P,
+                        book.H ?? []),
                     fetched));
             }
 

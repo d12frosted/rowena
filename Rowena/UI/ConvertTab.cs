@@ -145,6 +145,7 @@ internal sealed class ConvertTab
                     costs = row.PerRun,
                     rate = row.Rate,
                     net = row.Profit,
+                    floor = boards.Selling(row.ItemId ?? 0)?.Floor ?? 0,
                     banks = row.Banks,
                     sellable = row.Sellable,
                     absorb = row.Absorb,

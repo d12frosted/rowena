@@ -105,7 +105,8 @@ public sealed class Plugin : IDalamudPlugin
             conversion => mainWindow!.RefreshTrade(conversion));
         var craftTab = new CraftTab(
             sweep, furnishings, boards, cells, basket, config, diagnostics,
-            conversion => mainWindow!.RefreshTrade(conversion));
+            conversion => mainWindow!.RefreshTrade(conversion),
+            () => RecheckCrafts());
         var vendorTab = new VendorTab(
             vendorSweep, boards, cells, config, diagnostics,
             ids => market.RefreshInBackground(scope.Buying, [.. ids], true, FetchPriority.Interactive));
@@ -141,6 +142,7 @@ public sealed class Plugin : IDalamudPlugin
             {
                 ["refresh"] = () => mainWindow.RefreshPrices(),
                 ["sweep"] = () => sweep.Start(scope.Buying, scope.Selling, config.FurnishingShortlist, config.SweepAge()),
+                ["recraft"] = RecheckCrafts,
                 ["scan"] = () => vendorSweep.Start(scope.Buying, config.VendorCandidatesToCost, config.SweepAge()),
                 ["brief"] = () => briefing.Now(),
                 ["open"] = () => mainWindow.IsOpen = true,
@@ -154,6 +156,7 @@ public sealed class Plugin : IDalamudPlugin
                     var into = PluginInterface.ConfigDirectory.FullName;
                     File.WriteAllText(Path.Combine(into, "dump.json"), convertTab.Dump());
                     File.WriteAllText(Path.Combine(into, "vendor.json"), vendorTab.Dump());
+                    File.WriteAllText(Path.Combine(into, "craft.json"), craftTab.Dump());
                 },
             },
             diagnosticsPanel.Report);
@@ -175,6 +178,43 @@ public sealed class Plugin : IDalamudPlugin
                 + "Add sinks, flips, vendor, craft or settings to open on that tab; brief says the login "
                 + "line again.",
         });
+    }
+
+    /// <summary>
+    /// Refetches what the swept furnishings cost and fetch, without sweeping again.
+    /// </summary>
+    /// <remarks>
+    /// The shortlist is hours of requests and stays useful; the prices under it are minutes
+    /// old at best. Separating the two means the expensive half is not repeated to correct the
+    /// cheap half.
+    /// </remarks>
+    private void RecheckCrafts()
+    {
+        var shortlist = sweep.Shortlist;
+
+        market.RefreshInBackground(
+            scope.Buying,
+            [
+                .. shortlist
+                    .SelectMany(conversion => conversion.Inputs)
+                    .Where(amount => amount.Resource.Kind == ResourceKind.Item)
+                    .Select(amount => amount.Resource.Id)
+                    .Distinct(),
+            ],
+            true,
+            FetchPriority.Background);
+
+        market.RefreshInBackground(
+            scope.Selling,
+            [
+                .. shortlist
+                    .SelectMany(conversion => conversion.Outputs)
+                    .Where(amount => amount.Resource.Kind == ResourceKind.Item)
+                    .Select(amount => amount.Resource.Id)
+                    .Distinct(),
+            ],
+            true,
+            FetchPriority.Background);
     }
 
     private void Save() => PluginInterface.SavePluginConfig(config);

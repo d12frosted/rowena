@@ -16,6 +16,8 @@ then run this. It exits non-zero if anything disagrees.
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 
 AGENT = "Rowena-verify/0.1 (+https://github.com/d12frosted/rowena)"
@@ -24,10 +26,36 @@ DEFAULT_CONFIG = os.path.expanduser(
 )
 
 
+_seen = {}
+
+
 def board(scope, item):
+    """One item's listings, remembered and retried.
+
+    Checking a craft asks about every material, and materials repeat across recipes, so the
+    same book would otherwise be fetched several times in one run. Universalis is free and
+    asks callers to be reasonable; this is a checker, not a reason to hammer it.
+    """
+    key = (scope, item)
+
+    if key in _seen:
+        return _seen[key]
+
     url = f"https://universalis.app/api/v2/{scope}/{item}?listings=40"
     request = urllib.request.Request(url, headers={"User-Agent": AGENT})
-    return json.load(urllib.request.urlopen(request, timeout=30))
+
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                _seen[key] = json.load(response)
+                time.sleep(0.2)
+                return _seen[key]
+        except (TimeoutError, urllib.error.URLError, json.JSONDecodeError):
+            if attempt == 3:
+                raise
+            time.sleep(2 * (attempt + 1))
+
+    raise RuntimeError("unreachable")
 
 
 def cost_to_buy(listings, quantity, buyer_rate):
@@ -97,6 +125,11 @@ def main():
             print(f"  SKIP  {row['trade']}: nothing listed now")
             continue
         floor = min(l["pricePerUnit"] for l in listings)
+
+        if floor != row["floor"]:
+            print(f"  SKIP  {row['trade']}: board moved (floor {row['floor']:,} -> {floor:,})")
+            continue
+
         net = floor - int(floor * seller)
         # A sink spends currency, so its net is the whole sale of one run's output.
         ok = net == row["net"]
@@ -136,9 +169,69 @@ def main():
         print(f"  {'ok  ' if ok else 'FAIL'}  {row['trade']}: outlay {row['outlay']:,} vs {outlay:,}{note}")
 
     failures += verify_vendor(config, buyer)
+    failures += verify_craft(config, buyer, seller)
 
     print(f"\n{failures} disagreements")
     return 1 if failures else 0
+
+
+def verify_craft(config, buyer_rate, seller_rate):
+    """The craft ranking: materials off the buying board, the product sold on the selling one.
+
+    Sub-crafts are priced as bought rather than as made, which is the plugin's own rule, so
+    this buys them the same way.
+    """
+    path = os.path.join(config, "craft.json")
+
+    if not os.path.exists(path):
+        return 0
+
+    with open(path) as handle:
+        dump = json.load(handle)
+
+    if not dump["crafts"]:
+        print("\ncraft: nothing ranked")
+        return 0
+
+    print("\ncraft")
+    failures = 0
+
+    for row in dump["crafts"]:
+        materials = 0
+        short = False
+
+        for line in row["inputs"]:
+            listings = board(dump["buying"], line["item"])["listings"]
+            cost, filled, _ = cost_to_buy(listings, line["quantity"], buyer_rate)
+            short |= filled < line["quantity"]
+            materials += cost
+
+        product = board(dump["selling"], row["item"])["listings"]
+        floor = min((l["pricePerUnit"] for l in product), default=None)
+
+        # Same trap as everywhere else: a book that has moved since the dump is not the book
+        # the plugin priced, and comparing them says nothing about the arithmetic. The
+        # materials are their own fingerprint, since they are priced by walking the book.
+        if floor is None or short:
+            print(f"  SKIP  {row['name']}: nothing listed, or the board is short now")
+            continue
+
+        if floor != row["floor"] or materials != row["materials"]:
+            print(
+                f"  SKIP  {row['name']}: board moved since the dump "
+                f"(floor {row['floor']:,} -> {floor:,}, materials {row['materials']:,} -> {materials:,})"
+            )
+            continue
+
+        profit = floor - int(floor * seller_rate) - materials
+        ok = profit == row["profit"]
+        failures += not ok
+        print(
+            f"  {'ok  ' if ok else 'FAIL'}  {row['name']}: "
+            f"materials {row['materials']:,}/{materials:,}, profit {row['profit']:,}/{profit:,}"
+        )
+
+    return failures
 
 
 def verify_vendor(config, buyer_rate):
