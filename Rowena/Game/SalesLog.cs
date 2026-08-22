@@ -124,6 +124,26 @@ internal sealed class SalesLog : IDisposable
             return [.. sales.Where(sale => sale.ItemId == itemId)];
     }
 
+    /// <summary>
+    /// How much of each item the game announced since a moment, by item.
+    /// </summary>
+    /// <remarks>
+    /// For the reconciliation, which reads a retainer's slots and cannot tell a sale I was told
+    /// about from one I was not. Both leave an empty slot and gil in the purse.
+    /// </remarks>
+    public IReadOnlyDictionary<uint, int> AnnouncedSince(DateTimeOffset at)
+    {
+        var told = new Dictionary<uint, int>();
+
+        lock (gate)
+        {
+            foreach (var sale in sales.Where(sale => sale.Announced && sale.At >= at))
+                told[sale.ItemId] = told.GetValueOrDefault(sale.ItemId) + sale.Quantity;
+        }
+
+        return told;
+    }
+
     /// <summary>Everything sold since a moment, for asking how the week went.</summary>
     public IReadOnlyList<Sale> Since(DateTimeOffset at)
     {

@@ -131,6 +131,52 @@ public class SaleReconciliationTests
     }
 
     [Fact]
+    public void SomethingTheGameAlreadyAnnouncedIsNotCountedTwice()
+    {
+        // The slots cannot tell a sale I was told about from one I was not. Both leave an empty
+        // slot and gil in the purse, so without this every sale heard in chat is counted again
+        // the next time I open that retainer and my takings quietly double.
+        var sales = SaleReconciliation.Between(
+            [Slot(1, 10, 1000)],
+            [Empty],
+            gilGained: 10_000,
+            MarketTax.None,
+            alreadyKnown: new Dictionary<uint, int> { [1] = 10 });
+
+        Assert.Empty(sales);
+    }
+
+    [Fact]
+    public void OnlyThePartNobodyAnnouncedIsBooked()
+    {
+        // Four sold while I was watching and six while I was not.
+        var sales = SaleReconciliation.Between(
+            [Slot(1, 10, 1000)],
+            [Empty],
+            gilGained: 10_000,
+            MarketTax.None,
+            alreadyKnown: new Dictionary<uint, int> { [1] = 4 });
+
+        Assert.Single(sales);
+        Assert.Equal(6, sales[0].Quantity);
+        Assert.Equal(6_000, sales[0].Gross);
+    }
+
+    [Fact]
+    public void AnAnnouncementForSomethingElseChangesNothing()
+    {
+        var sales = SaleReconciliation.Between(
+            [Slot(1, 10, 1000)],
+            [Empty],
+            gilGained: 10_000,
+            MarketTax.None,
+            alreadyKnown: new Dictionary<uint, int> { [2] = 99 });
+
+        Assert.Single(sales);
+        Assert.Equal(10, sales[0].Quantity);
+    }
+
+    [Fact]
     public void NothingChangingIsNoSale() =>
         Assert.Empty(SaleReconciliation.Between([Slot(1, 10, 1000)], [Slot(1, 10, 1000)], 0, MarketTax.None));
 

@@ -134,11 +134,16 @@ internal sealed class RetainerSales : IDisposable
     /// <summary>Turns what went into sales, and says so.</summary>
     private void Book(ulong id, StoredRetainer last, IReadOnlyList<MarketSlot> now, long gil, uint town)
     {
+        // Everything chat already said since this retainer was last looked at. Without it the
+        // slots book those sales a second time and the takings quietly double.
+        var told = sales.AnnouncedSince(DateTimeOffset.FromUnixTimeSeconds(last.SeenAt));
+
         var found = SaleReconciliation.Between(
             [.. last.Slots.Select(slot => new MarketSlot(slot.ItemId, slot.Quantity, slot.UnitPrice, slot.IsHq))],
             now,
             gil - last.Gil,
-            taxFor(town));
+            taxFor(town),
+            told);
 
         foreach (var sale in found)
             sales.Record(sale.ItemId, sale.Quantity, sale.Net, announced: false);

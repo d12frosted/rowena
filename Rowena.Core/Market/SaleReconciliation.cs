@@ -24,6 +24,11 @@ public readonly record struct InferredSale(uint ItemId, int Quantity, long Gross
 /// The budget is spent down as sales are attributed, which matters when several things go
 /// between visits: checking each vanished slot against the same untouched purse lets one
 /// thing's worth of gil pay for two things.
+///
+/// What was already announced has to come off the top. The slots cannot tell a sale I was told
+/// about from one I was not, since both leave an empty slot and gil in the purse, so without
+/// subtracting them every sale heard in chat would be counted again the next time I opened that
+/// retainer and my takings would quietly double.
 /// </remarks>
 public static class SaleReconciliation
 {
@@ -35,17 +40,25 @@ public static class SaleReconciliation
     /// nothing and is worth no guesses: read as an unsigned difference it becomes an enormous
     /// number and every empty slot turns into a sale.
     /// </param>
+    /// <param name="alreadyKnown">
+    /// How much of each item the game has already announced since the last look, which is not
+    /// news and must not be booked twice.
+    /// </param>
     public static IReadOnlyList<InferredSale> Between(
         IReadOnlyList<MarketSlot> before,
         IReadOnlyList<MarketSlot> after,
         long gilGained,
-        MarketTax tax)
+        MarketTax tax,
+        IReadOnlyDictionary<uint, int>? alreadyKnown = null)
     {
         if (before.Count == 0 || gilGained <= 0)
             return [];
 
         var sales = new List<InferredSale>();
         var budget = gilGained;
+        var known = alreadyKnown is null
+            ? []
+            : new Dictionary<uint, int>(alreadyKnown);
 
         for (var slot = 0; slot < before.Count && slot < after.Count; slot++)
         {
@@ -58,9 +71,19 @@ public static class SaleReconciliation
 
             // Slots get reused. Something else standing where mine was says nothing about what
             // happened to mine, so it is left alone rather than guessed at.
-            var gone = now.IsEmpty
+            int gone = now.IsEmpty
                 ? was.Quantity
                 : now.ItemId == was.ItemId ? was.Quantity - now.Quantity : 0;
+
+            // Whatever the game already said about this item is not news. Spent down as it is
+            // used, so two slots of the same thing cannot both be excused by one announcement.
+            if (known.TryGetValue(was.ItemId, out var told) && told > 0)
+            {
+                var covered = Math.Min(told, gone);
+
+                known[was.ItemId] = told - covered;
+                gone -= covered;
+            }
 
             if (gone <= 0)
                 continue;
