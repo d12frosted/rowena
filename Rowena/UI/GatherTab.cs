@@ -179,12 +179,36 @@ internal sealed class GatherTab
         {
             ImGui.SameLine();
 
-            // A list to take away, since the gathering itself happens in another plugin's window.
-            if (ImGui.Button("Copy list"))
+            // Handed over rather than driven, the same division as the crafting list and
+            // Artisan: this decides what is worth gathering, and the plugin that gathers does
+            // the gathering.
+            if (ImGui.Button("Copy for GatherBuddy"))
+            {
+                ImGui.SetClipboardText(Rowena.Core.Lists.GatherList.Build(
+                    "Rowena",
+                    $"worth gathering, {DateTime.Now:d MMM HH:mm}",
+                    current.Rows.Select(row => row.ItemId)));
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "One paste, as a gather window preset.\n"
+                    + "\n"
+                    + "1. Press this.\n"
+                    + "2. Open GatherBuddy, Gather Window tab.\n"
+                    + "3. Press the import button.\n"
+                    + "\n"
+                    + "Everything shown goes in, so filter first if you want less.");
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Copy names"))
                 ImGui.SetClipboardText(string.Join("\n", current.Rows.Select(row => row.Name)));
 
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("The names shown, one per line, for pasting into whatever does your gathering.");
+                ImGui.SetTooltip("The same list as plain names, one per line, for anything else.");
         }
     }
 

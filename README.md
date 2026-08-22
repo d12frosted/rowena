@@ -147,6 +147,12 @@ away. Under it, a tab per question:
   different errand. Fishing is deliberately absent: bait, weather and a cast that can fail
   are not things a market tool knows, and ranking a fish beside a mining node would promise
   an hour it cannot deliver.
+  The list goes over to GatherBuddyReborn in one paste, as a gather window preset. Its IPC
+  offers a version, a name lookup and a switch for auto-gather and nothing for managing what
+  is in a list, but its own import takes a gzipped preset behind a version byte, so that is
+  the hand-off: this decides what is worth gathering, and the plugin that gathers gathers it.
+  A format rather than an interface, so the shape is pinned by a test that takes the string
+  apart again.
 - **Craft.** The swept furnishing ranking and the list you are building from it. Its own tab
   because it runs on its own clock, hours rather than minutes, and because it is the only
   thing here that is a workspace rather than a report. The tab counts what is in the list,
