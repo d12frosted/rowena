@@ -391,7 +391,14 @@ def verify_vendor(config, buyer_rate):
         # underpriced by definition, so they churn.
         live_units = sum(l["quantity"] for l in listings)
 
-        if (live_floor != find["cheapest"]
+        # The split, not just the totals: this walk takes whole listings while each still pays,
+        # so the same units divided differently across the same number of listings buy a
+        # different number of them. Seventeen units against twenty-eight, off a book that
+        # agreed on floor, listing count and total units.
+        moved = book_print(listings) != find.get("print", book_print(listings))
+
+        if (moved
+                or live_floor != find["cheapest"]
                 or len(listings) != find["listings"]
                 or live_units != find["unitsListed"]):
             print(
@@ -403,6 +410,12 @@ def verify_vendor(config, buyer_rate):
 
         units = profit = 0
 
+        # The tab can be narrowed to one world, and then a find is what stands on that world:
+        # the units and the gil of one trip rather than of the five it would otherwise take.
+        # Checking a data-centre total against a one-world answer disagrees about a correct
+        # number, which is how twenty-eight units came to be compared with seventeen.
+        only = dump.get("world") or None
+
         # Whole listings only, cheapest first, while each still pays after the buyer's cut.
         for listing in sorted(listings, key=lambda l: l["pricePerUnit"]):
             cost = listing["pricePerUnit"] * listing["quantity"]
@@ -410,6 +423,13 @@ def verify_vendor(config, buyer_rate):
             gain = find["vendorPays"] * listing["quantity"] - cost
             if gain <= 0:
                 break
+
+            # The walk stops at the first listing that loses wherever it stands, because the
+            # book is sorted and the rest lose more. Narrowing to a world drops listings from
+            # the count, not from the walk.
+            if only and listing.get("worldName") != only:
+                continue
+
             units += listing["quantity"]
             profit += gain
 

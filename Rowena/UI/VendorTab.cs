@@ -89,6 +89,11 @@ internal sealed class VendorTab
             new
             {
                 buying = boards.Scope.Buying,
+
+                // Which world the table is narrowed to, because a find on one world is a
+                // different find from the same one across the data centre, and a checker that
+                // does not know which is being asked will disagree about a correct answer.
+                world = config.VendorWorld,
                 buyerRate = boards.Tax.BuyerRate,
                 scan = sweep.Current.Detail,
                 finds = model.Current.Finds.Select(find => new
@@ -101,6 +106,11 @@ internal sealed class VendorTab
                     profit = find.Profit,
                     listings = find.Listings,
                     unitsListed = find.UnitsListed,
+
+                    // The split rather than the totals. This walk takes whole listings while
+                    // each still pays, so the same units divided differently across the same
+                    // number of listings buy a different number of them.
+                    print = BookPrint.Of(boards.Buying(find.ItemId)),
                     seenAt = find.SeenAt,
                     byWorld = find.ByWorld.Select(share => new
                     {
