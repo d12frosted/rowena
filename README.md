@@ -384,6 +384,15 @@ interprets it. It is the link an activity will need in order to know what it pro
 
 ## Read without being opened
 
+Two of the alerts are driven by prices moving rather than by a timer. The cache says which
+book it just replaced and only that item is looked at, so the work is proportional to what
+actually moved. It matters for exactly two things: somebody undercutting a listing of mine
+into a queue longer than I said I wanted to wait, and something appearing on the board for
+less than a vendor pays. The second is gone within minutes and is worthless an hour later.
+
+Being undercut is not the trigger; being undercut *into a queue* is. Three units ahead on a
+board selling ten a day are gone this afternoon and are not worth being told about.
+
 ## Nothing is written into the game
 
 Rowena never speaks into the game unprompted: no login line, no alerts, no toasts, no error

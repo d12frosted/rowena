@@ -458,6 +458,21 @@ internal sealed class MarketCache : IDisposable
 
         diagnostics.Note("fetch", $"stored {requested.Count} books on {scope}, {withHistory} with sale history");
 
+        // After the writes, so a handler reading the cache sees what just landed. One handler
+        // throwing is its own problem and must not lose the rest of the batch or kill the
+        // worker that fetched it.
+        foreach (var itemId in requested)
+        {
+            try
+            {
+                BookChanged?.Invoke(scope, itemId);
+            }
+            catch (Exception error)
+            {
+                log.Warning(error, $"A handler failed on {itemId} changing.");
+            }
+        }
+
         return true;
     }
 
@@ -509,6 +524,20 @@ internal sealed class MarketCache : IDisposable
         summaries.Select(entry => (entry.Key.Scope, entry.Value.Summary, entry.Value.Fetched));
 
     /// <summary>What a previous session swept, if it is still worth having.</summary>
+    /// <summary>
+    /// Raised for each book replaced by a fetch, with the board it is on.
+    /// </summary>
+    /// <remarks>
+    /// So that anything caring about one item can recompute that item rather than everything
+    /// re-reading the whole cache on a timer. A timer scraping the cache every few seconds
+    /// finds an undercut on its next tick at best, and finds a vendor listing an hour after
+    /// somebody else has bought it.
+    ///
+    /// Raised on the fetch worker, not the framework thread, and after the book is stored, so a
+    /// handler that reads the cache sees the new value rather than the one being replaced.
+    /// </remarks>
+    public event Action<string, uint>? BookChanged;
+
     public StoredSweep? RestoredSweep { get; private set; }
 
     /// <summary>

@@ -198,6 +198,21 @@ internal sealed class SettingsTab(
             "Once, when the craft sweep passes its re-sweep age.");
 
         changed |= Toggle(
+            "Say when I am undercut into a queue", config.AlertUndercut,
+            value => config.AlertUndercut = value,
+            "Arrives when the price moves rather than on a timer. Not whenever somebody is cheaper\n"
+            + "than me, which is the easy question and usually the wrong one: three units ahead on a\n"
+            + "board selling ten a day are gone this afternoon. Only when the queue is longer than\n"
+            + "the days of selling I said I wanted.");
+
+        changed |= Toggle(
+            "Say when a vendor find appears", config.AlertVendorFind,
+            value => config.AlertVendorFind = value,
+            "Something listed for less than a vendor pays. The one alert that is worthless late:\n"
+            + "these are underpriced by definition, so anybody else watching can see them too and\n"
+            + "they are gone within minutes. Uses the same floor as the vendor tab.");
+
+        changed |= Toggle(
             "Say when a timed node opens", config.AlertWindows, value => config.AlertWindows = value,
             "The only thing here that will not still be true in ten minutes. Noted on the Overview,\n"
             + "like everything else: nothing this plugin has to say is worth writing into the game\n"

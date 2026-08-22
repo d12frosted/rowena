@@ -35,8 +35,12 @@ internal sealed class OverviewTab(
     /// <summary>What the overview is saying, for checking it without a window.</summary>
     public string Dump() =>
         System.Text.Json.JsonSerializer.Serialize(
-            Notes().OrderBy(note => note.Urgency)
-                .Select(note => new { note.Urgency, note.Headline, note.Detail, goes = note.Goes.ToString() }),
+            new
+            {
+                notes = Notes().OrderBy(note => note.Urgency)
+                    .Select(note => new { note.Urgency, note.Headline, note.Detail, goes = note.Goes.ToString() }),
+                whileAway = notices.All().Select(notice => notice.Text),
+            },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
     public void Draw()

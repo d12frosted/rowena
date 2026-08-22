@@ -51,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SalesLog sales;
     private readonly RetainerSales retainerSales;
     private readonly GatherClock gatherClock;
+    private readonly Watch watch;
 
     public Plugin()
     {
@@ -94,7 +95,8 @@ public sealed class Plugin : IDalamudPlugin
         var basket = new CraftBasket(config, new Recipes(DataManager, Log), Save, Log);
         var actions = new ItemActions(
             new ArtisanIpc(PluginInterface, Log), allaganTools, basket, ChatGui, Log);
-        var cells = new ItemCells(new Items(DataManager), Textures, actions, market, scope, boardWatcher);
+        var itemNames = new Items(DataManager);
+        var cells = new ItemCells(itemNames, Textures, actions, market, scope, boardWatcher);
         var vendorPrices = new VendorPrices(DataManager);
         var boards = new Boards(market, scope, vendorPrices, boardWatcher);
         vendorSweep = new VendorSweep(vendorPrices, market, diagnostics, Log);
@@ -122,6 +124,11 @@ public sealed class Plugin : IDalamudPlugin
             gatherSweep, gatherables, boards, cells, config, gatherClock, diagnostics);
 
         sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
+
+        // Driven by prices moving rather than by a timer, so an undercut or a vendor listing
+        // arrives while it still means something.
+        watch = new Watch(
+            Framework, market, boardWatcher, boards, scope, itemNames, config, notices, diagnostics, Log);
 
         // Chat only reports what sold while somebody was online to hear it. The rest is read
         // off the retainer itself, whenever one is open.
@@ -180,6 +187,16 @@ public sealed class Plugin : IDalamudPlugin
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
                 ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
+                ["recheck listings"] = () => market.RefreshInBackground(
+                    scope.Selling, [.. boardWatcher.ListedItems()], true, FetchPriority.Interactive),
+                ["watch"] = () => Log.Information($"Watch: {watch.Report}"),
+                ["alert watch"] = () =>
+                {
+                    config.AlertUndercut = !config.AlertUndercut;
+                    config.AlertVendorFind = config.AlertUndercut;
+                    Save();
+                    Log.Information($"Change alerts are now {(config.AlertUndercut ? "on" : "off")}.");
+                },
                 ["alert windows"] = () =>
                 {
                     config.AlertWindows = !config.AlertWindows;
@@ -360,6 +377,7 @@ public sealed class Plugin : IDalamudPlugin
         sales.Dispose();
         retainerSales.Dispose();
         gatherClock.Dispose();
+        watch.Dispose();
         debug.Dispose();
         briefing.Dispose();
         serverBar.Dispose();

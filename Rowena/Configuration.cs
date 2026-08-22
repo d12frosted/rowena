@@ -384,6 +384,19 @@ public sealed class Configuration : IPluginConfiguration
     /// what makes saying it unprompted the right thing rather than an interruption. A window
     /// advertised as four game hours is under twelve real minutes.
     /// </remarks>
+    /// <summary>
+    /// Whether to say when a listing of mine falls behind a queue worth caring about.
+    /// </summary>
+    /// <remarks>
+    /// Driven by the price moving rather than by a timer, so it arrives when it happens. Not
+    /// "somebody is cheaper than me", which is the easy question and usually the wrong one.
+    /// </remarks>
+    public bool AlertUndercut { get; set; }
+
+    /// <summary>Whether to say when something appears for less than a vendor pays.</summary>
+    /// <remarks>The one alert that is worthless late: these are gone within minutes.</remarks>
+    public bool AlertVendorFind { get; set; }
+
     public bool AlertWindows { get; set; }
 
     /// <summary>How much one has to be worth before a window is worth mentioning.</summary>
