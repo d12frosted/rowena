@@ -270,10 +270,12 @@ a tab per question:
   market data cannot reach: not what this sells for, but whether mine sells. The game
   announces every retainer sale in chat with the item attached as a link, so the item is
   exact and only the numbers are read from the text. The wording is English, which is a real
-  limit: a client in another language records nothing rather than something wrong.
+  limit: a client in another language records nothing rather than something wrong. The
+  record is kept for half a year (a setting), in a file of its own, because what sells well
+  for you is a question about months rather than a fortnight.
 
-  Listings come from the game rather than Universalis, so they are exact: opening a board
-  once says what you have out, and it is remembered after that. Each is netted at its own
+  Listings come from the game rather than Universalis, so they are exact: opening a retainer
+  reads what it has out, and it is remembered after that. Each is netted at its own
   retainer's city rate rather than the worst of them, since that is a number the game has
   actually said.
 - **Bags.** What to do with the pile. Materials accumulate faster than anybody decides about

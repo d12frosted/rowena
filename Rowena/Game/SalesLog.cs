@@ -7,17 +7,6 @@ using Rowena.Core.Market;
 
 namespace Rowena.Game;
 
-/// <summary>One of my own sales, as it happened.</summary>
-/// <param name="Announced">
-/// True when the game said so in chat, false when it was worked out from a retainer's slots
-/// and purse. The two are kept apart because one is a fact and the other is a reading.
-/// </param>
-internal readonly record struct Sale(uint ItemId, int Quantity, long Gil, DateTimeOffset At, bool Announced = true)
-{
-    /// <summary>What one of them fetched, net of the fees the message has already taken off.</summary>
-    public long Each => Quantity > 0 ? Gil / Quantity : Gil;
-}
-
 /// <summary>
 /// What I have actually sold, which nothing else knows.
 /// </summary>
@@ -31,48 +20,114 @@ internal readonly record struct Sale(uint ItemId, int Quantity, long Gil, DateTi
 /// record of it that survives logging out, since the game keeps no history a plugin can ask
 /// for.
 ///
-/// Kept to a few hundred, newest first. This is evidence about how things have been selling
-/// lately, not an accounting ledger, and a file that grows forever to answer a question about
-/// the last fortnight is a file nobody wants.
+/// Kept for months rather than to a count, newest first, in a file of its own: the
+/// configuration is rewritten on every small change and should not carry a season of sales
+/// along each time. What was in the configuration from before is carried over once.
 /// </remarks>
 internal sealed class SalesLog : IDisposable
 {
-    /// <summary>How many are kept before the oldest are dropped.</summary>
-    private const int Keep = 500;
+    /// <summary>A ceiling nothing should reach: a safety net under the age limit, not a policy.</summary>
+    private const int Cap = 50_000;
+
+    private static readonly System.Text.Json.JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
     private readonly IChatGui chat;
     private readonly Configuration config;
+    private readonly string path;
     private readonly Action save;
     private readonly Diagnostics diagnostics;
     private readonly IPluginLog log;
 
-    private readonly List<Sale> sales;
+    private List<SaleRecord> sales;
     private readonly object gate = new();
 
     public SalesLog(
         IChatGui chat,
         Configuration config,
+        string path,
         Action save,
         Diagnostics diagnostics,
         IPluginLog log)
     {
         this.chat = chat;
         this.config = config;
+        this.path = path;
         this.save = save;
         this.diagnostics = diagnostics;
         this.log = log;
 
-        sales =
-        [
-            .. config.Sales.Select(stored => new Sale(
-                stored.ItemId,
-                stored.Quantity,
-                stored.Gil,
-                DateTimeOffset.FromUnixTimeSeconds(stored.At),
-                stored.Announced)),
-        ];
+        sales = [.. SalesRetention.Prune(Load().Concat(Carried()), DateTimeOffset.UtcNow, config.SalesKeepDays, Cap)];
+
+        // Once carried over, the configuration's copy is done with. Left there it would be
+        // carried over again on every load and counted twice.
+        if (config.Sales.Count > 0)
+        {
+            config.Sales = [];
+            Write();
+            save();
+            diagnostics.Note("sales", $"moved the sales record into its own file, {sales.Count} kept");
+        }
 
         chat.ChatMessage += OnMessage;
+    }
+
+    /// <summary>What the file holds, or nothing when there is no file yet.</summary>
+    private IEnumerable<SaleRecord> Load()
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return [];
+
+            var stored = System.Text.Json.JsonSerializer.Deserialize<List<StoredSale>>(File.ReadAllText(path), Options) ?? [];
+            return stored.Select(Read);
+        }
+        catch (Exception error)
+        {
+            // A record that cannot be read is a record starting over, not a plugin that will not load.
+            log.Warning(error, "Could not read the sales record.");
+            return [];
+        }
+    }
+
+    /// <summary>What the configuration still holds from before the record had a file.</summary>
+    private IEnumerable<SaleRecord> Carried() => config.Sales.Select(Read);
+
+    private static SaleRecord Read(StoredSale stored) => new(
+        stored.ItemId,
+        stored.Quantity,
+        stored.Gil,
+        DateTimeOffset.FromUnixTimeSeconds(stored.At),
+        stored.Announced);
+
+    private void Write()
+    {
+        try
+        {
+            List<StoredSale> stored;
+
+            lock (gate)
+            {
+                stored =
+                [
+                    .. sales.Select(one => new StoredSale
+                    {
+                        ItemId = one.ItemId,
+                        Quantity = one.Quantity,
+                        Gil = one.Gil,
+                        At = one.At.ToUnixTimeSeconds(),
+                        Announced = one.Announced,
+                    }),
+                ];
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(stored, Options));
+        }
+        catch (Exception error)
+        {
+            log.Warning(error, "Could not write the sales record.");
+        }
     }
 
     public void Dispose() => chat.ChatMessage -= OnMessage;
@@ -89,36 +144,22 @@ internal sealed class SalesLog : IDisposable
     {
         lock (gate)
         {
-            sales.Insert(0, new Sale(itemId, quantity, gil, DateTimeOffset.UtcNow, announced));
-
-            if (sales.Count > Keep)
-                sales.RemoveRange(Keep, sales.Count - Keep);
-
-            config.Sales =
-            [
-                .. sales.Select(one => new StoredSale
-                {
-                    ItemId = one.ItemId,
-                    Quantity = one.Quantity,
-                    Gil = one.Gil,
-                    At = one.At.ToUnixTimeSeconds(),
-                    Announced = one.Announced,
-                }),
-            ];
+            sales.Insert(0, new SaleRecord(itemId, quantity, gil, DateTimeOffset.UtcNow, announced));
+            sales = [.. SalesRetention.Prune(sales, DateTimeOffset.UtcNow, config.SalesKeepDays, Cap)];
         }
 
-        save();
+        Write();
     }
 
     /// <summary>Everything remembered, newest first.</summary>
-    public IReadOnlyList<Sale> All()
+    public IReadOnlyList<SaleRecord> All()
     {
         lock (gate)
             return [.. sales];
     }
 
     /// <summary>What one item has sold for lately, newest first.</summary>
-    public IReadOnlyList<Sale> For(uint itemId)
+    public IReadOnlyList<SaleRecord> For(uint itemId)
     {
         lock (gate)
             return [.. sales.Where(sale => sale.ItemId == itemId)];
@@ -145,7 +186,7 @@ internal sealed class SalesLog : IDisposable
     }
 
     /// <summary>Everything sold since a moment, for asking how the week went.</summary>
-    public IReadOnlyList<Sale> Since(DateTimeOffset at)
+    public IReadOnlyList<SaleRecord> Since(DateTimeOffset at)
     {
         lock (gate)
             return [.. sales.Where(sale => sale.At >= at)];

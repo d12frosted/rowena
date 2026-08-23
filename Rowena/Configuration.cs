@@ -390,13 +390,21 @@ public sealed class Configuration : IPluginConfiguration
     public List<StoredListing> MyListings { get; set; } = [];
 
     /// <summary>
-    /// What my retainers have sold, newest first.
+    /// What my retainers had sold, from before the record had a file of its own.
     /// </summary>
     /// <remarks>
-    /// The game keeps no history a plugin can ask for, so this is the only record of it that
-    /// survives logging out.
+    /// Carried into the sales file once and emptied. Kept so an older configuration loads.
     /// </remarks>
     public List<StoredSale> Sales { get; set; } = [];
+
+    /// <summary>
+    /// How many days of my own sales are kept.
+    /// </summary>
+    /// <remarks>
+    /// Half a year by default. What sells well and what does not are questions about months,
+    /// and a record that only reaches back a fortnight cannot answer them.
+    /// </remarks>
+    public int SalesKeepDays { get; set; } = 180;
 
     /// <summary>
     /// Each retainer as it was last seen: what it had listed, and what was in its purse.

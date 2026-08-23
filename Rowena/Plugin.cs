@@ -116,7 +116,8 @@ public sealed class Plugin : IDalamudPlugin
         var convertTab = new ConvertTab(
             trades, boards, balances, cells, config, market, venues, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
-        sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
+        sales = new SalesLog(
+            ChatGui, config, Path.Combine(PluginInterface.ConfigDirectory.FullName, "sales.json"), Save, diagnostics, Log);
         var realised = new Realised(sales, boards, market, config);
 
         var craftTab = new CraftTab(

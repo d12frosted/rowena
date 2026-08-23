@@ -81,6 +81,11 @@ internal sealed class SettingsTab(
             + "would sell. Prices stay at the floor; what gives is volume. Ranking on the rate alone put\n"
             + "items nobody has ever bought at the top.");
 
+        changed |= Number(
+            "Days of my own sales to keep", config.SalesKeepDays, value => config.SalesKeepDays = Math.Max(1, value),
+            "The record of what your retainers sold, and for how much, reaches back this far. Half a\n"
+            + "year by default: what sells well for you is a question about months, not a fortnight.");
+
         Group("Undercutting");
 
         changed |= Number(
