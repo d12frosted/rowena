@@ -170,7 +170,7 @@ internal sealed class StatusStrip
             balances.Gil,
             WalletStrip.Pick(
                 trades.Currencies.Select(currency => new Holding(currency, balances.Held(currency), balances.CapOf(currency))),
-                config.PinnedCurrencies.Contains),
+                config.PinnedCurrencies),
             GatheringLine());
 
     /// <summary>

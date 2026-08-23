@@ -25,24 +25,39 @@ public readonly record struct WalletRow(Resource Currency, long Held, long? Cap,
 /// </remarks>
 public static class WalletStrip
 {
-    /// <summary>Pinned first, in the order given; then the warnings, fullest first.</summary>
-    public static IReadOnlyList<WalletRow> Pick(IEnumerable<Holding> holdings, Func<uint, bool> pinned)
+    /// <summary>Pinned first, in the order they were pinned in; then the warnings, fullest first.</summary>
+    /// <remarks>
+    /// The holdings arrive in whatever order the catalogue found them, which is no order at
+    /// all. The pinned list is one somebody arranged, so it is the one that shows.
+    /// </remarks>
+    public static IReadOnlyList<WalletRow> Pick(IEnumerable<Holding> holdings, IReadOnlyList<uint> pinned)
     {
         var rows = holdings
             .Select(holding => new WalletRow(
                 holding.Currency,
                 holding.Held,
                 holding.Cap,
-                pinned(holding.Currency.Id),
+                pinned.Contains(holding.Currency.Id),
                 holding.Cap is { } cap && IsNearCap(holding.Held, cap)))
             .Where(row => row.Pinned || row.NearCap)
             .ToArray();
 
         return
         [
-            .. rows.Where(row => row.Pinned),
+            .. rows.Where(row => row.Pinned).OrderBy(row => pinned.IndexOf(row.Currency.Id)),
             .. rows.Where(row => !row.Pinned).OrderByDescending(row => (double)row.Held / row.Cap!.Value),
         ];
+    }
+
+    private static int IndexOf(this IReadOnlyList<uint> ids, uint id)
+    {
+        for (var index = 0; index < ids.Count; index++)
+        {
+            if (ids[index] == id)
+                return index;
+        }
+
+        return -1;
     }
 
     /// <summary>Into the last tenth. The same line the chat alert is drawn at.</summary>

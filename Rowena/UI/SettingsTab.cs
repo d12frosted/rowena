@@ -368,28 +368,64 @@ internal sealed class SettingsTab(
     {
         ImGui.TextColored(
             Palette.Dim,
-            "Always shown, whatever the balance. Anything unticked appears only once it is into the\n"
-            + "last tenth of its cap, in red, since what is earned past the cap is lost.");
-
-        // The sheets know about a hundred and fifty currencies, most of which nobody holds.
-        // The ones in your pockets, the catalogue or the pinned set are the decision; the
-        // rest are there, folded away, for the day one of them matters.
-        var known = trades.Currencies.OrderBy(currency => currency.Name, StringComparer.Ordinal).ToArray();
-        var near = known
-            .Where(currency => config.PinnedCurrencies.Contains(currency.Id)
-                || trades.IsWatched(currency)
-                || balances.Held(currency) > 0)
-            .ToArray();
+            "Always shown, whatever the balance, in this order. Anything unticked appears only once\n"
+            + "it is into the last tenth of its cap, in red, since what is earned past the cap is lost.");
 
         var changed = false;
+        var byId = trades.Currencies.ToDictionary(currency => currency.Id);
+        var pinned = config.PinnedCurrencies;
+
+        // The pinned ones first, in strip order, each with a way to move it. Arrows rather
+        // than drag and drop: four rows do not need a gesture, and a gesture cannot be
+        // undone by clicking the other arrow.
+        // Walked off a copy, since unticking one edits the list under the loop.
+        foreach (var (id, index) in pinned.ToArray().Select((id, index) => (id, index)))
+        {
+
+            ImGui.BeginDisabled(index == 0);
+            if (ImGui.ArrowButton($"##up{id}", ImGuiDir.Up))
+            {
+                (pinned[index - 1], pinned[index]) = (pinned[index], pinned[index - 1]);
+                changed = true;
+            }
+            ImGui.EndDisabled();
+
+            ImGui.SameLine();
+            ImGui.BeginDisabled(index == pinned.Count - 1);
+            if (ImGui.ArrowButton($"##down{id}", ImGuiDir.Down))
+            {
+                (pinned[index + 1], pinned[index]) = (pinned[index], pinned[index + 1]);
+                changed = true;
+            }
+            ImGui.EndDisabled();
+
+            ImGui.SameLine();
+
+            // A pinned id the catalogue no longer knows still gets a row, so it can be unpinned.
+            if (byId.TryGetValue(id, out var currency))
+                changed |= PinBox(currency);
+            else if (Unpin(id, $"Unknown currency {id}"))
+                changed = true;
+        }
+
+        // The sheets know about a hundred and fifty currencies, most of which nobody holds.
+        // The ones in your pockets or the catalogue are the likely next pins; the rest are
+        // there, folded away, for the day one of them matters.
+        var rest = trades.Currencies
+            .Where(currency => !pinned.Contains(currency.Id))
+            .OrderBy(currency => currency.Name, StringComparer.Ordinal)
+            .ToArray();
+        var near = rest
+            .Where(currency => trades.IsWatched(currency) || balances.Held(currency) > 0)
+            .ToArray();
 
         foreach (var currency in near)
             changed |= PinBox(currency);
 
-        if (near.Length < known.Length
-            && ImGui.CollapsingHeader($"Everything else ({known.Length - near.Length})##pinrest"))
+        if (near.Length < rest.Length
+            && ImGui.CollapsingHeader($"Everything else ({rest.Length - near.Length})##pinrest"))
         {
-            foreach (var currency in known.Except(near))
+            foreach (var currency in rest.Except(near))
                 changed |= PinBox(currency);
         }
 
@@ -399,17 +435,30 @@ internal sealed class SettingsTab(
 
     private bool PinBox(Resource currency)
     {
-        var pinned = config.PinnedCurrencies.Contains(currency.Id);
         var label = trades.IsWatched(currency) ? $"{currency.Name} (in the catalogue)" : currency.Name;
+
+        if (config.PinnedCurrencies.Contains(currency.Id))
+            return Unpin(currency.Id, label);
+
+        var pinned = false;
 
         if (!ImGui.Checkbox($"{label}##pin{currency.Id}", ref pinned))
             return false;
 
-        if (pinned)
-            config.PinnedCurrencies.Add(currency.Id);
-        else
-            config.PinnedCurrencies.Remove(currency.Id);
+        // New pins go last. Where it belongs is a choice, and the arrows are right there.
+        config.PinnedCurrencies.Add(currency.Id);
+        return true;
+    }
 
+    /// <summary>A ticked box that, unticked, drops its id from the pinned list.</summary>
+    private bool Unpin(uint id, string label)
+    {
+        var pinned = true;
+
+        if (!ImGui.Checkbox($"{label}##pin{id}", ref pinned))
+            return false;
+
+        config.PinnedCurrencies.Remove(id);
         return true;
     }
 
