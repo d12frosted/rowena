@@ -402,13 +402,20 @@ public sealed class Configuration : IPluginConfiguration
     /// <remarks>
     /// What the rest of the window is read against, whatever the balance. Starts as the four
     /// current scrips, since that is what the plugin is for; anything else only appears up there
-    /// as a warning when it nears its cap. Chosen in Settings from the currencies the catalogue
-    /// knows.
+    /// as a warning when it nears its cap. Chosen and arranged in Settings from the currencies
+    /// the catalogue knows; the order here is the order on the strip.
     /// </remarks>
     public List<uint> PinnedCurrencies { get; set; } = [.. DefaultPinnedCurrencies];
 
-    /// <summary>Purple crafters', purple gatherers', orange crafters', orange gatherers'.</summary>
-    public static readonly uint[] DefaultPinnedCurrencies = [33913, 33914, 41784, 41785];
+    /// <summary>
+    /// Gatherers' then crafters', the current tier first: orange gatherers', purple
+    /// gatherers', orange crafters', purple crafters'.
+    /// </summary>
+    /// <remarks>
+    /// The order is the order on the strip. Gathering first because that is what this plugin
+    /// drives, and the tier you are earning now before the one you are spending down.
+    /// </remarks>
+    public static readonly uint[] DefaultPinnedCurrencies = [41785, 33914, 41784, 33913];
 
     /// <summary>
     /// The return a flip has to reach before it is said in chat, in percent. Zero turns it off.
