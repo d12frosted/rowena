@@ -237,8 +237,8 @@ a tab per question:
   a wall nobody buys from is not a position. Only the field: the game's confirm button is still the one that commits it.
   Items you would rather leave where they are can be ignored per item; the number stays on
   the row, the dialog is left alone, and the ignore clears once nothing of that item is
-  listed anymore. HQ listings are never filled in unasked, because the board data does not
-  tell qualities apart and the listing in front may be NQ.
+  listed anymore. Quality counts: cheaper NQ is not in front of an HQ listing, since nobody
+  buying HQ takes the NQ instead, while cheaper HQ is in front of an NQ one.
 
   With a retainer open, the same column sits beside the game's own sell list, one row per
   listing in the list's order, showing the cheapest listing ahead and what yours would be

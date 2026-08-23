@@ -86,15 +86,19 @@ public readonly record struct ListingDiagnosis(
         OrderBook? book,
         long vendorPrice,
         MarketTax tax,
-        int patienceDays)
+        int patienceDays,
+        bool hq = false)
     {
         if (book is null || mine <= 0)
             return null;
 
         // Strictly below, because a tie is ambiguous from out here: the board does not say
         // which of the listings at my price is mine, and counting them as ahead of me would
-        // manufacture a queue out of my own stock.
-        var ahead = book.Listings.Where(listing => listing.UnitPrice < mine).Sum(listing => listing.Quantity);
+        // manufacture a queue out of my own stock. And only what a buyer of my quality would
+        // take: cheaper NQ is not in front of an HQ listing.
+        var ahead = book.Listings
+            .Where(listing => listing.UnitPrice < mine && listing.Serves(hq))
+            .Sum(listing => listing.Quantity);
 
         var days = book.SaleVelocityPerDay > 0 ? (ahead + units) / book.SaleVelocityPerDay : (double?)null;
         var floor = book.CredibleFloor() ?? mine;

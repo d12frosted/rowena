@@ -112,3 +112,34 @@ public class UndercutNobodyPaysTests
         Assert.Null(Undercut.Of(100_000, Book([1_000, 1_200], (100_000, 1)), 5));
     }
 }
+
+public class UndercutQualityTests
+{
+    private static OrderBook Book(params Listing[] listings) => OrderBook.Create(1, listings);
+
+    [Fact]
+    public void AnHqListingIsNotUndercutByCheaperNq()
+    {
+        // Measured: an HQ nugget at 4,989 over NQ ones at 515. Nobody buying HQ takes the NQ
+        // instead, so they are not in front, and 510 is money gone.
+        Assert.Null(Undercut.Of(4_989, Book(new Listing(515, 99, "Light", IsHq: false)), 5, hq: true));
+    }
+
+    [Fact]
+    public void AnHqListingIsUndercutByCheaperHq()
+    {
+        var plan = Undercut.Of(4_989, Book(new Listing(515, 99, "Light"), new Listing(4_000, 1, "Light", IsHq: true)), 5, hq: true);
+
+        Assert.Equal(3_995, plan!.Value.Target);
+        Assert.Equal(1, plan.Value.UnitsAhead);
+    }
+
+    [Fact]
+    public void AnNqListingIsUndercutByCheaperHq()
+    {
+        // Somebody wanting NQ takes a cheaper HQ happily, so it is in front of mine.
+        var plan = Undercut.Of(600, Book(new Listing(550, 2, "Light", IsHq: true)), 5, hq: false);
+
+        Assert.Equal(545, plan!.Value.Target);
+    }
+}

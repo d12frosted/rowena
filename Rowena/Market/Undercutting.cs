@@ -12,8 +12,8 @@ namespace Rowena.Market;
 internal sealed class Undercutting(Boards boards, Configuration config, Action save)
 {
     /// <summary>What I would have to ask to be cheapest, or null when I already am.</summary>
-    public UndercutPlan? Plan(uint itemId, long mine) =>
-        Undercut.Of(mine, boards.Selling(itemId), config.UndercutBy);
+    public UndercutPlan? Plan(uint itemId, long mine, bool hq = false) =>
+        Undercut.Of(mine, boards.Selling(itemId), config.UndercutBy, hq);
 
     public bool Ignored(uint itemId) => config.UndercutIgnored.Contains(itemId);
 
@@ -46,6 +46,6 @@ internal sealed class Undercutting(Boards boards, Configuration config, Action s
     }
 
     /// <summary>The plan, unless I have said to leave this item alone.</summary>
-    public UndercutPlan? Wanted(uint itemId, long mine) =>
-        Ignored(itemId) ? null : Plan(itemId, mine);
+    public UndercutPlan? Wanted(uint itemId, long mine, bool hq = false) =>
+        Ignored(itemId) ? null : Plan(itemId, mine, hq);
 }

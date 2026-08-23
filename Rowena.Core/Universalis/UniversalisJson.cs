@@ -129,7 +129,8 @@ public static class UniversalisJson
                 listings.Add(new Listing(
                     listing.GetProperty("pricePerUnit").GetInt64(),
                     listing.GetProperty("quantity").GetInt32(),
-                    listing.TryGetProperty("worldName", out var world) ? world.GetString() ?? "" : ""));
+                    listing.TryGetProperty("worldName", out var world) ? world.GetString() ?? "" : "",
+                    listing.TryGetProperty("hq", out var hq) && hq.ValueKind == JsonValueKind.True));
             }
         }
 

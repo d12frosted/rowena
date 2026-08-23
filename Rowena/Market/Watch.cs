@@ -158,7 +158,8 @@ internal sealed class Watch : IDisposable
             return;
 
         var cheapest = mine.Min(listing => listing.UnitPrice);
-        var units = mine.Where(listing => listing.UnitPrice == cheapest).Sum(listing => listing.Quantity);
+        var front = mine.Where(listing => listing.UnitPrice == cheapest).ToArray();
+        var units = front.Sum(listing => listing.Quantity);
 
         var reading = ListingDiagnosis.Of(
             cheapest,
@@ -166,7 +167,8 @@ internal sealed class Watch : IDisposable
             boards.Selling(itemId),
             boards.Vendor(itemId),
             board.TaxFor(mine[0].CityId),
-            config.SellingHorizon());
+            config.SellingHorizon(),
+            front.All(listing => listing.IsHq));
 
         if (reading is not { } read)
             return;

@@ -38,12 +38,13 @@ public static class Undercut
     /// <remarks>A couple of fire-sale buys should not drag a legitimately dear item down to them.</remarks>
     public const int EnoughSales = 5;
 
-    public static UndercutPlan? Of(long mine, OrderBook? book, long margin)
+    /// <param name="hq">The quality of my listing, which decides who counts as in front of it.</param>
+    public static UndercutPlan? Of(long mine, OrderBook? book, long margin, bool hq = false)
     {
         if (book is null || mine <= 0)
             return null;
 
-        var ahead = book.Listings.Where(listing => listing.UnitPrice < mine).ToArray();
+        var ahead = book.Listings.Where(listing => listing.UnitPrice < mine && listing.Serves(hq)).ToArray();
         var units = ahead.Sum(listing => listing.Quantity);
         long? below = ahead.Length == 0 ? null : ahead.Min(listing => listing.UnitPrice);
 

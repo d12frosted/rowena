@@ -382,7 +382,8 @@ internal sealed class SellingTab
         ImGui.SameLine();
         Cell.Right(
             row.Ignored ? Palette.Dim : Palette.Bad,
-            (plan.Why == UndercutWhy.NobodyPays ? "~" : "") + $"{plan.Target:N0}" + (row.IsHq ? " HQ?" : ""));
+            (plan.Why == UndercutWhy.NobodyPays ? "~" : "") + $"{plan.Target:N0}"
+            + (row.IsHq && plan.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
 
         if (ImGui.IsItemHovered())
         {
@@ -392,9 +393,9 @@ internal sealed class SellingTab
                       + $"about {plan.Below:N0}. Asking {plan.Target:N0} puts you {config.UndercutBy:N0} under that."
                     : $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
                       + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it.")
-                + (row.IsHq
-                    ? "\n\nThis listing is HQ and the board data does not tell qualities apart, so the\n"
-                      + "listing in front may be NQ. Check before taking this number."
+                + (row.IsHq && plan.Why == UndercutWhy.NobodyPays
+                    ? "\n\nThis listing is HQ and recent sales are not split by quality, so what people\n"
+                      + "pay may be for NQ. Check before taking this number."
                     : "")
                 + (row.Ignored ? "\n\nYou said to leave this one alone, so the price dialog is not filled in." : ""));
         }
@@ -560,7 +561,8 @@ internal sealed class SellingTab
                     book,
                     boards.Vendor(itemId),
                     TaxFor(first.CityId),
-                    config.SellingHorizon());
+                    config.SellingHorizon(),
+                    group.Key.IsHq);
 
                 if (reading is not { } read)
                     continue;
@@ -574,7 +576,7 @@ internal sealed class SellingTab
                     group.Key.IsHq,
                     read,
                     Sold(itemId, recently),
-                    undercutting.Plan(itemId, group.Key.UnitPrice),
+                    undercutting.Plan(itemId, group.Key.UnitPrice, group.Key.IsHq),
                     undercutting.Ignored(itemId)));
             }
         }
