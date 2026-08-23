@@ -191,3 +191,22 @@ public class RecentSalesTests
         Assert.All(book.RecentSales, price => Assert.True(price > 0));
     }
 }
+
+public class ListingQualityParsingTests
+{
+    [Fact]
+    public void TheQualityOfEachListingIsRead()
+    {
+        const string json = """
+            {"itemID": 1, "listings": [
+                {"pricePerUnit": 515, "quantity": 99, "worldName": "Shiva", "hq": false},
+                {"pricePerUnit": 4989, "quantity": 2, "worldName": "Shiva", "hq": true}
+            ], "recentHistory": []}
+            """;
+
+        var book = UniversalisJson.ParseItem(json);
+
+        Assert.False(book.Listings[0].IsHq);
+        Assert.True(book.Listings[1].IsHq);
+    }
+}

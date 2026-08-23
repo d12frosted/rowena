@@ -132,7 +132,7 @@ internal sealed class RetainerOverlay : Window
             {
                 foreach (var (slot, index) in slots)
                 {
-                    if (!undercutting.Ignored(slot.ItemId) && undercutting.Plan(slot.ItemId, slot.UnitPrice) is { } plan)
+                    if (!undercutting.Ignored(slot.ItemId) && undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq) is { } plan)
                         sellFill.Reprice(index, slot.ItemId, plan.Target);
                 }
             }
@@ -142,8 +142,7 @@ internal sealed class RetainerOverlay : Window
                 ImGui.SetTooltip(
                     "Reprices every red row above, one after another, through the game's own windows:\n"
                     + "the ones somebody is under, and the ones nobody is paying. Ignored items are\n"
-                    + "skipped. HQ listings are included: the board data does not tell qualities apart,\n"
-                    + "so check those rows first if that worries you.");
+                    + "skipped.");
             }
         }
 
@@ -161,7 +160,7 @@ internal sealed class RetainerOverlay : Window
 
     private void DrawUndercut(StoredSlot slot, int index, ref int undercut)
     {
-        var plan = undercutting.Plan(slot.ItemId, slot.UnitPrice);
+        var plan = undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq);
         var ignored = undercutting.Ignored(slot.ItemId);
 
         if (plan is not { } wanted)
@@ -190,8 +189,8 @@ internal sealed class RetainerOverlay : Window
                       + (wanted.UnitsAhead > 0 ? $", nor the {wanted.UnitsAhead:N0} units listed under it" : ", cheapest on the board or not")
                       + $": what actually sells goes for about {wanted.Below:N0}, so that is what this sits under."
                     : $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}.")
-                + (slot.IsHq
-                    ? "\n\nHQ: the board data does not tell qualities apart, so the listing in front may be NQ."
+                + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays
+                    ? "\n\nHQ: recent sales are not split by quality, so what people pay may be for NQ."
                     : "")
                 + (ignored ? "\n\nYou said to leave this one alone; the button still works, it just does not count." : ""));
         }
@@ -200,6 +199,6 @@ internal sealed class RetainerOverlay : Window
         Cell.Right(
             ignored ? Palette.Dim : Palette.Bad,
             (wanted.Why == UndercutWhy.NobodyPays ? $"sells ~{wanted.Below:N0}" : $"{wanted.Below:N0}")
-            + $" -> {wanted.Target:N0}" + (slot.IsHq ? " HQ?" : ""));
+            + $" -> {wanted.Target:N0}" + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
     }
 }

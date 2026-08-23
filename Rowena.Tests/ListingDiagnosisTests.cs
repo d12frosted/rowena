@@ -245,3 +245,27 @@ public class ListingDiagnosisTests
     public void NoBookIsNoAnswerRatherThanABadOne() =>
         Assert.Null(ListingDiagnosis.Of(1000, 5, null, 0, MarketTax.None, 7));
 }
+
+public class ListingDiagnosisQualityTests
+{
+    [Fact]
+    public void AnHqListingHasNoQueueOfNq()
+    {
+        var book = OrderBook.Create(1, [new Listing(515, 99, "Light"), new Listing(4_989, 2, "Light", IsHq: true)], saleVelocityPerDay: 10);
+
+        var reading = ListingDiagnosis.Of(4_989, 2, book, 0, MarketTax.None, 7, hq: true);
+
+        Assert.Equal(0, reading!.Value.UnitsAhead);
+        Assert.Equal(ListingCall.Hold, reading.Value.Call);
+    }
+
+    [Fact]
+    public void AnNqListingQueuesBehindCheaperHq()
+    {
+        var book = OrderBook.Create(1, [new Listing(550, 3, "Light", IsHq: true), new Listing(600, 1, "Light")], saleVelocityPerDay: 10);
+
+        var reading = ListingDiagnosis.Of(600, 1, book, 0, MarketTax.None, 7);
+
+        Assert.Equal(3, reading!.Value.UnitsAhead);
+    }
+}

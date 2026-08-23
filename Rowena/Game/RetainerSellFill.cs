@@ -363,16 +363,7 @@ internal sealed class RetainerSellFill : IDisposable
             if (Identify(dialog) is not { } slot)
                 return;
 
-            // The board data does not tell qualities apart, so the listing in front of an HQ
-            // stack may be NQ, and filling an NQ price into an HQ listing is money gone. The
-            // number is still shown on the Selling tab; it is just not typed in unasked.
-            if (slot.IsHq)
-            {
-                diagnostics.Note("undercut", $"{names.Name(slot.ItemId)} is HQ; not filling in unasked");
-                return;
-            }
-
-            if (undercutting.Wanted(slot.ItemId, slot.UnitPrice) is not { } plan)
+            if (undercutting.Wanted(slot.ItemId, slot.UnitPrice, slot.IsHq) is not { } plan)
                 return;
 
             if (Set(dialog, plan.Target))
