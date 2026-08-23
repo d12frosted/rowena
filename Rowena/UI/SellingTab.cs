@@ -589,7 +589,7 @@ internal sealed class SellingTab
     private const int SinceDays = 14;
 
     /// <summary>My own sales of one item, folded into a total.</summary>
-    private static Mine? Sold(uint itemId, IReadOnlyList<Sale> recently)
+    private static Mine? Sold(uint itemId, IReadOnlyList<SaleRecord> recently)
     {
         var mine = recently.Where(sale => sale.ItemId == itemId).ToArray();
 
