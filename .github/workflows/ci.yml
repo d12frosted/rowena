@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A push that supersedes a running build replaces it instead of queueing behind
+# it. Only on branches and PRs: every commit on master keeps its own verdict, so
+# a regression can be pinned to the commit that brought it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The plugin project has a lock file, the others only declare their
+      # dependencies in the project file, so the key covers both.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Only the plugin project needs these; the core library and its tests are
+      # deliberately free of them.
+      - name: Fetch Dalamud
+        run: |
+          curl -sSL https://goatcorp.github.io/dalamud-distrib/latest.zip -o dalamud.zip
+          unzip -q dalamud.zip -d "$HOME/dalamud"
+          echo "DALAMUD_HOME=$HOME/dalamud" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: dotnet test Rowena.Tests/Rowena.Tests.csproj --nologo
+
+      - name: Build
+        run: dotnet build Rowena/Rowena.csproj -c Release --nologo
