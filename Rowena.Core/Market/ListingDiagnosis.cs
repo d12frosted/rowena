@@ -64,7 +64,8 @@ public readonly record struct ListingDiagnosis(
     long? VendorNet)
 {
     /// <summary>How far above recent sales a price has to be before it is worth mentioning.</summary>
-    private const double Rich = 1.5d;
+    /// <summary>How far above what people pay an ask has to be before nobody is paying it.</summary>
+    public const double Rich = 1.5d;
 
     /// <summary>How much room above has to be there before raising is worth the bother.</summary>
     private const double Worthwhile = 1.1d;

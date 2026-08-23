@@ -49,8 +49,9 @@ internal sealed class SellingTab
         + "the queue ahead plus your own stock, over sales a day.",
         "What matching the current floor would cost you per unit. Not a recommendation, a\n"
         + "price tag on one.",
-        "What to ask to be cheapest on the board: the cheapest listing in front of yours, less\n"
-        + "the margin from settings. Opening the retainer's price dialog on this listing fills it\n"
+        "What to ask to actually sell: the cheapest listing in front of yours less the margin\n"
+        + "from settings, or, where nobody is paying even the cheapest listing, what recent sales\n"
+        + "went for less the margin. Opening the retainer's price dialog on this listing fills it\n"
         + "in. Ignored items show the number but are never filled in.",
         null,
     ];
@@ -227,13 +228,14 @@ internal sealed class SellingTab
         if (undercut > 0)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Palette.Bad, $"{undercut} undercut.");
+            ImGui.TextColored(Palette.Bad, $"{undercut} to reprice.");
 
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(
-                    "Listings with somebody cheaper in front of them, not counting the ones you said\n"
-                    + "to leave alone. Open the retainer and its price dialog fills in the undercut price.");
+                    "Listings with somebody cheaper in front of them, or priced where nobody is buying,\n"
+                    + "not counting the ones you said to leave alone. Open the retainer and the column\n"
+                    + "beside its sell list does the rest.");
             }
         }
 
@@ -340,7 +342,7 @@ internal sealed class SellingTab
             Cell.Right(Palette.Good, "-");
 
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Nothing is listed below yours.");
+                ImGui.SetTooltip("Nothing is listed below yours, and it is priced where things sell.");
 
             ImGui.PopID();
             return;
@@ -378,13 +380,18 @@ internal sealed class SellingTab
         }
 
         ImGui.SameLine();
-        Cell.Right(row.Ignored ? Palette.Dim : Palette.Bad, row.IsHq ? $"{plan.Target:N0} HQ?" : $"{plan.Target:N0}");
+        Cell.Right(
+            row.Ignored ? Palette.Dim : Palette.Bad,
+            (plan.Why == UndercutWhy.NobodyPays ? "~" : "") + $"{plan.Target:N0}" + (row.IsHq ? " HQ?" : ""));
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
-                + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it."
+                (plan.Why == UndercutWhy.NobodyPays
+                    ? $"Nobody is paying this, cheapest on the board or not: what actually sells goes for\n"
+                      + $"about {plan.Below:N0}. Asking {plan.Target:N0} puts you {config.UndercutBy:N0} under that."
+                    : $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
+                      + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it.")
                 + (row.IsHq
                     ? "\n\nThis listing is HQ and the board data does not tell qualities apart, so the\n"
                       + "listing in front may be NQ. Check before taking this number."
