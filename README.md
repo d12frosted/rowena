@@ -229,6 +229,23 @@ a tab per question:
   everything that actually trades goes for under 1,500. A wall of listings nobody takes is
   not a market, and being at the front of it is not a position.
 
+  Having decided to undercut, the doing is cheap. Each row with somebody in front of it shows
+  the price that would put it first (the cheapest listing ahead, less a margin from settings,
+  five gil by default), and opening that listing's price dialog on the retainer fills the
+  number in. Only the field: the game's confirm button is still the one that commits it.
+  Items you would rather leave where they are can be ignored per item; the number stays on
+  the row, the dialog is left alone, and the ignore clears once nothing of that item is
+  listed anymore. HQ listings are never filled in unasked, because the board data does not
+  tell qualities apart and the listing in front may be NQ.
+
+  With a retainer open, the same column sits beside the game's own sell list, one row per
+  listing in the list's order, showing the cheapest listing ahead and what yours would be
+  cut to. Each undercut row has a button that reprices it through the game's own windows
+  (the listing's menu, Adjust Price, the dialog, confirm), and one button does every
+  undercut row in turn. Each step waits for its window and the run stops and says so if one
+  does not appear, rather than sending a click to whatever is open instead. Confirming can be
+  left to you in settings.
+
   Room to raise is measured against the next listing rather than against past sales. A
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
   history, and raising it earns four gil.

@@ -244,6 +244,47 @@ public sealed class Configuration : IPluginConfiguration
     public int SellingHorizon() => Math.Max(1, SellingHorizonDays);
 
     /// <summary>
+    /// How far under the cheapest listing in front of mine to go when undercutting.
+    /// </summary>
+    /// <remarks>
+    /// Gil, not percent. Undercutting is about being first in the queue, and a gil does that as
+    /// well as a thousand; the margin is only there so a tie does not leave it to the board.
+    /// </remarks>
+    public int UndercutBy { get; set; } = 5;
+
+    /// <summary>
+    /// Whether opening the game's price dialog on one of my undercut listings fills in the
+    /// undercut price.
+    /// </summary>
+    /// <remarks>
+    /// Fills in, never confirms. The number lands in the field and the game's own button is
+    /// still the one that commits it.
+    /// </remarks>
+    public bool UndercutFillsPrice { get; set; } = true;
+
+    /// <summary>
+    /// Whether a repricing started from the overlay also presses the dialog's confirm.
+    /// </summary>
+    /// <remarks>
+    /// On by default, because the button already was the decision, and a run over nine
+    /// listings that stops nine times to ask again is not a run. A dialog opened by hand is
+    /// never confirmed unasked, whatever this says.
+    /// </remarks>
+    public bool UndercutConfirms { get; set; } = true;
+
+    /// <summary>Whether the undercut column is drawn beside the retainer's sell list.</summary>
+    public bool UndercutOverlay { get; set; } = true;
+
+    /// <summary>
+    /// Items I have chosen to leave where they are, however many sit in front.
+    /// </summary>
+    /// <remarks>
+    /// Cleared for an item once nothing of it is listed anymore: the decision was about the
+    /// stack that was out, and the next one starts watched.
+    /// </remarks>
+    public List<uint> UndercutIgnored { get; set; } = [];
+
+    /// <summary>
     /// The smallest vendor find worth showing, in gil.
     /// </summary>
     /// <remarks>

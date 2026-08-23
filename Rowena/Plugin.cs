@@ -30,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
     [PluginService] internal static IMarketBoard MarketBoard { get; private set; } = null!;
+    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
 
     private readonly WindowSystem windows = new("Rowena");
     private readonly MainWindow mainWindow;
@@ -50,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly GatherSweep gatherSweep;
     private readonly SalesLog sales;
     private readonly RetainerSales retainerSales;
+    private readonly RetainerSellFill sellFill;
     private readonly GatherClock gatherClock;
     private readonly Watch watch;
     private readonly RetainerStock retainerStock;
@@ -138,8 +140,14 @@ public sealed class Plugin : IDalamudPlugin
         retainerSales = new RetainerSales(
             Framework, config, sales, itemNames, notices, boardWatcher.TaxFor, Save, diagnostics, Log);
 
+        // The one thing that writes into the game's UI: the undercut price, into the price
+        // dialog, and only into the field. Confirming it stays a button the game owns.
+        var undercutting = new Undercutting(boards, config, Save);
+        sellFill = new RetainerSellFill(
+            AddonLifecycle, Framework, config, undercutting, itemNames, notices, diagnostics, Log);
+
         var sellingTab = new SellingTab(
-            boardWatcher, boards, cells, config, diagnostics, sales,
+            boardWatcher, boards, cells, config, diagnostics, sales, undercutting, sellFill,
             ids => market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive));
         var vendorTab = new VendorTab(
             vendorSweep, boards, cells, config, diagnostics,
@@ -166,6 +174,9 @@ public sealed class Plugin : IDalamudPlugin
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
             gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, overviewTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
+        windows.AddWindow(new RetainerOverlay(
+            sellFill, undercutting, config, cells,
+            (itemId, _) => market.RefreshInBackground(scope.Selling, [itemId], true, FetchPriority.Interactive)));
 
         var headlines = new Headlines(trades, boards, balances, config);
 
@@ -390,6 +401,7 @@ public sealed class Plugin : IDalamudPlugin
         warmup.Dispose();
         sales.Dispose();
         retainerSales.Dispose();
+        sellFill.Dispose();
         gatherClock.Dispose();
         watch.Dispose();
         retainerStock.Dispose();

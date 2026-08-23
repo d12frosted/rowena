@@ -81,6 +81,37 @@ internal sealed class SettingsTab(
             + "would sell. Prices stay at the floor; what gives is volume. Ranking on the rate alone put\n"
             + "items nobody has ever bought at the top.");
 
+        Group("Undercutting");
+
+        changed |= Number(
+            "Gil under the cheapest listing in front", config.UndercutBy, value => config.UndercutBy = Math.Max(0, value),
+            "The undercut price is the cheapest listing in front of yours less this. Being first in\n"
+            + "the queue is the whole point, and a gil does it as well as a thousand; this only keeps\n"
+            + "a tie from deciding.");
+
+        changed |= Toggle(
+            "Fill the undercut price into the retainer's price dialog", config.UndercutFillsPrice,
+            value => config.UndercutFillsPrice = value,
+            "When the game's price dialog opens on one of your undercut listings, the field is set to\n"
+            + "the undercut price. Only the field: confirming it is still the game's button, and items\n"
+            + "you have marked as ignored on the Selling tab are never touched."
+            + (config.UndercutIgnored.Count > 0
+                ? $"\nIgnoring {config.UndercutIgnored.Count} item{(config.UndercutIgnored.Count == 1 ? "" : "s")} at the moment."
+                : ""));
+
+        changed |= Toggle(
+            "Confirm the price dialog when repricing from the overlay", config.UndercutConfirms,
+            value => config.UndercutConfirms = value,
+            "A repricing started from the overlay's button also presses the dialog's confirm, so a\n"
+            + "run over a whole retainer is one click. Off, each dialog waits for you. A dialog you\n"
+            + "opened by hand is never confirmed for you either way.");
+
+        changed |= Toggle(
+            "Show the undercut column beside the retainer's sell list", config.UndercutOverlay,
+            value => config.UndercutOverlay = value,
+            "One row per listing, in the list's order, with the undercut price and a button that\n"
+            + "opens the game's price dialog on that listing with the price filled in.");
+
         Group("The craft sweep");
 
         changed |= Toggle(
