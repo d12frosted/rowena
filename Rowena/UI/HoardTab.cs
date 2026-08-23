@@ -417,7 +417,7 @@ internal sealed class HoardTab
 
         // Twenty a retainer, less whatever is already out. Only what the board is the better
         // counter for competes for a slot: a vendor needs no slot and no waiting.
-        var slots = Math.Max(0, stock.Seen.Known * SlotsEach - board.ListedItems().Count);
+        var slots = Math.Max(0, stock.Seen.Known * SlotsEach - board.Known().Count);
 
         var plan = RetainerSlots.Fill(
             rows.Where(row => row.Verdict.Call == HoardCall.List)

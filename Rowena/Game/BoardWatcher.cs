@@ -5,16 +5,6 @@ using Rowena.Core.Market;
 
 namespace Rowena.Game;
 
-/// <summary>One of my retainer's listings, as the board itself reported it.</summary>
-/// <param name="CityId">Where the retainer stands, which is what decides the seller's tax.</param>
-internal readonly record struct MyListing(
-    uint ItemId,
-    long UnitPrice,
-    int Quantity,
-    bool IsHq,
-    string Retainer,
-    uint CityId);
-
 /// <summary>
 /// What the game itself says about the board, which is exact and costs nothing.
 /// </summary>
@@ -28,8 +18,11 @@ internal readonly record struct MyListing(
 /// your retainers somewhere cheap" from folklore into a number.
 ///
 /// My own listings, because a listing carrying one of my retainer ids is mine wherever the
-/// board view came from. That is the foundation the selling side needs: what I have out, at
-/// what price, in which city.
+/// board view came from. Not the whole of them: a board view is about one item, so it only
+/// ever says what I have out of the thing I searched for. The whole list is the retainers'
+/// own market slots, read whenever one is opened, and what the board adds is a fresher word
+/// on one item than the slots have, since a listing can sell between two visits. The two are
+/// folded together by <see cref="KnownListings"/> and that is what <see cref="Listed"/> serves.
 ///
 /// What is deliberately not taken from here is the board as an order book. A listing carries
 /// no world, so a view cannot be attributed to a world or a data centre, and filing
@@ -44,8 +37,11 @@ internal sealed class BoardWatcher : IDisposable
     private readonly Diagnostics diagnostics;
     private readonly IPluginLog log;
 
-    private readonly Dictionary<uint, (int Request, List<MyListing> Listings)> mine = [];
+    private readonly Dictionary<uint, (int Request, DateTimeOffset SeenAt, List<RetainerListing> Listings)> mine = [];
     private readonly object gate = new();
+
+    private IReadOnlyList<RetainerListing> known = [];
+    private DateTime knownAt;
 
     private IReadOnlyList<uint> towns = [];
     private DateTime townsReadAt;
@@ -66,18 +62,22 @@ internal sealed class BoardWatcher : IDisposable
         // What the game said last time, if it is still true. The rates hold for hours and are
         // only offered when asked for, so throwing them away on every reload means assuming
         // the worst for no reason.
-        foreach (var group in config.MyListings.GroupBy(listing => listing.ItemId))
+        // A listing written down before the retainer id was kept cannot be matched against its
+        // retainer's slots, so it would sit beside them as a duplicate. The slots cover it.
+        foreach (var group in config.MyListings.Where(listing => listing.RetainerId != 0).GroupBy(listing => listing.ItemId))
         {
             mine[group.Key] = (
                 0,
+                DateTimeOffset.FromUnixTimeSeconds(group.Max(listing => listing.SeenAt)),
                 [
-                    .. group.Select(listing => new MyListing(
+                    .. group.Select(listing => new RetainerListing(
+                        listing.RetainerId,
+                        listing.Retainer,
+                        listing.CityId,
                         listing.ItemId,
                         listing.UnitPrice,
                         listing.Quantity,
-                        listing.IsHq,
-                        listing.Retainer,
-                        listing.CityId)),
+                        listing.IsHq)),
                 ]);
         }
 
@@ -135,18 +135,55 @@ internal sealed class BoardWatcher : IDisposable
     /// <summary>When the reported rates stop being trustworthy.</summary>
     public DateTimeOffset? RatesValidUntil { get; private set; }
 
-    /// <summary>What I have listed for an item, newest sighting wins.</summary>
-    public IReadOnlyList<MyListing> Listed(uint itemId)
-    {
-        lock (gate)
-            return mine.TryGetValue(itemId, out var seen) ? [.. seen.Listings] : [];
-    }
+    /// <summary>What I have listed for an item, from whichever source has looked most recently.</summary>
+    public IReadOnlyList<RetainerListing> Listed(uint itemId) =>
+        [.. Known().Where(listing => listing.ItemId == itemId)];
 
     /// <summary>Every item I have something listed for.</summary>
-    public IReadOnlyCollection<uint> ListedItems()
+    public IReadOnlyCollection<uint> ListedItems() =>
+        [.. Known().Select(listing => listing.ItemId).Distinct()];
+
+    /// <summary>Every listing I have out, on every retainer that has been looked at.</summary>
+    public IReadOnlyList<RetainerListing> Known()
     {
+        // Asked for once a row while drawing, and the answer only moves when a retainer or a
+        // board is opened, so a second-old answer is the same answer.
+        if (DateTime.UtcNow - knownAt < TimeSpan.FromSeconds(1))
+            return known;
+
+        List<BoardSighting> sightings;
+
         lock (gate)
-            return [.. mine.Where(entry => entry.Value.Listings.Count > 0).Select(entry => entry.Key)];
+        {
+            sightings =
+            [
+                .. mine.Select(entry => new BoardSighting(entry.Key, entry.Value.SeenAt, [.. entry.Value.Listings])),
+            ];
+        }
+
+        var retainers = config.Retainers
+            .Select(retainer => new SeenRetainer(
+                retainer.RetainerId,
+                string.IsNullOrWhiteSpace(retainer.Name) ? "a retainer" : retainer.Name,
+                retainer.CityId,
+                DateTimeOffset.FromUnixTimeSeconds(retainer.SeenAt),
+                [.. retainer.Slots.Select(slot => new MarketSlot(slot.ItemId, slot.Quantity, slot.UnitPrice, slot.IsHq))]))
+            .ToList();
+
+        known = KnownListings.Merge(retainers, sightings);
+        knownAt = DateTime.UtcNow;
+        return known;
+    }
+
+    /// <summary>How many retainers I have, and how many of them have been opened and read.</summary>
+    public (int Seen, int Of) RetainersSeen() => (config.Retainers.Count, RetainerCount());
+
+    private int retainerCount;
+
+    private int RetainerCount()
+    {
+        RetainerTowns();
+        return retainerCount;
     }
 
     /// <summary>
@@ -225,6 +262,7 @@ internal sealed class BoardWatcher : IDisposable
                 found.Add((uint)retainer->Town);
         }
 
+        retainerCount = found.Count;
         return [.. found.Distinct()];
     }
 
@@ -287,13 +325,14 @@ internal sealed class BoardWatcher : IDisposable
             {
                 var listed = group
                     .Where(listing => retainers.Contains(listing.RetainerId))
-                    .Select(listing => new MyListing(
+                    .Select(listing => new RetainerListing(
+                        listing.RetainerId,
+                        listing.RetainerName,
+                        (uint)listing.RetainerCityId,
                         listing.ItemId,
                         (long)listing.PricePerUnit,
                         (int)listing.ItemQuantity,
-                        listing.IsHq,
-                        listing.RetainerName,
-                        (uint)listing.RetainerCityId))
+                        listing.IsHq))
                     .ToList();
 
                 int total;
@@ -303,7 +342,7 @@ internal sealed class BoardWatcher : IDisposable
                     if (mine.TryGetValue(group.Key, out var seen) && seen.Request == offerings.RequestId)
                         seen.Listings.AddRange(listed);
                     else
-                        mine[group.Key] = (offerings.RequestId, listed);
+                        mine[group.Key] = (offerings.RequestId, DateTimeOffset.UtcNow, listed);
 
                     total = mine[group.Key].Listings.Count;
                 }
@@ -333,16 +372,17 @@ internal sealed class BoardWatcher : IDisposable
         {
             config.MyListings =
             [
-                .. mine.SelectMany(entry => entry.Value.Listings).Select(listing => new StoredListing
+                .. mine.SelectMany(entry => entry.Value.Listings.Select(listing => new StoredListing
                 {
                     ItemId = listing.ItemId,
                     UnitPrice = listing.UnitPrice,
                     Quantity = listing.Quantity,
                     IsHq = listing.IsHq,
                     Retainer = listing.Retainer,
+                    RetainerId = listing.RetainerId,
                     CityId = listing.CityId,
-                    SeenAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                }),
+                    SeenAt = entry.Value.SeenAt.ToUnixTimeSeconds(),
+                })),
             ];
         }
 
