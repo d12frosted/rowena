@@ -35,6 +35,9 @@ internal sealed class GatherTab
         "Nodes that only appear on a clock, and whether that clock is favourable now. A game\n"
         + "hour is under three minutes of yours, so a window said to last four hours is twelve\n"
         + "minutes of your evening: these are things you walk to now or miss.",
+        "What you already have of it, in bags and retainers and listed, and how long the board\n"
+        + "needs to get through that. A pile that outlasts the selling horizon is gathering\n"
+        + "already done: those rows drop to the bottom and the session plan leaves them out.",
     ];
 
     /// <summary>The same columns with a session in front of them, where two of them mean something else.</summary>
@@ -50,6 +53,7 @@ internal sealed class GatherTab
         "What a day of the board would pay, which is what the ranking used. The session's own\n"
         + "figure is above the table.",
         Help[5],
+        Help[6],
     ];
 
     private readonly GatherSweep sweep;
@@ -58,6 +62,9 @@ internal sealed class GatherTab
     private readonly ItemCells cells;
     private readonly Configuration config;
     private readonly GatherClock clock;
+    private readonly Balances balances;
+    private readonly RetainerStock stock;
+    private readonly BoardWatcher board;
 
     private readonly Rebuilt<Model> model;
 
@@ -68,6 +75,9 @@ internal sealed class GatherTab
         ItemCells cells,
         Configuration config,
         GatherClock clock,
+        Balances balances,
+        RetainerStock stock,
+        BoardWatcher board,
         Diagnostics diagnostics)
     {
         this.sweep = sweep;
@@ -76,6 +86,9 @@ internal sealed class GatherTab
         this.cells = cells;
         this.config = config;
         this.clock = clock;
+        this.balances = balances;
+        this.stock = stock;
+        this.board = board;
 
         model = new Rebuilt<Model>("gather", Build, diagnostics);
     }
@@ -107,6 +120,9 @@ internal sealed class GatherTab
                     floor = boards.Selling(row.ItemId)?.Floor ?? 0,
                     salesPerDay = row.SalesPerDay,
                     gilPerDay = row.GilPerDay,
+                    held = row.Held,
+                    mineListed = row.MineListed,
+                    backlogDays = row.Backlog,
                     timed = row.Timed,
                     opensIn = Math.Round(row.OpensIn, 1),
                     openFor = Math.Round(row.OpenFor, 1),
@@ -510,7 +526,7 @@ internal sealed class GatherTab
         if (current.Plan is { } plan)
             DrawPlan(plan);
 
-        var columns = current.Plan is null ? 6 : 7;
+        var columns = current.Plan is null ? 7 : 8;
 
         if (!ImGui.BeginTable("gather", columns, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
@@ -525,6 +541,7 @@ internal sealed class GatherTab
         ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 110);
         ImGui.TableSetupColumn("node", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 110);
         Cell.Headers(current.Plan is null ? Help : PlannedHelp);
 
         foreach (var row in current.Rows)
@@ -557,9 +574,48 @@ internal sealed class GatherTab
 
             ImGui.TableNextColumn();
             DrawWindow(row);
+
+            ImGui.TableNextColumn();
+            DrawHeld(row);
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// What is already yours, and whether that is the reason not to gather more.
+    /// </summary>
+    /// <remarks>
+    /// A thousand of something in a retainer is not a reason to stop showing the row, since
+    /// a conversion chain may still want it. It is a reason to stop ranking it as if the board
+    /// were waiting for it, and the number says why.
+    /// </remarks>
+    private void DrawHeld(Row row)
+    {
+        var mine = row.Held + row.MineListed;
+
+        if (mine == 0)
+        {
+            ImGui.TextColored(Palette.Dim, "     -");
+            return;
+        }
+
+        Cell.Right(
+            row.Backlogged ? Palette.Bad : Palette.Dim,
+            row.Backlog is { } days ? $"{mine:N0} ({Phrases.Absorb(days)})" : $"{mine:N0} (never)");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                $"{row.Held:N0} in bags and retainers, {row.MineListed:N0} listed. At {row.SalesPerDay:F1} a day the board\n"
+                + (row.Backlog is { } left
+                    ? $"needs {Phrases.Absorb(left)} to get through what you already have"
+                    : "is not getting through what you already have")
+                + (row.Backlogged
+                    ? $", which is past the {config.SellingHorizon()} days you said\n"
+                      + "you wanted to be selling. Gathering more of this is gathering for later."
+                    : "."));
+        }
     }
 
     /// <summary>
@@ -614,6 +670,12 @@ internal sealed class GatherTab
         var rows = new List<Row>();
         var hidden = 0;
 
+        // What is already mine goes out before anything gathered today does, so it is room
+        // the board does not have for gathering. Bags, retainers, and what is listed.
+        var carried = balances.Carrying();
+        var stored = stock.Held();
+        var horizon = config.SellingHorizon();
+
         foreach (var itemId in scan.Shortlist)
         {
             if (!byItem.TryGetValue(itemId, out var gatherable))
@@ -647,6 +709,10 @@ internal sealed class GatherTab
                 ? Math.Min(book.SaleVelocityPerDay, config.GatherPerDayCap)
                 : book.SaleVelocityPerDay;
 
+            var held = carried.GetValueOrDefault(itemId) + stored.GetValueOrDefault(itemId);
+            var mineListed = board.Listed(itemId).Sum(listing => listing.Quantity);
+            var backlog = GatherPlan.Backlog(held, mineListed, book.SaleVelocityPerDay);
+
             rows.Add(new Row(
                 itemId,
                 cells.Name(itemId),
@@ -658,12 +724,18 @@ internal sealed class GatherTab
                 book.SaleVelocityPerDay,
                 book.UnitsListed,
                 (long)(sale.Net * perDay),
+                held,
+                mineListed,
+                backlog,
+                held + mineListed > 0 && (backlog is null || backlog > horizon),
                 gatherable.Windows.Count == 0 ? 0 : Real(EorzeaWindow.NextOpen(gatherable.Windows, now) ?? 0),
                 gatherable.Windows.Count == 0 ? 0 : Real(EorzeaWindow.LeftOf(gatherable.Windows, now)),
                 gatherable.Windows.Count == 0 ? 0 : Real(gatherable.Windows.Max(window => window.LengthMinutes))));
         }
 
-        var ranked = rows.OrderByDescending(row => row.GilPerDay).ToArray();
+        // What you already have enough of goes last, whatever it would pay: the board is not
+        // waiting for more of it, it is waiting to get through yours.
+        var ranked = rows.OrderBy(row => row.Backlogged).ThenByDescending(row => row.GilPerDay).ToArray();
 
         return config.GatherSessionMinutes > 0
             ? Planned(ranked, hidden)
@@ -697,7 +769,7 @@ internal sealed class GatherTab
         var reachable = ranked.Where(row => !row.Timed || row.OpensIn < config.GatherSessionMinutes).ToArray();
 
         var basket = GatherPlan.For(
-            reachable.Select(row => new GatherCandidate(row.ItemId, row.Each, row.SalesPerDay, row.Listed, row.Timed)),
+            reachable.Select(row => new GatherCandidate(row.ItemId, row.Each, row.SalesPerDay, row.Listed, row.Timed, row.Held)),
             capacity,
             config.SellingHorizon(),
             Aim,
@@ -762,6 +834,10 @@ internal sealed class GatherTab
         double SalesPerDay,
         int Listed,
         long GilPerDay,
+        int Held,
+        int MineListed,
+        double? Backlog,
+        bool Backlogged,
         double OpensIn,
         double OpenFor,
         double WindowIs);

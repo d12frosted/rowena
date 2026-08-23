@@ -18,12 +18,14 @@ public enum GatherAim
 /// <param name="SalesPerDay">How fast the board takes them, which limits how many are worth having.</param>
 /// <param name="Listed">How many are already for sale, and so are ahead of yours in the queue.</param>
 /// <param name="Timed">Whether the node appears on a clock, which changes what it costs to visit.</param>
+/// <param name="Held">How many I already have and have not listed: bags and retainers. They go out before anything gathered does.</param>
 public readonly record struct GatherCandidate(
     uint ItemId,
     long Net,
     double SalesPerDay,
     int Listed,
-    bool Timed = false);
+    bool Timed = false,
+    int Held = 0);
 
 /// <summary>How many of one thing to gather, what they come to, and what they cost the session.</summary>
 public readonly record struct GatherPortion(uint ItemId, int Units, long Gil, double Cost);
@@ -45,7 +47,9 @@ public readonly record struct GatherPortion(uint ItemId, int Units, long Gil, do
 ///
 /// What the board will take is also not what it will take from you. A hundred and thirty a
 /// day is the whole market's throughput and the people already listing are ahead of you in
-/// it, so the room for one more seller is what is left after them.
+/// it, so the room for one more seller is what is left after them. And after your own pile:
+/// nine hundred and ninety-nine of something in a retainer go out before anything gathered
+/// today does, so the room they take is not room for gathering.
 ///
 /// What it cannot know is how many items an hour actually yields, or what a window gives.
 /// Those are measurements nobody has made, so they are numbers handed in from outside rather
@@ -127,11 +131,28 @@ public static class GatherPlan
     public static long Worth(IEnumerable<GatherPortion> basket) => basket.Sum(portion => portion.Gil);
 
     /// <summary>
+    /// How many days the board needs to get through what I already have of something.
+    /// </summary>
+    /// <remarks>
+    /// Held and listed both, since both are mine and both go out before anything gathered.
+    /// Null when it never would, which is a different answer from zero.
+    /// </remarks>
+    public static double? Backlog(int held, int listedMine, double salesPerDay)
+    {
+        var mine = Math.Max(0, held) + Math.Max(0, listedMine);
+
+        if (mine == 0)
+            return 0d;
+
+        return salesPerDay > 0 ? mine / salesPerDay : null;
+    }
+
+    /// <summary>
     /// One candidate priced in time, or nothing when the board has no room for it.
     /// </summary>
     private static Offer? Weigh(GatherCandidate candidate, double horizonDays, int windowYield, double windowCost)
     {
-        var room = (int)Math.Floor(candidate.SalesPerDay * horizonDays) - candidate.Listed;
+        var room = (int)Math.Floor(candidate.SalesPerDay * horizonDays) - candidate.Listed - Math.Max(0, candidate.Held);
 
         if (candidate.Net <= 0 || room <= 0)
             return null;

@@ -155,7 +155,12 @@ a tab per question:
   dearest things the board still has room for, in the order to gather them. Room is the
   board's throughput over the selling horizon less what is already listed, because a
   hundred and thirty a day is the whole market and the people already selling are ahead of
-  you in it. Timed nodes are priced by what the detour costs rather than dropped, since a
+  you in it. So is your own pile: what sits in bags and retainers and what you already have
+  listed goes out before anything gathered today, so the room it takes is not room for
+  gathering. Nine hundred and ninety-nine of something that sells twelve a day is eighty
+  days of stock; the row says so, drops to the bottom, and the plan leaves it out, since
+  gathering more of it is gathering for later. Timed nodes are priced by what the detour
+  costs rather than dropped, since a
   windowful for the price of the trip is usually a bargain and that is the whole reason
   they are worth going out of your way for.
 
