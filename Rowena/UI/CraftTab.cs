@@ -145,7 +145,8 @@ internal sealed class CraftTab
         return new Note(
             Note.Waiting,
             Palette.Plain,
-            $"{best.Item} is the best thing to make: {best.Profit:N0} a run",
+            $"{best.Profit:N0} gil",
+            $"a run of {best.Item}, the best thing to make",
             $"{best.Materials:N0} in materials, about {best.GilPerDay:N0} a day at what the board takes.",
             MainWindow.Tab.Craft);
     }

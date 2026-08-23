@@ -164,9 +164,12 @@ internal sealed class RetainerSales : IDisposable
         var takings = found.Sum(sale => sale.Net);
 
         notices.Add(
+            NoticeKind.Sale,
             found.Count == 1
                 ? $"Sold while you were away: {found[0].Quantity}x {names.Name(found[0].ItemId)} for {takings:N0} gil."
-                : $"Sold while you were away: {found.Count} things for {takings:N0} gil.");
+                : $"Sold while you were away: {found.Count} things for {takings:N0} gil.",
+            count: found.Count,
+            gil: takings);
 
         diagnostics.Note("sales", $"retainer {id % 10_000}: {found.Count} sales off the slots, {takings:N0} gil");
     }

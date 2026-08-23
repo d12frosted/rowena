@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 using Rowena.Market;
 
 namespace Rowena.UI;
@@ -48,7 +49,6 @@ internal sealed class Briefing : IDisposable
     private readonly HashSet<uint> cappedSaid = [];
     private readonly HashSet<string> flipsSaid = [];
     private readonly HashSet<uint> windowsSaid = [];
-    private bool staleSaid;
 
     public Briefing(
         IClientState client,
@@ -177,7 +177,7 @@ internal sealed class Briefing : IDisposable
             ? $"sweep {Phrases.Ago(DateTimeOffset.UtcNow - swept)} old"
             : "no craft sweep yet");
 
-        var prefix = fresh ? "" : "prices not refetched, from the cache: ";
+        var prefix = fresh ? "" : "From cached prices: ";
         return prefix + string.Join(". ", parts) + ".";
     }
 
@@ -231,25 +231,6 @@ internal sealed class Briefing : IDisposable
             // Shut again, so the next time it comes round is news again.
             windowsSaid.RemoveWhere(id => !ids.Contains(id));
         }
-
-        if (config.AlertStaleSweep)
-        {
-            // Read once: whether it is stale and how stale it is must come from the same run.
-            var scan = sweep.Current;
-            var stale = scan.ReadyAt is { } at && DateTimeOffset.UtcNow - at > config.SweepAge() && !scan.Running;
-
-            if (stale && !staleSaid)
-            {
-                staleSaid = true;
-
-                Say($"the craft sweep is {Phrases.Ago(DateTimeOffset.UtcNow - scan.ReadyAt!.Value)} old. "
-                    + "Re-sweep when convenient.");
-            }
-            else if (!stale)
-            {
-                staleSaid = false;
-            }
-        }
     }
 
     private static string Describe(Conversion conversion)
@@ -269,7 +250,7 @@ internal sealed class Briefing : IDisposable
     /// </remarks>
     private void Say(string text)
     {
-        notices.Add(text);
+        notices.Add(NoticeKind.Briefing, text);
         diagnostics.Note("notice", text);
     }
 }

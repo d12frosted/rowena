@@ -401,9 +401,6 @@ public sealed class Configuration : IPluginConfiguration
     /// </summary>
     public int AlertFlipReturnPercent { get; set; } = 100;
 
-    /// <summary>Whether a furnishing sweep older than its re-sweep age is said in chat, once.</summary>
-    public bool AlertStaleSweep { get; set; } = true;
-
     /// <summary>
     /// Whether to say when a timed gathering node opens.
     /// </summary>

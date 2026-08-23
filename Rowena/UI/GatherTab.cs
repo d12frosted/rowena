@@ -161,9 +161,10 @@ internal sealed class GatherTab
         return new Note(
             Note.Expiring,
             Palette.Good,
+            $"{soonest.OpenFor:F0} min",
             open.Length == 1
-                ? $"{soonest.Name} is up, {soonest.OpenFor:F0} minutes left"
-                : $"{open.Length} timed nodes are up, the first shuts in {soonest.OpenFor:F0} minutes",
+                ? $"until {soonest.Name} shuts"
+                : $"until the first of {open.Length} timed nodes shuts",
             $"Worth {open.Sum(row => row.Each * 40):N0} if you fill a window of each. "
             + "Game hours are minutes here.",
             MainWindow.Tab.Gather);

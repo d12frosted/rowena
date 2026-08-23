@@ -205,9 +205,10 @@ internal sealed class ConvertTab
             yield return new Note(
                 full ? Note.Expiring : Note.Waiting,
                 full ? Palette.Bad : Palette.Plain,
+                full ? $"{group.Held:N0} {group.Unit}" : $"{best:N0} gil",
                 full
-                    ? $"Your {group.Currency.Name} is nearly capped and earning nothing"
-                    : $"{group.Held:N0} {group.Unit} is worth {best:N0} gil spent well",
+                    ? $"of {group.Currency.Name}, nearly capped and earning nothing"
+                    : $"if {group.Held:N0} {group.Unit} is spent well",
                 $"Best is {group.Rows.FirstOrDefault(row => row.Banks == best)?.Trade ?? "?"}."
                 + (full ? " Anything gathered past a cap is thrown away." : ""),
                 MainWindow.Tab.Sinks);
@@ -218,7 +219,8 @@ internal sealed class ConvertTab
             yield return new Note(
                 Note.Waiting,
                 Palette.Good,
-                $"{flip.TotalFlipProfit:N0} gil in flips your balance covers",
+                $"{flip.TotalFlipProfit:N0} gil",
+                "in flips your balance covers",
                 flip.Flips.FirstOrDefault() is { } top
                     ? $"Best is {top.Trade}: {top.Outlay:N0} out, {top.Profit:N0} back."
                     : "Spread across several trades.",

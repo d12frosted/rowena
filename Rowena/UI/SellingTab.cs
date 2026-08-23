@@ -90,9 +90,10 @@ internal sealed class SellingTab
         return new Note(
             Note.AtRisk,
             Palette.Bad,
+            wanting.Length == 1 ? "1 listing" : $"{wanting.Length} listings",
             wanting.Length == 1
-                ? $"{worst.Name} is listed at a price it will not sell at"
-                : $"{wanting.Length} of your listings want a decision",
+                ? $"{worst.Name}, at a price it will not sell at"
+                : "of yours want a decision",
             $"{worst.Name}: asking {worst.Reading.Mine:N0}, "
             + (worst.Reading.TypicalSale is { } paid ? $"sells for {paid:N0}." : "nothing has sold lately.")
             + $" {wanting.Sum(row => row.Reading.NetHolding * row.Units):N0} gil is sitting behind these.",
