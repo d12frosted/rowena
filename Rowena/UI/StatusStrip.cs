@@ -1,5 +1,5 @@
 using Dalamud.Bindings.ImGui;
-using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 using Rowena.Game;
 using Rowena.IPC;
 using Rowena.Market;
@@ -20,6 +20,7 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class StatusStrip
 {
+    private readonly Configuration config;
     private readonly MarketCache market;
     private readonly Balances balances;
     private readonly Trades trades;
@@ -31,7 +32,10 @@ internal sealed class StatusStrip
 
     private readonly Rebuilt<Wallet> wallet;
 
+    private const uint GilItemId = 1;
+
     public StatusStrip(
+        Configuration config,
         MarketCache market,
         Balances balances,
         Trades trades,
@@ -42,6 +46,7 @@ internal sealed class StatusStrip
         Diagnostics diagnostics,
         Action refresh)
     {
+        this.config = config;
         this.market = market;
         this.balances = balances;
         this.trades = trades;
@@ -94,26 +99,30 @@ internal sealed class StatusStrip
 
         var current = wallet.Current;
 
-        ImGui.TextUnformatted($"Gil {current.Gil:N0}");
+        // Gil is an item like the rest, so it gets the icon the rest get. Capless, so no warning.
+        cells.Icon(GilItemId, 16f);
+        ImGui.SameLine(0f, 4f);
+        ImGui.TextUnformatted($"{current.Gil:N0}");
 
-        foreach (var (currency, held, cap) in current.Currencies)
+        foreach (var row in current.Rows)
         {
             // Icon and number, name on hover. The icon is how a currency is recognised in the
             // game, and a row of them reads at a glance where a row of names was a paragraph.
-            var close = cap is { } max && held >= max - max / 10;
-            var text = cap is { } limit ? $"{held:N0}/{limit:N0}" : $"{held:N0}";
+            // A pinned currency always shows its cap: the few pixels saved by dropping it when
+            // far away were paid for in a strip where the same currency kept changing shape.
+            var text = row.Cap is { } limit ? $"{row.Held:N0}/{limit:N0}" : $"{row.Held:N0}";
 
             Flow(16f + 4f + ImGui.CalcTextSize(text).X);
-            cells.Icon(currency.Id, 16f);
+            cells.Icon(row.Currency.Id, 16f);
             ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(close ? Palette.Bad : Palette.Dim, text);
+            ImGui.TextColored(row.NearCap ? Palette.Bad : Palette.Dim, text);
 
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(
-                    close
-                        ? $"{currency.Name}: nearly capped. Anything earned past the cap is simply lost."
-                        : currency.Name);
+                    row.NearCap
+                        ? $"{row.Currency.Name}: nearly capped. Anything earned past the cap is simply lost."
+                        : row.Currency.Name);
             }
         }
 
@@ -153,24 +162,16 @@ internal sealed class StatusStrip
     /// <remarks>
     /// Not everything in them. Every currency you hold has a table in the Sinks tab, with its
     /// count beside its name, and listing all twenty here as well was a paragraph nobody read.
-    /// What stays is what changes how the rest of the window is read: the currencies the file
-    /// declares an interest in, and any currency within sight of its cap, since a cap is a
-    /// decision wherever you are looking.
+    /// What stays is what you pinned in Settings, and any other currency about to waste what
+    /// it earns next. The choice itself lives in <see cref="WalletStrip"/>.
     /// </remarks>
     private Wallet Build() =>
         new(
             balances.Gil,
-            [
-                .. trades.Currencies
-                    .Select(currency => (Currency: currency, Held: balances.Held(currency), Cap: balances.CapOf(currency)))
-                    .Where(entry => trades.IsWatched(entry.Currency)
-                        || entry.Cap is { } cap && entry.Held * 2 >= cap)
-                    .Select(entry => (entry.Currency, entry.Held, InSight(entry.Held, entry.Cap))),
-            ],
+            WalletStrip.Pick(
+                trades.Currencies.Select(currency => new Holding(currency, balances.Held(currency), balances.CapOf(currency))),
+                config.PinnedCurrencies.Contains),
             GatheringLine());
-
-    /// <summary>The cap, once it is close enough to be worth the width of printing.</summary>
-    private static long? InSight(long held, long? cap) => cap is { } limit && held * 2 >= limit ? limit : null;
 
     /// <summary>
     /// What GatherBuddyReborn is up to, reported and not driven.
@@ -200,9 +201,6 @@ internal sealed class StatusStrip
                 : $"GatherBuddyReborn: {status}";
     }
 
-    /// <param name="Currencies">
-    /// Each spendable currency, how much of it you are holding, and the cap when the game
-    /// enforces one.
-    /// </param>
-    private sealed record Wallet(long Gil, (Resource Currency, long Held, long? Cap)[] Currencies, string? Gathering);
+    /// <param name="Rows">The currencies that earned a place, and why.</param>
+    private sealed record Wallet(long Gil, IReadOnlyList<WalletRow> Rows, string? Gathering);
 }

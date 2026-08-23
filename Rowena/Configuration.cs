@@ -397,6 +397,20 @@ public sealed class Configuration : IPluginConfiguration
     public bool AlertNearCap { get; set; } = true;
 
     /// <summary>
+    /// The currencies the strip across the top always shows, by item id.
+    /// </summary>
+    /// <remarks>
+    /// What the rest of the window is read against, whatever the balance. Starts as the four
+    /// current scrips, since that is what the plugin is for; anything else only appears up there
+    /// as a warning when it nears its cap. Chosen in Settings from the currencies the catalogue
+    /// knows.
+    /// </remarks>
+    public List<uint> PinnedCurrencies { get; set; } = [.. DefaultPinnedCurrencies];
+
+    /// <summary>Purple crafters', purple gatherers', orange crafters', orange gatherers'.</summary>
+    public static readonly uint[] DefaultPinnedCurrencies = [33913, 33914, 41784, 41785];
+
+    /// <summary>
     /// The return a flip has to reach before it is said in chat, in percent. Zero turns it off.
     /// </summary>
     public int AlertFlipReturnPercent { get; set; } = 100;
