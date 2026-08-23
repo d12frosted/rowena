@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Rowena.Core.Conversions;
 using Rowena.Game;
 using Rowena.Market;
 
@@ -23,6 +24,7 @@ internal sealed class SettingsTab(
     MarketCache market,
     CatalogFile catalogue,
     Trades trades,
+    Balances balances,
     BoardWatcher board,
     DiagnosticsPanel diagnostics,
     Action refreshPrices,
@@ -219,6 +221,10 @@ internal sealed class SettingsTab(
             "Gil a unit, net. Every window in the game turning up on the Overview would be noise;\n"
             + "the ones worth crossing a zone for are not.");
 
+        Group("The strip across the top");
+
+        changed |= DrawPinnedCurrencies();
+
         Group("Hand-off");
 
         changed |= Text(
@@ -305,6 +311,63 @@ internal sealed class SettingsTab(
     /// worst. Shown rather than merely used, because the cheapest city is worth knowing: moving
     /// a retainer is a one-off errand that pays on every sale it ever makes.
     /// </remarks>
+    /// <summary>
+    /// Which currencies are always up there, one checkbox per currency the catalogue knows.
+    /// </summary>
+    /// <remarks>
+    /// Everything else shows only as a warning when it nears its cap, so this is the whole
+    /// answer to "why is that one there". The list is the catalogue's rather than your
+    /// pockets', so a currency can be pinned before the first one is earned.
+    /// </remarks>
+    private bool DrawPinnedCurrencies()
+    {
+        ImGui.TextColored(
+            Palette.Dim,
+            "Always shown, whatever the balance. Anything unticked appears only once it is into the\n"
+            + "last tenth of its cap, in red, since what is earned past the cap is lost.");
+
+        // The sheets know about a hundred and fifty currencies, most of which nobody holds.
+        // The ones in your pockets, the catalogue or the pinned set are the decision; the
+        // rest are there, folded away, for the day one of them matters.
+        var known = trades.Currencies.OrderBy(currency => currency.Name, StringComparer.Ordinal).ToArray();
+        var near = known
+            .Where(currency => config.PinnedCurrencies.Contains(currency.Id)
+                || trades.IsWatched(currency)
+                || balances.Held(currency) > 0)
+            .ToArray();
+
+        var changed = false;
+
+        foreach (var currency in near)
+            changed |= PinBox(currency);
+
+        if (near.Length < known.Length
+            && ImGui.CollapsingHeader($"Everything else ({known.Length - near.Length})##pinrest"))
+        {
+            foreach (var currency in known.Except(near))
+                changed |= PinBox(currency);
+        }
+
+        ImGui.Spacing();
+        return changed;
+    }
+
+    private bool PinBox(Resource currency)
+    {
+        var pinned = config.PinnedCurrencies.Contains(currency.Id);
+        var label = trades.IsWatched(currency) ? $"{currency.Name} (in the catalogue)" : currency.Name;
+
+        if (!ImGui.Checkbox($"{label}##pin{currency.Id}", ref pinned))
+            return false;
+
+        if (pinned)
+            config.PinnedCurrencies.Add(currency.Id);
+        else
+            config.PinnedCurrencies.Remove(currency.Id);
+
+        return true;
+    }
+
     private void DrawTaxRates()
     {
         if (board.SellerRates is not { Count: > 0 } rates)

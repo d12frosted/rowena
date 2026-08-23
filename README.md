@@ -120,7 +120,10 @@ actually bear.
 
 A strip across the top says which boards you are pricing against, what is in your pockets
 and how old the prices are. Every number below is read against it, so it does not scroll
-away. Under it, a tab per question:
+away. Pockets means gil and the currencies you pinned in Settings (the four current scrips
+to start with), each with its cap; any other currency shows up there only when it is into
+the last tenth of its cap, in red, since whatever is earned past the cap is lost. Under it,
+a tab per question:
 
 - **Sinks.** What a bound currency in your pockets is worth spending, one currency at a
   time: pick it, and its sinks rank by what a week of selling would bank, which is the runs

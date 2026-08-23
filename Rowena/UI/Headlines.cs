@@ -32,7 +32,7 @@ internal sealed class Headlines(Trades trades, Boards boards, Balances balances,
                 continue;
 
             var held = balances.Held(currency);
-            if (held >= cap - cap / 10)
+            if (WalletStrip.IsNearCap(held, cap))
                 near.Add(new Capped(currency, held, cap));
         }
 

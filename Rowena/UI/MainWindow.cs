@@ -99,7 +99,7 @@ internal sealed class MainWindow : Window
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        strip = new StatusStrip(market, balances, trades, gatherBuddy, cells, places, live, diagnostics, () => RefreshPrices());
+        strip = new StatusStrip(config, market, balances, trades, gatherBuddy, cells, places, live, diagnostics, () => RefreshPrices());
     }
 
     /// <summary>
