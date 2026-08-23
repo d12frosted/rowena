@@ -210,3 +210,43 @@ public class GatherPlanTests
         Assert.Equal(25, basket[1].Units);
     }
 }
+
+public class GatherStockTests
+{
+    [Fact]
+    public void WhatIAlreadyHoldUsesUpTheRoomBeforeGatheringDoes()
+    {
+        // The board takes ten a day, nobody has any listed, and I have forty in a retainer.
+        // A week's room is seventy; forty of it is already mine.
+        var basket = GatherPlan.For(
+            [new GatherCandidate(1, 5000, 10, 0, Held: 40), new GatherCandidate(2, 100, 10, 0)],
+            capacity: 100,
+            horizonDays: 7);
+
+        Assert.Equal(30, basket[0].Units);
+        Assert.Equal(70, basket[1].Units);
+    }
+
+    [Fact]
+    public void APileThatOutlastsTheHorizonIsNotWorthAddingTo()
+    {
+        // Nine hundred and ninety-nine of something that sells twelve a day is eighty days of
+        // stock. Gathering more of it is gathering for October.
+        var basket = GatherPlan.For(
+            [new GatherCandidate(1, 99_999, 12, 0, Held: 999), new GatherCandidate(2, 100, 10, 0)],
+            capacity: 50,
+            horizonDays: 7);
+
+        Assert.Single(basket);
+        Assert.Equal(2u, basket[0].ItemId);
+    }
+
+    [Fact]
+    public void BacklogIsHowLongTheBoardNeedsForWhatIAlreadyHave()
+    {
+        Assert.Equal(83.25d, GatherPlan.Backlog(held: 999, listedMine: 0, salesPerDay: 12)!.Value, 2);
+        Assert.Equal(10d, GatherPlan.Backlog(held: 50, listedMine: 50, salesPerDay: 10));
+        Assert.Null(GatherPlan.Backlog(held: 50, listedMine: 0, salesPerDay: 0));
+        Assert.Equal(0d, GatherPlan.Backlog(held: 0, listedMine: 0, salesPerDay: 10));
+    }
+}

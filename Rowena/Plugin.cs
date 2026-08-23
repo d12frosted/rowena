@@ -126,8 +126,10 @@ public sealed class Plugin : IDalamudPlugin
         gatherClock = new GatherClock(
             Framework, GameGui, balances, gatherables, config, Save, diagnostics, Log);
 
+        retainerStock = new RetainerStock(Framework, config, Save, diagnostics, Log);
+
         var gatherTab = new GatherTab(
-            gatherSweep, gatherables, boards, cells, config, gatherClock, diagnostics);
+            gatherSweep, gatherables, boards, cells, config, gatherClock, balances, retainerStock, boardWatcher, diagnostics);
 
 
         // Driven by prices moving rather than by a timer, so an undercut or a vendor listing
@@ -154,8 +156,6 @@ public sealed class Plugin : IDalamudPlugin
             ids => market.RefreshInBackground(scope.Buying, [.. ids], true, FetchPriority.Interactive));
         var diagnosticsPanel = new DiagnosticsPanel(
             diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
-
-        retainerStock = new RetainerStock(Framework, config, Save, diagnostics, Log);
 
         var hoardTab = new HoardTab(
             balances, retainerStock, boardWatcher, boards, market, cells, config, diagnostics,
