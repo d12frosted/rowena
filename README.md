@@ -211,6 +211,12 @@ a tab per question:
 - **Selling.** What is already sitting on a retainer, which is where a good deal of gil
   quietly is not. Every other tab asks what to acquire; this one reads what you have out.
 
+  What you have out comes from the retainers themselves: opening one reads its twenty market
+  slots, prices and all, and that is remembered until it is opened again. A board search for
+  one item is the fresher word on that item, since a listing can sell between two visits, so
+  the two are folded together and the newer one wins. Retainers not opened yet are said to be
+  missing rather than quietly left out.
+
   Not an undercut tool, deliberately. Undercutting is the one move the board makes easy and
   it is usually the wrong one: the question is never "is somebody cheaper than me" but "how
   long until the board has eaten through everyone cheaper than me". Three units ahead on a

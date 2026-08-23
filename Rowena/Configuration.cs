@@ -20,6 +20,9 @@ public sealed class StoredListing
 
     public string Retainer { get; set; } = "";
 
+    /// <summary>Which retainer, so a later look at that retainer can overrule this.</summary>
+    public ulong RetainerId { get; set; }
+
     public uint CityId { get; set; }
 
     public long SeenAt { get; set; }
@@ -62,6 +65,11 @@ public sealed class StoredSlot
 public sealed class StoredRetainer
 {
     public ulong RetainerId { get; set; }
+
+    public string Name { get; set; } = "";
+
+    /// <summary>Where the retainer stands, which decides the cut on what it sells.</summary>
+    public uint CityId { get; set; }
 
     public long Gil { get; set; }
 
@@ -334,10 +342,9 @@ public sealed class Configuration : IPluginConfiguration
     /// What my retainers had listed when the board last said so.
     /// </summary>
     /// <remarks>
-    /// Kept because the game only says it when I happen to look up something I am selling, and
-    /// that is not something to have to do again after every reload. Stale by nature: a listing
-    /// can sell while the game is closed, so each carries when it was seen and the next look at
-    /// that item replaces it.
+    /// A board view is the freshest word on one item: newer than the retainer's slots if the
+    /// board was opened after the retainer was. Kept across reloads for that reason, each
+    /// carrying when it was seen, and the next look at that item replaces it.
     /// </remarks>
     public List<StoredListing> MyListings { get; set; } = [];
 
@@ -350,7 +357,13 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public List<StoredSale> Sales { get; set; } = [];
 
-    /// <summary>Each retainer as it was last seen, for working out what sold while away.</summary>
+    /// <summary>
+    /// Each retainer as it was last seen: what it had listed, and what was in its purse.
+    /// </summary>
+    /// <remarks>
+    /// The slots are the complete answer to what that retainer has out, which makes this the
+    /// source of truth for my listings; <see cref="MyListings"/> only refreshes it per item.
+    /// </remarks>
     public List<StoredRetainer> Retainers { get; set; } = [];
 
     /// <summary>What each retainer was holding when it was last looked at.</summary>

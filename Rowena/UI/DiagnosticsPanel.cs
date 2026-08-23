@@ -148,7 +148,7 @@ internal sealed class DiagnosticsPanel(
         yield return (
             "my listings",
             listed.Count == 0
-                ? "none seen: open the board for something you have listed"
+                ? "none seen: open a retainer, or the board for something you have listed"
                 : string.Join(
                     "; ",
                     listed.Select(item =>

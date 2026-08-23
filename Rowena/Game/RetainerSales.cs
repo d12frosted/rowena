@@ -135,7 +135,7 @@ internal sealed class RetainerSales : IDisposable
         if (seen is { } last)
             Book(id, last, now, gil, (uint)active->Town);
 
-        Remember(id, now, gil);
+        Remember(id, active->NameString, (uint)active->Town, now, gil);
     }
 
     /// <summary>Turns what went into sales, and says so.</summary>
@@ -178,13 +178,15 @@ internal sealed class RetainerSales : IDisposable
         config.Retainers.FirstOrDefault(stored => stored.RetainerId == id);
 
     /// <summary>Leaves the slots and the purse as they stand, to compare against next time.</summary>
-    private void Remember(ulong id, IReadOnlyList<MarketSlot> now, long gil)
+    private void Remember(ulong id, string name, uint town, IReadOnlyList<MarketSlot> now, long gil)
     {
         config.Retainers.RemoveAll(stored => stored.RetainerId == id);
 
         config.Retainers.Add(new StoredRetainer
         {
             RetainerId = id,
+            Name = string.IsNullOrWhiteSpace(name) ? "a retainer" : name,
+            CityId = town,
             Gil = gil,
             SeenAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             Slots =

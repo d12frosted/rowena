@@ -20,9 +20,10 @@ namespace Rowena.UI;
 /// leaves the decision where it belongs.
 ///
 /// What is listed comes from the game rather than from Universalis, so it is exact: opening a
-/// board once tells Rowena what you have out, and it is remembered across sessions. Each
-/// listing is netted at its own retainer's city rate rather than the worst of them, since that
-/// is a number the game has actually said.
+/// retainer reads its twenty market slots, and it is remembered across sessions. A board search
+/// for one item is the fresher word on that item, so the two are folded together. Each listing
+/// is netted at its own retainer's city rate rather than the worst of them, since that is a
+/// number the game has actually said.
 /// </remarks>
 internal sealed class SellingTab
 {
@@ -138,12 +139,16 @@ internal sealed class SellingTab
 
         var current = model.Current;
 
+        var (seen, of) = board.RetainersSeen();
+
         if (board.ListedItems().Count == 0)
         {
             ImGui.TextColored(
                 Palette.Dim,
-                "\n    Nothing known yet. Open a market board once and the game says what you have out;\n"
-                + "    it is remembered after that, so this only has to happen once a character.");
+                seen == 0
+                    ? "\n    Nothing known yet. Open each retainer once and the game says what it has out;\n"
+                      + "    it is remembered after that, so this only has to happen once a retainer."
+                    : $"\n    Nothing listed on the {(seen == 1 ? "retainer" : $"{seen} retainers")} opened so far.");
             return;
         }
 
@@ -179,6 +184,22 @@ internal sealed class SellingTab
 
         ImGui.TextColored(Palette.Dim, $"  {current.Rows.Length} listings, {worth:N0} gil if it all sells. ");
         ImGui.SameLine();
+
+        var (seen, of) = board.RetainersSeen();
+
+        if (of > seen)
+        {
+            ImGui.TextColored(Palette.Bad, $"{seen} of {of} retainers seen. ");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "A retainer's listings are read when it is opened, so what the others have out\n"
+                    + "is not known yet. This list is what it is, not what you have.");
+            }
+
+            ImGui.SameLine();
+        }
 
         ImGui.TextColored(
             wanting == 0 ? Palette.Good : Palette.Bad,
