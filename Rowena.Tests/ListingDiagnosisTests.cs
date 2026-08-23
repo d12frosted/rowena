@@ -219,6 +219,29 @@ public class ListingDiagnosisTests
     }
 
     [Fact]
+    public void ARateNobodyHasFetchedYetIsNotAMarketThatNeverSells()
+    {
+        // Nought means two things and they must not read the same. A listings fetch carries no
+        // rate this library can use, so treating the gap as "never sells" would put the worst
+        // verdict in the table on every listing the moment it was first looked at.
+        var book = OrderBook.Create(1, [new Listing(1000, 5, "")]).WithoutRate();
+
+        var call = ListingDiagnosis.Of(1000, 5, book, 0, MarketTax.None, 7);
+
+        Assert.Equal(ListingCall.Unknown, call!.Value.Call);
+    }
+
+    [Fact]
+    public void ARateThatHasArrivedAndIsZeroIsAMarketThatNeverSells()
+    {
+        var book = OrderBook.Create(1, [new Listing(1000, 5, "")]).WithVelocity(0);
+
+        var call = ListingDiagnosis.Of(1000, 5, book, 0, MarketTax.None, 7);
+
+        Assert.Equal(ListingCall.Stuck, call!.Value.Call);
+    }
+
+    [Fact]
     public void NoBookIsNoAnswerRatherThanABadOne() =>
         Assert.Null(ListingDiagnosis.Of(1000, 5, null, 0, MarketTax.None, 7));
 }

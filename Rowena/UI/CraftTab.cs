@@ -460,6 +460,9 @@ internal sealed class CraftTab
             }
 
             ImGui.TableNextColumn();
+            DrawNature(row.Nature);
+
+            ImGui.TableNextColumn();
             if (row.RecipeId is { } addable)
             {
                 ImGui.PushID((int)addable);
@@ -585,10 +588,71 @@ internal sealed class CraftTab
     /// Read off the selling board rather than the buying one: what matters is the market the
     /// thing goes back into, not the one its materials came from.
     /// </remarks>
+    /// <summary>
+    /// What sort of market this is, in a word and a reason.
+    /// </summary>
+    /// <remarks>
+    /// The rest of the row says what it pays and none of it says what you are walking into. Two
+    /// rows paying the same are not the same proposition when one sells as fast as it is stocked
+    /// and the other has months of somebody else's stock in front of it.
+    /// </remarks>
+    private static void DrawNature(MarketNature nature)
+    {
+        var supply = nature.DaysOfSupply is { } days
+            ? $"{days:F1} days of stock are listed ahead of you."
+            : "Nothing has sold, so there is no telling how long the stock would last.";
+
+        var (colour, label, why) = nature.Character switch
+        {
+            MarketCharacter.Hot => (
+                Palette.Good, "hot",
+                $"{supply} It sells about as fast as it is listed, so what you make moves.\n"
+                + "Everybody else can see that too, so expect company and undercutting."),
+
+            MarketCharacter.Steady => (
+                Palette.Plain, "steady",
+                $"{supply} It moves, the price holds, and nobody is fighting over it."),
+
+            MarketCharacter.Niche => (
+                Palette.Good, "niche",
+                $"{supply} Slow, but almost nobody is selling it. Patient money, and the sort of\n"
+                + "market a person can have to themselves because it is not worth mass producing."),
+
+            MarketCharacter.Swingy => (
+                Palette.Plain, "swingy",
+                $"{supply} Recent prices vary by about {nature.Spread:P0} of the middle one, so the\n"
+                + "profit on this row is a number with a wide error bar rather than a promise."),
+
+            MarketCharacter.Glutted => (
+                Palette.Bad, "glutted",
+                $"{supply} Whatever the margin says, you are behind all of it, and adding more is\n"
+                + "how a glut is made."),
+
+            MarketCharacter.Dead => (
+                Palette.Bad, "dead",
+                "The board reports no sales at all. Not slow: shut."),
+
+            _ => (
+                Palette.Dim, "no rate yet",
+                "How fast this sells is not known yet, so what sort of market it is cannot be said.\n"
+                + "The summary that reports units a day has been asked for."),
+        };
+
+        ImGui.TextColored(colour, label);
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(why);
+    }
+
+    /// <remarks>
+    /// Said explicitly rather than defaulted. The default of the record is the first character
+    /// in the enum, which is the most flattering one there is, and a book nobody has priced
+    /// would have arrived in the table announcing itself as a hot market.
+    /// </remarks>
     private MarketNature Nature(uint itemId) =>
-        boards.Selling(itemId) is { } book
+        boards.Selling(itemId) is { RateKnown: true } book
             ? MarketNature.Of(book.UnitsListed, book.SaleVelocityPerDay, book.RecentSales)
-            : default;
+            : new MarketNature(MarketCharacter.Unknown, null, null);
 
     /// <summary>What each material costs, for the tooltip.</summary>
     private ItemCells.MaterialLine[] Breakdown(Conversion conversion) =>

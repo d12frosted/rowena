@@ -45,6 +45,18 @@ public sealed class OrderBook
     /// <summary>Units sold per day, as reported by the source.</summary>
     public double SaleVelocityPerDay { get; }
 
+    /// <summary>
+    /// Whether that rate is known at all.
+    /// </summary>
+    /// <remarks>
+    /// Nought means two different things and they must not read the same: nothing sells here,
+    /// or nobody has asked yet. A listings response carries no rate this library can use, since
+    /// that endpoint counts sales where everything here counts units, so a book arrives without
+    /// one and the summary supplies it afterwards. Reporting the gap as "never sells" would put
+    /// the worst possible verdict on every item the moment it was first looked at.
+    /// </remarks>
+    public bool RateKnown { get; private init; } = true;
+
     /// <summary>When this snapshot was taken. Market data goes stale quickly.</summary>
     public DateTimeOffset Retrieved { get; }
 
@@ -134,11 +146,18 @@ public sealed class OrderBook
     /// ranking it on another. This exists so a single source can be imposed on everything.
     /// </remarks>
     public OrderBook WithVelocity(double saleVelocityPerDay) =>
-        new(ItemId, Listings, saleVelocityPerDay, Retrieved, Complete, Source, RecentSales);
+        new(ItemId, Listings, saleVelocityPerDay, Retrieved, Complete, Source, RecentSales) { RateKnown = true };
+
+    /// <summary>The same listings, with no idea how fast they move.</summary>
+    public OrderBook WithoutRate() =>
+        new(ItemId, Listings, 0d, Retrieved, Complete, Source, RecentSales) { RateKnown = false };
 
     /// <summary>The same listings, said to be all of them or not.</summary>
     public OrderBook WithCompleteness(bool complete) =>
-        new(ItemId, Listings, SaleVelocityPerDay, Retrieved, complete, Source, RecentSales);
+        new(ItemId, Listings, SaleVelocityPerDay, Retrieved, complete, Source, RecentSales)
+        {
+            RateKnown = RateKnown,
+        };
 
     /// <summary>Total units listed.</summary>
     public int UnitsListed => Listings.Sum(listing => listing.Quantity);

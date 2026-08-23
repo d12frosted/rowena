@@ -79,7 +79,8 @@ internal sealed class SellingTab
     public Note? Headline()
     {
         var wanting = model.Current.Rows
-            .Where(row => row.Reading.Call is not (ListingCall.Hold or ListingCall.Wait))
+            .Where(row => row.Reading.Call
+                is not (ListingCall.Hold or ListingCall.Wait or ListingCall.Unknown))
             .ToArray();
 
         if (wanting.Length == 0)
@@ -371,6 +372,13 @@ internal sealed class SellingTab
                 + $"this has been selling at about {reading.TypicalSale:N0}, so somebody is paying up there.\n"
                 + $"Against your {reading.Mine:N0} that is {reading.CouldAsk - reading.Mine:N0} a unit left behind for a queue\n"
                 + "position nobody was competing for."),
+
+            ListingCall.Unknown => (
+                Palette.Dim, "no rate yet",
+                "How fast this sells is not known yet. A listings fetch cannot say: that endpoint\n"
+                + "counts sales where everything here counts units, and a sale is a listing bought\n"
+                + "however many units were in it. The summary that reports units a day has been\n"
+                + "asked for; until it lands there is nothing honest to say about the queue."),
 
             _ => (
                 Palette.Bad, "nothing sells",

@@ -12,7 +12,11 @@ public class UniversalisJsonTests
 
         Assert.Equal(41807u, book.ItemId);
         Assert.Equal(48_795, book.Floor);
-        Assert.True(book.SaleVelocityPerDay > 0);
+        // Deliberately none. The listings endpoint reports sales a day and everything here
+        // counts units a day, and a sale is a listing bought however many units were in it.
+        // Taking it would read about a tenth of what the board absorbs for anything trading in
+        // stacks, so a book says it does not know and the summary supplies the real one.
+        Assert.Equal(0d, book.SaleVelocityPerDay);
         Assert.NotEmpty(book.Listings);
         Assert.All(book.Listings, listing => Assert.True(listing.Quantity > 0));
     }

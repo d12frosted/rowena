@@ -416,6 +416,17 @@ less than a vendor pays. The second is gone within minutes and is worthless an h
 Being undercut is not the trigger; being undercut *into a queue* is. Three units ahead on a
 board selling ten a day are gone this afternoon and are not worth being told about.
 
+Sale rates are units a day and only ever units a day. Universalis reports two: the listings
+endpoint counts sales, where a sale is a listing bought however many units were in it, and the
+summary endpoint counts units. Everything here weighs a rate against units listed or units to
+sell, so the first is a tenfold error in a number that looks perfectly reasonable, and it is
+the one a book arrives carrying. A book therefore arrives with no rate at all and the summary
+supplies it.
+
+Not knowing a rate is a different answer from knowing it is nought, and they get different
+words. Read as "never sells" the gap would put the worst verdict in the table on every listing
+the moment it was first looked at.
+
 ## Nothing is written into the game
 
 Rowena never speaks into the game unprompted: no login line, no alerts, no toasts, no error

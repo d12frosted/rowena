@@ -12,8 +12,11 @@ public class ConversionEvaluatorTests
     private static readonly Resource Token = Catalog.ResourceFor("mount-token");
     private static readonly Resource Mount = Catalog.ResourceFor("rroneek-horn");
 
-    private static readonly OrderBook Tokens = Fixtures.Book(Fixtures.MountToken);
-    private static readonly OrderBook Mounts = Fixtures.Book(Fixtures.RroneekHorn);
+    // The rates the cache would have imposed from the summary endpoint. A recorded listings
+    // response carries none this library can use, since that endpoint counts sales and
+    // everything here counts units.
+    private static readonly OrderBook Tokens = Fixtures.Book(Fixtures.MountToken, unitsPerDay: 12d);
+    private static readonly OrderBook Mounts = Fixtures.Book(Fixtures.RroneekHorn, unitsPerDay: 4d);
 
     private static Func<uint, OrderBook?> Books(params OrderBook[] books) =>
         id => books.FirstOrDefault(book => book.ItemId == id);

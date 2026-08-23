@@ -23,6 +23,9 @@ public enum ListingCall
 
     /// <summary>Nothing sells here at any price.</summary>
     Stuck,
+
+    /// <summary>How fast it sells is not known yet, so there is nothing to say.</summary>
+    Unknown,
 }
 
 /// <summary>
@@ -122,6 +125,11 @@ public readonly record struct ListingDiagnosis(
     /// </remarks>
     private static ListingCall Verdict(ListingDiagnosis reading, OrderBook book, double? days, int patienceDays)
     {
+        // Before anything else, because every verdict below rests on knowing how fast it moves
+        // and none of them is worth guessing at.
+        if (!book.RateKnown)
+            return ListingCall.Unknown;
+
         if (reading.VendorNet is { } vendor && vendor >= reading.NetHolding)
             return ListingCall.Vendor;
 

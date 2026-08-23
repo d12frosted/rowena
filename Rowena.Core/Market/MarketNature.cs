@@ -20,6 +20,9 @@ public enum MarketCharacter
 
     /// <summary>Nothing sells here at any price.</summary>
     Dead,
+
+    /// <summary>How fast it sells is not known yet.</summary>
+    Unknown,
 }
 
 /// <summary>

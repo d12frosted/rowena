@@ -40,5 +40,16 @@ internal static class Fixtures
     public static byte[] Bytes(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
 
-    public static OrderBook Book(string name) => UniversalisJson.ParseItem(Read(name));
+    /// <summary>
+    /// A recorded book, optionally with the sale rate the cache would have imposed on it.
+    /// </summary>
+    /// <remarks>
+    /// A listings response carries no rate this library can use: the endpoint counts sales and
+    /// everything here counts units. In the plugin the summary supplies it afterwards, so a
+    /// test that needs one says so rather than inheriting a number in the wrong unit.
+    /// </remarks>
+    public static OrderBook Book(string name, double unitsPerDay = 0d) =>
+        UniversalisJson.ParseItem(Read(name)) is var book && unitsPerDay > 0
+            ? book.WithVelocity(unitsPerDay)
+            : book;
 }

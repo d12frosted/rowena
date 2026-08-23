@@ -456,6 +456,12 @@ internal sealed class MarketCache : IDisposable
             books[(scope, itemId)] = new BookSnapshot(WithSurveyedVelocity(scope, book), now);
         }
 
+        // A book carries no usable sale rate of its own, so anything without a summary cannot
+        // say how fast it moves. Asked for quietly rather than left unknown: every "days to
+        // clear" in the plugin rests on it.
+        if (requested.Where(itemId => !summaries.ContainsKey((scope, itemId))).ToArray() is { Length: > 0 } rateless)
+            Submit(scope, FetchKind.Summary, rateless, FetchPriority.Background, null);
+
         diagnostics.Note("fetch", $"stored {requested.Count} books on {scope}, {withHistory} with sale history");
 
         // After the writes, so a handler reading the cache sees what just landed. One handler
@@ -510,6 +516,14 @@ internal sealed class MarketCache : IDisposable
     /// The two endpoints disagree, sometimes by more than threefold. Whichever is closer to the
     /// truth, one of them has to win everywhere, or an item gets shortlisted on one number and
     /// ranked on another. The survey wins because it is the one every candidate has.
+    /// </remarks>
+    /// <summary>
+    /// The sale rate a book cannot supply for itself.
+    /// </summary>
+    /// <remarks>
+    /// The listings endpoint counts sales and the summary counts units, and everything here
+    /// wants units, so only the summary is trusted. A book without one reports nothing rather
+    /// than a rate an order of magnitude out.
     /// </remarks>
     private OrderBook WithSurveyedVelocity(string scope, OrderBook book) =>
         summaries.TryGetValue((scope, book.ItemId), out var summary)

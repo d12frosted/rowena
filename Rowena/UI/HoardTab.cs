@@ -444,9 +444,14 @@ internal sealed class HoardTab
     /// A book refuses a floor no recent sale supports, which matters more here than anywhere:
     /// this table is telling somebody what their own things are worth, and a fantasy listing
     /// would inflate a pile they might then decide to keep.
+    ///
+    /// A book that does not yet know how fast it moves is no use here either, whatever its
+    /// floor: the whole verdict turns on whether the board will take the stack. Falling back to
+    /// the summary covers it, and failing that the stack waits rather than being called dead
+    /// and sent to a vendor.
     /// </remarks>
     private Priceable? Priced(string selling, uint itemId) =>
-        boards.Selling(itemId) is { } book
+        boards.Selling(itemId) is { RateKnown: true } book
             ? new Priceable(book.CredibleFloor(), book.SaleVelocityPerDay)
             : market.Summary(selling, itemId) is { } summary
                 ? new Priceable(summary.Floor, summary.SaleVelocityPerDay)

@@ -133,9 +133,13 @@ public static class UniversalisJson
             }
         }
 
-        var velocity = item.TryGetProperty("regularSaleVelocity", out var rate) && rate.ValueKind == JsonValueKind.Number
-            ? rate.GetDouble()
-            : 0d;
+        // Not the velocity this library means. The listings endpoint counts sales, and a sale is
+        // a listing bought however many units were in it: for an ore that trades in tens it reads
+        // about a tenth of what the board actually absorbs. Everything here compares a velocity
+        // against units listed or units to sell, so taking this one would be a tenfold error in
+        // a number that looks perfectly reasonable. The summary endpoint reports units a day and
+        // the cache imposes it; until it has, a book says it does not know rather than guessing.
+        const double velocity = 0d;
 
         // Prefer the upload time over the time we happened to parse it. How old the data
         // is matters, and the answer is "when a player last saw this board", not "now".
@@ -161,6 +165,8 @@ public static class UniversalisJson
             }
         }
 
-        return OrderBook.Create(itemId, listings, velocity, retrieved, complete, MarketSource.Universalis, sales);
+        return OrderBook
+            .Create(itemId, listings, velocity, retrieved, complete, MarketSource.Universalis, sales)
+            .WithoutRate();
     }
 }
