@@ -12,12 +12,16 @@ namespace Rowena.UI;
 /// The other tabs all ask what to acquire. This is the only one that looks at what is already
 /// sitting on a retainer, which is where a good deal of gil quietly is not.
 ///
-/// Not an undercut tool, deliberately. Undercutting is the one move the board makes easy and
-/// it is usually the wrong one: the question is never "is somebody cheaper than me" but "how
-/// long until the board has eaten through everyone cheaper than me". Three units ahead on a
-/// board that sells ten a day are gone this afternoon; dropping your price to jump them is a
-/// haircut for nothing. So every row shows the queue and what chasing it would cost, and
-/// leaves the decision where it belongs.
+/// Not an undercut tool first. Undercutting is the one move the board makes easy and it is
+/// often the wrong one: the question is never "is somebody cheaper than me" but "how long
+/// until the board has eaten through everyone cheaper than me". Three units ahead on a board
+/// that sells ten a day are gone this afternoon; dropping your price to jump them is a haircut
+/// for nothing. So every row shows the queue and what chasing it would cost, and leaves the
+/// decision where it belongs.
+///
+/// Having decided, though, the doing should be cheap. Each undercut row carries the price that
+/// would put it first, and the game's price dialog fills it in when opened on that listing;
+/// items I have chosen to leave alone are marked and left alone.
 ///
 /// What is listed comes from the game rather than from Universalis, so it is exact: opening a
 /// retainer reads its twenty market slots, and it is remembered across sessions. A board search
@@ -45,6 +49,9 @@ internal sealed class SellingTab
         + "the queue ahead plus your own stock, over sales a day.",
         "What matching the current floor would cost you per unit. Not a recommendation, a\n"
         + "price tag on one.",
+        "What to ask to be cheapest on the board: the cheapest listing in front of yours, less\n"
+        + "the margin from settings. Opening the retainer's price dialog on this listing fills it\n"
+        + "in. Ignored items show the number but are never filled in.",
         null,
     ];
 
@@ -53,6 +60,8 @@ internal sealed class SellingTab
     private readonly ItemCells cells;
     private readonly Configuration config;
     private readonly SalesLog sales;
+    private readonly Undercutting undercutting;
+    private readonly RetainerSellFill sellFill;
     private readonly Action<IReadOnlyList<uint>> refresh;
 
     private readonly Rebuilt<Model> model;
@@ -64,6 +73,8 @@ internal sealed class SellingTab
         Configuration config,
         Diagnostics diagnostics,
         SalesLog sales,
+        Undercutting undercutting,
+        RetainerSellFill sellFill,
         Action<IReadOnlyList<uint>> refresh)
     {
         this.board = board;
@@ -71,6 +82,8 @@ internal sealed class SellingTab
         this.cells = cells;
         this.config = config;
         this.sales = sales;
+        this.undercutting = undercutting;
+        this.sellFill = sellFill;
         this.refresh = refresh;
 
         model = new Rebuilt<Model>("selling", Build, diagnostics);
@@ -129,6 +142,10 @@ internal sealed class SellingTab
                     soldEach = row.Sold?.Each ?? 0,
                     call = row.Reading.Call.ToString(),
                     retainer = row.Retainer,
+                    hq = row.IsHq,
+                    undercutTo = row.Undercut?.Target,
+                    undercutBelow = row.Undercut?.Below,
+                    ignored = row.Ignored,
                 }),
             },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -205,6 +222,21 @@ internal sealed class SellingTab
             wanting == 0 ? Palette.Good : Palette.Bad,
             wanting == 0 ? "Nothing needs doing." : $"{wanting} worth a look.");
 
+        var undercut = current.Rows.Count(row => row.Undercut is not null && !row.Ignored);
+
+        if (undercut > 0)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(Palette.Bad, $"{undercut} undercut.");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Listings with somebody cheaper in front of them, not counting the ones you said\n"
+                    + "to leave alone. Open the retainer and its price dialog fills in the undercut price.");
+            }
+        }
+
         var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
 
         if (recently.Count == 0)
@@ -227,7 +259,7 @@ internal sealed class SellingTab
 
     private void DrawTable(Model current)
     {
-        if (!ImGui.BeginTable("selling", 9, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+        if (!ImGui.BeginTable("selling", 10, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
@@ -238,6 +270,7 @@ internal sealed class SellingTab
         ImGui.TableSetupColumn("you sold", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("chasing costs", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("undercut to", ImGuiTableColumnFlags.WidthFixed, 150);
         ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 110);
         Cell.Headers(Help);
 
@@ -281,10 +314,85 @@ internal sealed class SellingTab
             Cell.Right(Palette.Dim, reading.Haircut == 0 ? "-" : $"-{reading.Haircut:N0}");
 
             ImGui.TableNextColumn();
+            DrawUndercut(row);
+
+            ImGui.TableNextColumn();
             DrawCall(row);
         }
 
         ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// The undercut price, and the two things that can be done about it.
+    /// </summary>
+    /// <remarks>
+    /// The button fills the game's price dialog if it is open on this listing, and otherwise
+    /// puts the number on the clipboard and says which retainer to open. The toggle says to
+    /// stop nagging about this item: the number stays visible, the dialog is left alone.
+    /// </remarks>
+    private void DrawUndercut(Row row)
+    {
+        ImGui.PushID((int)row.ItemId);
+
+        if (row.Undercut is not { } plan)
+        {
+            Cell.Right(Palette.Good, "-");
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Nothing is listed below yours.");
+
+            ImGui.PopID();
+            return;
+        }
+
+        if (ImGui.SmallButton(row.Ignored ? "watch" : "ignore"))
+        {
+            undercutting.Ignore(row.ItemId, !row.Ignored);
+            model.Invalidate();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                row.Ignored
+                    ? "Start filling the price dialog in for this item again."
+                    : "Leave this item where it is. It still shows here, just not as something to do.");
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("set"))
+        {
+            if (!sellFill.Fill(row.ItemId, plan.Target))
+                ImGui.SetClipboardText($"{plan.Target}");
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                sellFill.Open() is { } open && open.ItemId == row.ItemId
+                    ? $"Puts {plan.Target:N0} into the open price dialog. You still confirm it."
+                    : $"Copies {plan.Target:N0} to the clipboard. To change the price, open {row.Retainer},\n"
+                      + "adjust this listing, and the dialog fills it in on its own.");
+        }
+
+        ImGui.SameLine();
+        Cell.Right(row.Ignored ? Palette.Dim : Palette.Bad, row.IsHq ? $"{plan.Target:N0} HQ?" : $"{plan.Target:N0}");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
+                + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it."
+                + (row.IsHq
+                    ? "\n\nThis listing is HQ and the board data does not tell qualities apart, so the\n"
+                      + "listing in front may be NQ. Check before taking this number."
+                    : "")
+                + (row.Ignored ? "\n\nYou said to leave this one alone, so the price dialog is not filled in." : ""));
+        }
+
+        ImGui.PopID();
     }
 
     /// <summary>
@@ -420,6 +528,13 @@ internal sealed class SellingTab
         var rows = new List<Row>();
         var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
 
+        // Only once every retainer has been read: until then "not listed" may just mean "not
+        // looked at", and forgetting a decision on that basis is the wrong kind of tidy.
+        var (seen, of) = board.RetainersSeen();
+
+        if (seen > 0 && seen >= of)
+            undercutting.Prune(board.ListedItems());
+
         foreach (var itemId in board.ListedItems())
         {
             var book = boards.Selling(itemId);
@@ -427,13 +542,13 @@ internal sealed class SellingTab
             if (book is null)
                 continue;
 
-            foreach (var group in board.Listed(itemId).GroupBy(listing => listing.UnitPrice))
+            foreach (var group in board.Listed(itemId).GroupBy(listing => (listing.UnitPrice, listing.IsHq)))
             {
                 var units = group.Sum(listing => listing.Quantity);
                 var first = group.First();
 
                 var reading = ListingDiagnosis.Of(
-                    group.Key,
+                    group.Key.UnitPrice,
                     units,
                     book,
                     boards.Vendor(itemId),
@@ -449,8 +564,11 @@ internal sealed class SellingTab
                     units,
                     group.Count() > 1 ? $"{group.Count()} retainers" : first.Retainer,
                     first.CityId,
+                    group.Key.IsHq,
                     read,
-                    Sold(itemId, recently)));
+                    Sold(itemId, recently),
+                    undercutting.Plan(itemId, group.Key.UnitPrice),
+                    undercutting.Ignored(itemId)));
             }
         }
 
@@ -513,8 +631,11 @@ internal sealed class SellingTab
         int Units,
         string Retainer,
         uint CityId,
+        bool IsHq,
         ListingDiagnosis Reading,
-        Mine? Sold);
+        Mine? Sold,
+        UndercutPlan? Undercut,
+        bool Ignored);
 
     private sealed record Model(Row[] Rows);
 }
