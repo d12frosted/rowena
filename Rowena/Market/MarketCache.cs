@@ -168,6 +168,28 @@ internal sealed class MarketCache : IDisposable
     /// starts a background task, and working it out in there would mean reading game state off the
     /// framework thread, which throws.
     /// </param>
+    /// <summary>
+    /// Asks for the cheap summary of some items, without waiting.
+    /// </summary>
+    /// <remarks>
+    /// For anything that needs a sale rate rather than depth. A book fetch brings no usable
+    /// rate, and something sold out of is never fetched again, so whatever wants the rate has
+    /// to ask for it rather than waiting for a book that will not come.
+    /// </remarks>
+    public void SurveyInBackground(
+        string? scope,
+        IReadOnlyCollection<uint> itemIds,
+        FetchPriority priority = FetchPriority.Background)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+            return;
+
+        var wanted = itemIds.Where(id => SummaryIsStale(scope, id, Ttl)).ToArray();
+
+        if (wanted.Length > 0)
+            Submit(scope, FetchKind.Summary, wanted, priority, null);
+    }
+
     public void RefreshInBackground(
         string? scope,
         IReadOnlyCollection<uint> itemIds,
@@ -459,7 +481,9 @@ internal sealed class MarketCache : IDisposable
         // A book carries no usable sale rate of its own, so anything without a summary cannot
         // say how fast it moves. Asked for quietly rather than left unknown: every "days to
         // clear" in the plugin rests on it.
-        if (requested.Where(itemId => !summaries.ContainsKey((scope, itemId))).ToArray() is { Length: > 0 } rateless)
+        // Staleness rather than presence, so an endpoint that had nothing to say the first time
+        // is asked again later instead of never.
+        if (requested.Where(itemId => SummaryIsStale(scope, itemId, Ttl)).ToArray() is { Length: > 0 } rateless)
             Submit(scope, FetchKind.Summary, rateless, FetchPriority.Background, null);
 
         diagnostics.Note("fetch", $"stored {requested.Count} books on {scope}, {withHistory} with sale history");
@@ -491,15 +515,16 @@ internal sealed class MarketCache : IDisposable
 
         foreach (var itemId in requested)
         {
-            var summary = fetched.TryGetValue(itemId, out var found)
-                ? found
-                : new MarketSummary(itemId, null, 0d);
+            var answered = fetched.TryGetValue(itemId, out var found);
+            var summary = answered ? found : new MarketSummary(itemId, null, 0d);
 
             summaries[(scope, itemId)] = new SummarySnapshot(summary, now);
 
-            // A book already held was fetched with the other endpoint's sale rate. Bring it into
-            // line rather than leaving two numbers in play.
-            if (books.TryGetValue((scope, itemId), out var existing))
+            // Only when the endpoint actually answered. A miss recorded as a rate of nought is
+            // the worst of both: it reads as a market that never sells, and it looks answered,
+            // so nothing ever asks again. Left alone, the book keeps saying it does not know and
+            // the request comes round with the next staleness check.
+            if (answered && books.TryGetValue((scope, itemId), out var existing))
             {
                 books[(scope, itemId)] =
                     existing with { Book = existing.Book.WithVelocity(summary.SaleVelocityPerDay) };

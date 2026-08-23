@@ -114,8 +114,11 @@ public sealed class Plugin : IDalamudPlugin
         var convertTab = new ConvertTab(
             trades, boards, balances, cells, config, market, venues, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion));
+        sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
+        var realised = new Realised(sales, boards, market, config);
+
         var craftTab = new CraftTab(
-            sweep, craftables, boards, cells, basket, config, levels, diagnostics,
+            sweep, craftables, boards, cells, basket, config, levels, realised, diagnostics,
             conversion => mainWindow!.RefreshTrade(conversion),
             () => RecheckCrafts());
         gatherClock = new GatherClock(
@@ -124,7 +127,6 @@ public sealed class Plugin : IDalamudPlugin
         var gatherTab = new GatherTab(
             gatherSweep, gatherables, boards, cells, config, gatherClock, diagnostics);
 
-        sales = new SalesLog(ChatGui, config, Save, diagnostics, Log);
 
         // Driven by prices moving rather than by a timer, so an undercut or a vendor listing
         // arrives while it still means something.
@@ -156,7 +158,8 @@ public sealed class Plugin : IDalamudPlugin
             tab => mainWindow!.Show(tab));
 
         var settingsTab = new SettingsTab(
-            config, gatherClock, market, catalogFile, trades, balances, boardWatcher, diagnosticsPanel,
+            config, gatherClock, realised, market, catalogFile, trades, balances, boardWatcher,
+            diagnosticsPanel,
             () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
@@ -194,6 +197,13 @@ public sealed class Plugin : IDalamudPlugin
                 ["recheck listings"] = () => market.RefreshInBackground(
                     scope.Selling, [.. boardWatcher.ListedItems()], true, FetchPriority.Interactive),
                 ["watch"] = () => Log.Information($"Watch: {watch.Report}"),
+                ["capture detail"] = () => Log.Information(realised.Detail),
+                ["realised"] = () => Log.Information(
+                    realised.Share is { } share
+                        ? $"Capture: {share:P1} of a market, from {realised.Seen} sales. "
+                          + $"A million a day ceiling is really {realised.Expect(1_000_000):N0}. "
+                          + $"Coverage {realised.Coverage:P0}."
+                        : $"Capture: not measured, because {realised.Missing}. {realised.Seen} usable sales."),
                 ["alert watch"] = () =>
                 {
                     config.AlertUndercut = !config.AlertUndercut;

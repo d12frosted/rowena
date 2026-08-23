@@ -21,6 +21,7 @@ namespace Rowena.UI;
 internal sealed class SettingsTab(
     Configuration config,
     GatherClock clock,
+    Realised realised,
     MarketCache market,
     CatalogFile catalogue,
     Trades trades,
@@ -51,6 +52,10 @@ internal sealed class SettingsTab(
             "Selling board", config.HomeScope, value => config.HomeScope = value,
             "Empty means the world you are logged in to. Your retainers sell where they stand, so this\n"
             + "is not the same board as the one above and should usually be a single world.");
+
+        Group("What I have actually been managing");
+
+        DrawRealised();
 
         Group("Prices");
 
@@ -269,6 +274,46 @@ internal sealed class SettingsTab(
         market.BookBatchSize = config.PriceBatchSize;
         market.SummaryBatchSize = config.SurveyBatchSize;
         save();
+    }
+
+    /// <summary>
+    /// What share of a market my sales have been coming to.
+    /// </summary>
+    /// <remarks>
+    /// Every ranking here is a ceiling that assumes taking every sale at today's price. This is
+    /// the only thing that says how far short of it I actually land, and it is a measurement
+    /// rather than a fudge: what the boards turned over is known and what I sold is recorded.
+    /// </remarks>
+    private void DrawRealised()
+    {
+        if (realised.Share is not { } share)
+        {
+            ImGui.TextColored(
+                Palette.Dim,
+                "    Every gil a day figure here is a ceiling: it assumes you take every sale at\n"
+                + $"    today's price. How far short of it you land is not measured yet, because\n"
+                + $"    {realised.Missing}.\n"
+                + "    Weighed against a fraction of your sales the answer would be drawn from\n"
+                + "    whichever items happened to be priced, which is not a sample of anything.");
+
+            return;
+        }
+
+        ImGui.TextColored(
+            Palette.Good,
+            $"    You have been taking about {share:P0} of a market, from {realised.Seen} sales of your own\n"
+            + "    against what those boards turned over in the same time.");
+
+        ImGui.TextColored(
+            Palette.Dim,
+            $"    Weighed over {realised.Coverage:P0} of your recent sales. The rest are things Universalis\n"
+            + "    reports no sale rate for, which no amount of waiting fixes.");
+
+        ImGui.TextColored(
+            Palette.Dim,
+            "    So a row promising a million a day is nearer "
+            + $"{realised.Expect(1_000_000):N0}. The rankings still order by\n"
+            + "    the ceiling, which is the right order; this is what the number means.");
     }
 
     /// <summary>

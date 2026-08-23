@@ -52,6 +52,7 @@ internal sealed class CraftTab
     private readonly CraftBasket basket;
     private readonly Configuration config;
     private readonly Levels levels;
+    private readonly Realised realised;
     private readonly Action<Conversion> refreshTrade;
     private readonly Action recheck;
 
@@ -68,6 +69,7 @@ internal sealed class CraftTab
         CraftBasket basket,
         Configuration config,
         Levels levels,
+        Realised realised,
         Diagnostics diagnostics,
         Action<Conversion> refreshTrade,
         Action recheck)
@@ -80,6 +82,7 @@ internal sealed class CraftTab
         this.basket = basket;
         this.config = config;
         this.levels = levels;
+        this.realised = realised;
         this.refreshTrade = refreshTrade;
 
         model = new Rebuilt<Model>("crafts", Build, diagnostics);
@@ -456,7 +459,14 @@ internal sealed class CraftTab
                 ImGui.SetTooltip(
                     "A ceiling, not a forecast: it assumes you take every sale at today's price.\n"
                     + "Many of these sit in thin books, often a wall of single units at a round\n"
-                    + "number, so adding supply tends to move the price rather than join it.");
+                    + "number, so adding supply tends to move the price rather than join it.\n"
+                    + "\n"
+                    + (realised.Share is { } share
+                        ? $"You have been taking about {share:P0} of a market, so nearer "
+                          + $"{realised.Expect(row.GilPerDay):N0} a day.\n"
+                          + "Measured from your own sales against what those boards turned over."
+                        : $"How much of a ceiling you actually reach is not measured yet, because\n"
+                          + $"{realised.Missing}."));
             }
 
             ImGui.TableNextColumn();

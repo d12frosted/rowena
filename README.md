@@ -416,6 +416,17 @@ less than a vendor pays. The second is gone within minutes and is worthless an h
 Being undercut is not the trigger; being undercut *into a queue* is. Three units ahead on a
 board selling ten a day are gone this afternoon and are not worth being told about.
 
+Every gil a day figure here is a ceiling: it assumes taking every sale at today's price. How
+far short of that I actually land is now measured rather than left as a caveat. What each
+board turned over is known and what I sold is recorded, so the share is a measurement and not
+a fudge factor, weighted by what each market moved rather than averaged across items.
+
+It quotes its own coverage, because some items never get a sale rate at all: Universalis
+reports one per world, per data centre and per region, and has none of the first two for some
+things and nothing whatever for others. Measured off a third of the sales it read eleven
+percent where the fuller set said four, since whatever is left when rates are missing skews
+towards the small quiet markets a person takes most of.
+
 Sale rates are units a day and only ever units a day. Universalis reports two: the listings
 endpoint counts sales, where a sale is a listing bought however many units were in it, and the
 summary endpoint counts units. Everything here weighs a rate against units listed or units to
