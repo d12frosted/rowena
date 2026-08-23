@@ -81,7 +81,7 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, 220);
         ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("cheapest ahead -> yours", ImGuiTableColumnFlags.WidthFixed, 250);
+        ImGui.TableSetupColumn("under -> yours", ImGuiTableColumnFlags.WidthFixed, 250);
         ImGui.TableHeadersRow();
 
         foreach (var (slot, index) in slots)
@@ -122,13 +122,13 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.TextColored(
             undercut == 0 ? Palette.Good : Palette.Bad,
-            undercut == 0 ? "Nothing is undercut." : $"{undercut} undercut.");
+            undercut == 0 ? "Nothing wants repricing." : $"{undercut} to reprice.");
 
         if (undercut > 0)
         {
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("undercut all"))
+            if (ImGui.SmallButton("reprice all"))
             {
                 foreach (var (slot, index) in slots)
                 {
@@ -140,9 +140,10 @@ internal sealed class RetainerOverlay : Window
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(
-                    "Reprices every undercut listing above, one after another, through the game's own\n"
-                    + "windows. Ignored items are skipped. HQ listings are included: the board data does\n"
-                    + "not tell qualities apart, so check those rows first if that worries you.");
+                    "Reprices every red row above, one after another, through the game's own windows:\n"
+                    + "the ones somebody is under, and the ones nobody is paying. Ignored items are\n"
+                    + "skipped. HQ listings are included: the board data does not tell qualities apart,\n"
+                    + "so check those rows first if that worries you.");
             }
         }
 
@@ -174,7 +175,7 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.BeginDisabled(sellFill.Running is not null);
 
-        if (ImGui.SmallButton("undercut"))
+        if (ImGui.SmallButton(wanted.Why == UndercutWhy.NobodyPays ? "reprice" : "undercut"))
             sellFill.Reprice(index, slot.ItemId, wanted.Target);
 
         ImGui.EndDisabled();
@@ -184,7 +185,11 @@ internal sealed class RetainerOverlay : Window
             ImGui.SetTooltip(
                 $"Reprices this listing to {wanted.Target:N0} through the game's own price dialog"
                 + (config.UndercutConfirms ? ".\n" : ", and leaves it for you to confirm.\n")
-                + $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}."
+                + (wanted.Why == UndercutWhy.NobodyPays
+                    ? $"Nobody is paying {slot.UnitPrice:N0}"
+                      + (wanted.UnitsAhead > 0 ? $", nor the {wanted.UnitsAhead:N0} units listed under it" : ", cheapest on the board or not")
+                      + $": what actually sells goes for about {wanted.Below:N0}, so that is what this sits under."
+                    : $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}.")
                 + (slot.IsHq
                     ? "\n\nHQ: the board data does not tell qualities apart, so the listing in front may be NQ."
                     : "")
@@ -194,6 +199,7 @@ internal sealed class RetainerOverlay : Window
         ImGui.SameLine();
         Cell.Right(
             ignored ? Palette.Dim : Palette.Bad,
-            $"{wanted.Below:N0} -> {wanted.Target:N0}" + (slot.IsHq ? " HQ?" : ""));
+            (wanted.Why == UndercutWhy.NobodyPays ? $"sells ~{wanted.Below:N0}" : $"{wanted.Below:N0}")
+            + $" -> {wanted.Target:N0}" + (slot.IsHq ? " HQ?" : ""));
     }
 }
