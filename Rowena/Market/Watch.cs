@@ -186,6 +186,7 @@ internal sealed class Watch : IDisposable
             return;
 
         notices.Add(
+            NoticeKind.Undercut,
             $"{items.Name(itemId)}: {read.UnitsAhead:N0} units are now listed below your "
             + $"{read.Mine:N0}, {Phrases.Absorb(read.DaysToClear)} to clear. "
             + $"Matching {read.Floor:N0} costs {read.Haircut:N0} a unit.");
@@ -219,6 +220,7 @@ internal sealed class Watch : IDisposable
         var where = found.Best is { } best ? $" on {best.World}" : "";
 
         notices.Add(
+            NoticeKind.VendorFind,
             $"{items.Name(itemId)}: {found.Units} units{where} are listed under what a vendor pays, "
             + $"{found.Profit:N0} gil.");
 

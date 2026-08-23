@@ -194,10 +194,6 @@ internal sealed class SettingsTab(
             + "fresh as the last fetch and never fetches on its own.");
 
         changed |= Toggle(
-            "Say when the sweep goes stale", config.AlertStaleSweep, value => config.AlertStaleSweep = value,
-            "Once, when the craft sweep passes its re-sweep age.");
-
-        changed |= Toggle(
             "Say when I am undercut into a queue", config.AlertUndercut,
             value => config.AlertUndercut = value,
             "Arrives when the price moves rather than on a timer. Not whenever somebody is cheaper\n"

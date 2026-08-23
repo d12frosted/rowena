@@ -87,7 +87,8 @@ internal sealed class HoardTab
         return new Note(
             Note.Waiting,
             Palette.Plain,
-            $"{current.Worth:N0} gil is sitting in your bags",
+            $"{current.Worth:N0} gil",
+            "is sitting in your bags",
             $"{current.Rows.Length} stacks worth doing something with. "
             + $"{current.Rows.Count(row => row.Verdict.Call == HoardCall.Vendor)} are worth more to a vendor "
             + "than to the board.",

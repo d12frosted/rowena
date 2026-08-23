@@ -198,6 +198,12 @@ away. Under it, a tab per question:
   It says nothing new: every line is another tab's own answer phrased shorter, which is what
   keeps it from becoming a sixth thing to maintain and a sixth thing to disagree with the
   others.
+
+  Each line leads with its number and sits under a band (expiring, going wrong, worth doing,
+  housekeeping) that says what the ordering means. Under the notes, "while you were away"
+  folds what happened since login: sales from every retainer become one line with one total,
+  and the rest is kept one event per line. It opens on its own while something in it is
+  recent and folds away once it is an hour old.
 - **Selling.** What is already sitting on a retainer, which is where a good deal of gil
   quietly is not. Every other tab asks what to acquire; this one reads what you have out.
 
@@ -423,9 +429,10 @@ cap, what the flips pay and which one pays most, how old the furnishing sweep is
 server info bar carries the single most urgent of those all the time, and opens the tab
 it came from when clicked. `/rowena brief` says the line again on demand.
 
-Three alerts, each said once when it becomes true and not again until it has stopped being
+Two alerts, each said once when it becomes true and not again until it has stopped being
 true: a currency entering the last tenth of its cap, a flip whose return crosses a
-threshold you set, a sweep past its re-sweep age. All of it is read off the price cache on
+threshold you set. A sweep past its re-sweep age is a standing note on the Overview instead,
+since a fact that stays true belongs on the page rather than in the log. All of it is read off the price cache on
 a slow clock and fetches nothing on its own. Undercuts are deliberately not here; Marketbuddy
 and Dagobert watch those.
 

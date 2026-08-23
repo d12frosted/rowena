@@ -1,3 +1,5 @@
+using Rowena.Core.Market;
+
 namespace Rowena.UI;
 
 /// <summary>
@@ -20,14 +22,11 @@ internal sealed class Notices
     private readonly List<Notice> notices = [];
     private readonly object gate = new();
 
-    /// <summary>One thing worth saying, and when it was said.</summary>
-    internal readonly record struct Notice(DateTimeOffset At, string Text);
-
-    public void Add(string text)
+    public void Add(NoticeKind kind, string text, int count = 0, long gil = 0)
     {
         lock (gate)
         {
-            notices.Insert(0, new Notice(DateTimeOffset.UtcNow, text));
+            notices.Insert(0, new Notice(kind, DateTimeOffset.UtcNow, text, count, gil));
 
             if (notices.Count > Keep)
                 notices.RemoveRange(Keep, notices.Count - Keep);

@@ -161,9 +161,10 @@ internal sealed class GatherTab
         return new Note(
             Note.Expiring,
             Palette.Good,
+            $"{soonest.OpenFor:F0} min",
             open.Length == 1
-                ? $"{soonest.Name} is up, {soonest.OpenFor:F0} minutes left"
-                : $"{open.Length} timed nodes are up, the first shuts in {soonest.OpenFor:F0} minutes",
+                ? $"until {soonest.Name} shuts"
+                : $"until the first of {open.Length} timed nodes shuts",
             $"Worth {open.Sum(row => row.Each * 40):N0} if you fill a window of each. "
             + "Game hours are minutes here.",
             MainWindow.Tab.Gather);
@@ -297,25 +298,32 @@ internal sealed class GatherTab
             // the gathering.
             if (ImGui.Button("Copy for GatherBuddy"))
             {
-                ImGui.SetClipboardText(Rowena.Core.Lists.GatherList.Build(
+                // The auto-gather list rather than the gather window preset. The window preset
+                // is what the overlay shows; this is the one auto-gather works through, and it
+                // is the only one of the two with anywhere to put an amount.
+                ImGui.SetClipboardText(Rowena.Core.Lists.GatherList.ForAutoGather(
                     "Rowena",
                     $"worth gathering, {DateTime.Now:d MMM HH:mm}",
-                    current.Rows.Select(row => row.ItemId)));
+                    current.Rows.ToDictionary(
+                        row => row.ItemId,
+                        row => current.Plan is { } plan && plan.Take.TryGetValue(row.ItemId, out var take)
+                            ? take
+                            : 0)));
             }
 
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(
-                    "One paste, as a gather window preset.\n"
+                    "One paste, as an auto-gather list.\n"
                     + "\n"
                     + "1. Press this.\n"
-                    + "2. Open GatherBuddy, Gather Window tab.\n"
-                    + "3. Press the import button.\n"
+                    + "2. Open GatherBuddy, Auto-Gather tab, and its list selector.\n"
+                    + "3. Press the clipboard button and give the list a name.\n"
                     + "\n"
                     + (current.Plan is null
                         ? "Everything shown goes in, so filter first if you want less."
-                        : "The plan goes in, in the order to gather it. How many of each is Rowena's\n"
-                          + "business rather than GatherBuddy's, so the amounts stay in this table."));
+                        : "The plan goes in with how many of each to gather, so the amounts come\n"
+                          + "across rather than staying in this table."));
             }
 
             ImGui.SameLine();

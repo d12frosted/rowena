@@ -134,7 +134,7 @@ public sealed class Plugin : IDalamudPlugin
         // Chat only reports what sold while somebody was online to hear it. The rest is read
         // off the retainer itself, whenever one is open.
         retainerSales = new RetainerSales(
-            Framework, config, sales, boardWatcher.TaxFor, Save, diagnostics, Log);
+            Framework, config, sales, itemNames, notices, boardWatcher.TaxFor, Save, diagnostics, Log);
 
         var sellingTab = new SellingTab(
             boardWatcher, boards, cells, config, diagnostics, sales,

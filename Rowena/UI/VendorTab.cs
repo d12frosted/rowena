@@ -75,7 +75,8 @@ internal sealed class VendorTab
         return new Note(
             Note.Waiting,
             Palette.Good,
-            $"{finds.Sum(find => find.Profit):N0} gil listed below what a vendor pays",
+            $"{finds.Sum(find => find.Profit):N0} gil",
+            "listed below what a vendor pays",
             $"Best is {best.Name}: {best.Units} units, {best.Profit:N0} gil, no market risk at all.",
             MainWindow.Tab.Vendor);
     }
