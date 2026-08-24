@@ -68,10 +68,10 @@ public readonly record struct ListingDiagnosis(
     public const double Rich = 1.5d;
 
     /// <summary>How much room above has to be there before raising is worth the bother.</summary>
-    private const double Worthwhile = 1.1d;
+    public const double Worthwhile = 1.1d;
 
     /// <summary>How far recent sales may sit below that room before it is somebody else's fantasy.</summary>
-    private const double Supported = 0.9d;
+    public const double Supported = 0.9d;
 
     /// <summary>
     /// Reads one listing against the board it is sitting on.

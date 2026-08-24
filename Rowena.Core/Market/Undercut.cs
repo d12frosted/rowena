@@ -7,11 +7,14 @@ public enum UndercutWhy
 
     /// <summary>Nobody is paying what I ask, cheapest on the board or not.</summary>
     NobodyPays,
+
+    /// <summary>Nobody is under me and the next listing is far enough up that mine is money left behind.</summary>
+    RoomAbove,
 }
 
 /// <summary>What repricing to where it would actually sell would mean.</summary>
 /// <param name="Target">The price to ask.</param>
-/// <param name="Below">What the target sits under: the cheapest listing in front, or what people pay.</param>
+/// <param name="Below">What the target sits under: the cheapest listing in front, what people pay, or the next listing up.</param>
 /// <param name="UnitsAhead">How many units the board serves before mine.</param>
 public readonly record struct UndercutPlan(long Target, long Below, int UnitsAhead, UndercutWhy Why = UndercutWhy.Queue);
 
@@ -23,8 +26,9 @@ public readonly record struct UndercutPlan(long Target, long Below, int UnitsAhe
 /// exists to argue about; this only says what it would cost to do it, so the decision can be
 /// taken with a number in hand rather than reopened every time a retainer is visited.
 ///
-/// Two reasons to move. Somebody cheaper in front, which is the usual one; and nobody paying
-/// what I ask, which being cheapest on the board does not cure. Measured: Mozzarella listed at
+/// Three reasons to move. Somebody cheaper in front, which is the usual one; nobody paying
+/// what I ask, which being cheapest on the board does not cure; and nobody anywhere near me,
+/// which is the same mistake in the other direction. Measured: Mozzarella listed at
 /// 389,994 on a board where every listing sits there and everything that trades goes for
 /// under 1,500. A wall of listings nobody takes is not a market, and the front of it is not a
 /// position, so the target there is what people pay, not what the wall asks.
@@ -47,19 +51,30 @@ public static class Undercut
         var ahead = book.Listings.Where(listing => listing.UnitPrice < mine && listing.Serves(hq)).ToArray();
         var units = ahead.Sum(listing => listing.Quantity);
         long? below = ahead.Length == 0 ? null : ahead.Min(listing => listing.UnitPrice);
+        var paid = Median(book.RecentSales);
 
         // What people pay, if enough of them have, and whether the cheapest thing on the board
         // (mine, or whoever is in front) is far above it. The factor is the diagnosis's own, so
         // the row that says "nobody pays this" and the button that fixes it agree.
-        if (book.RecentSales.Count >= EnoughSales
-            && Median(book.RecentSales) is var paid and > 0
-            && (below ?? mine) > paid * ListingDiagnosis.Rich)
-        {
+        if (book.RecentSales.Count >= EnoughSales && paid > 0 && (below ?? mine) > paid * ListingDiagnosis.Rich)
             return new UndercutPlan(Under(paid, margin), paid, units, UndercutWhy.NobodyPays);
-        }
 
-        return below is { } floor
-            ? new UndercutPlan(Under(floor, margin), floor, units)
+        if (below is { } floor)
+            return new UndercutPlan(Under(floor, margin), floor, units);
+
+        // Cheapest, with more room above than being cheapest requires. The bars are the
+        // diagnosis's again, so the row that says "you could ask more" and the button agree:
+        // the gap has to be worth the bother, and recent sales have to say somebody actually
+        // pays up there, or the room is somebody else's fantasy. Measured against the next
+        // listing of any quality, because raising past a cheaper NQ hands every buyer who
+        // does not care about quality a better deal than mine.
+        var next = book.Listings.FirstOrDefault(listing => listing.UnitPrice > mine).UnitPrice;
+
+        return next > 0
+               && next - 1 >= mine * ListingDiagnosis.Worthwhile
+               && paid >= (next - 1) * ListingDiagnosis.Supported
+               && Under(next, margin) > mine
+            ? new UndercutPlan(Under(next, margin), next, units, UndercutWhy.RoomAbove)
             : null;
     }
 
