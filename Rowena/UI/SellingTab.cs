@@ -51,8 +51,10 @@ internal sealed class SellingTab
         + "price tag on one.",
         "What to ask to actually sell: the cheapest listing in front of yours less the margin\n"
         + "from settings, or, where nobody is paying even the cheapest listing, what recent sales\n"
-        + "went for less the margin. Opening the retainer's price dialog on this listing fills it\n"
-        + "in. Ignored items show the number but are never filled in.",
+        + "went for less the margin. Where nothing is under yours and the next listing is far\n"
+        + "enough up, the target raises to sit the margin under it instead. Opening the retainer's\n"
+        + "price dialog on this listing fills it in. Ignored items show the number but are never\n"
+        + "filled in.",
         null,
     ];
 
@@ -146,6 +148,7 @@ internal sealed class SellingTab
                     hq = row.IsHq,
                     undercutTo = row.Undercut?.Target,
                     undercutBelow = row.Undercut?.Below,
+                    undercutWhy = row.Undercut?.Why.ToString(),
                     ignored = row.Ignored,
                 }),
             },
@@ -223,19 +226,28 @@ internal sealed class SellingTab
             wanting == 0 ? Palette.Good : Palette.Bad,
             wanting == 0 ? "Nothing needs doing." : $"{wanting} worth a look.");
 
-        var undercut = current.Rows.Count(row => row.Undercut is not null && !row.Ignored);
+        var undercut = current.Rows.Count(row => row.Undercut is { Why: not UndercutWhy.RoomAbove } && !row.Ignored);
+        var raise = current.Rows.Count(row => row.Undercut is { Why: UndercutWhy.RoomAbove } && !row.Ignored);
 
-        if (undercut > 0)
+        if (undercut + raise > 0)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Palette.Bad, $"{undercut} to reprice.");
+            ImGui.TextColored(
+                Palette.Bad,
+                (undercut, raise) switch
+                {
+                    (_, 0) => $"{undercut} to reprice.",
+                    (0, _) => $"{raise} to raise.",
+                    _ => $"{undercut} to reprice, {raise} to raise.",
+                });
 
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(
-                    "Listings with somebody cheaper in front of them, or priced where nobody is buying,\n"
-                    + "not counting the ones you said to leave alone. Open the retainer and the column\n"
-                    + "beside its sell list does the rest.");
+                    "Listings with somebody cheaper in front of them, priced where nobody is buying,\n"
+                    + "or so far under the next listing that gil is left behind, not counting the ones\n"
+                    + "you said to leave alone. Open the retainer and the column beside its sell list\n"
+                    + "does the rest.");
             }
         }
 
@@ -342,7 +354,7 @@ internal sealed class SellingTab
             Cell.Right(Palette.Good, "-");
 
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Nothing is listed below yours, and it is priced where things sell.");
+                ImGui.SetTooltip("Nothing is listed below yours, it is priced where things sell, and the next\nlisting is close enough that raising would earn nothing worth the bother.");
 
             ImGui.PopID();
             return;
@@ -382,17 +394,30 @@ internal sealed class SellingTab
         ImGui.SameLine();
         Cell.Right(
             row.Ignored ? Palette.Dim : Palette.Bad,
-            (plan.Why == UndercutWhy.NobodyPays ? "~" : "") + $"{plan.Target:N0}"
+            plan.Why switch
+            {
+                UndercutWhy.NobodyPays => $"~{plan.Target:N0}",
+                UndercutWhy.RoomAbove => $"^{plan.Target:N0}",
+                _ => $"{plan.Target:N0}",
+            }
             + (row.IsHq && plan.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                (plan.Why == UndercutWhy.NobodyPays
-                    ? $"Nobody is paying this, cheapest on the board or not: what actually sells goes for\n"
-                      + $"about {plan.Below:N0}. Asking {plan.Target:N0} puts you {config.UndercutBy:N0} under that."
-                    : $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
-                      + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it.")
+                plan.Why switch
+                {
+                    UndercutWhy.NobodyPays =>
+                        $"Nobody is paying this, cheapest on the board or not: what actually sells goes for\n"
+                        + $"about {plan.Below:N0}. Asking {plan.Target:N0} puts you {config.UndercutBy:N0} under that.",
+                    UndercutWhy.RoomAbove =>
+                        $"Nothing is under yours and the next listing sits at {plan.Below:N0}. Asking {plan.Target:N0}\n"
+                        + $"keeps you the cheapest and is {plan.Target - row.Reading.Mine:N0} more a unit, and recent sales\n"
+                        + "say somebody pays up there.",
+                    _ =>
+                        $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
+                        + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it.",
+                }
                 + (row.IsHq && plan.Why == UndercutWhy.NobodyPays
                     ? "\n\nThis listing is HQ and recent sales are not split by quality, so what people\n"
                       + "pay may be for NQ. Check before taking this number."

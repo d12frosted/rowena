@@ -13,8 +13,9 @@ namespace Rowena.UI;
 /// <remarks>
 /// The Selling tab says what wants repricing; this is where repricing happens, so the two
 /// should not be two windows apart. It follows the sell list around, one row per slot in the
-/// list's own order, and each row that is undercut has the button that opens the game's price
-/// dialog on it with the undercut price filled in. The dialog's confirm is still the game's.
+/// list's own order, and each row that wants a new price, under somebody or with room to
+/// raise, has the button that opens the game's price dialog on it with that price filled in.
+/// The dialog's confirm is still the game's.
 ///
 /// Rows are the slots as the retainer was last read, which is this visit: the reader runs
 /// whenever a retainer is open, so by the time the list is on screen the slots are current.
@@ -75,6 +76,7 @@ internal sealed class RetainerOverlay : Window
             .ToArray();
 
         var undercut = 0;
+        var raise = 0;
 
         if (!ImGui.BeginTable("overlay", 3, ImGuiTableFlags.RowBg))
             return;
@@ -96,18 +98,18 @@ internal sealed class RetainerOverlay : Window
             Cell.Right(Palette.Dim, $"{slot.UnitPrice:N0}");
 
             ImGui.TableNextColumn();
-            DrawUndercut(slot, index, ref undercut);
+            DrawUndercut(slot, index, ref undercut, ref raise);
 
             ImGui.PopID();
         }
 
         ImGui.EndTable();
 
-        DrawFooter(slots, undercut);
+        DrawFooter(slots, undercut, raise);
     }
 
     /// <summary>The tally, the run-everything button, and the run's progress while it goes.</summary>
-    private void DrawFooter((StoredSlot Slot, int Index)[] slots, int undercut)
+    private void DrawFooter((StoredSlot Slot, int Index)[] slots, int undercut, int raise)
     {
         if (sellFill.Running is { } running)
         {
@@ -121,10 +123,16 @@ internal sealed class RetainerOverlay : Window
         }
 
         ImGui.TextColored(
-            undercut == 0 ? Palette.Good : Palette.Bad,
-            undercut == 0 ? "Nothing wants repricing." : $"{undercut} to reprice.");
+            undercut + raise == 0 ? Palette.Good : Palette.Bad,
+            (undercut, raise) switch
+            {
+                (0, 0) => "Nothing wants repricing.",
+                (_, 0) => $"{undercut} to reprice.",
+                (0, _) => $"{raise} to raise.",
+                _ => $"{undercut} to reprice, {raise} to raise.",
+            });
 
-        if (undercut > 0)
+        if (undercut + raise > 0)
         {
             ImGui.SameLine();
 
@@ -141,8 +149,8 @@ internal sealed class RetainerOverlay : Window
             {
                 ImGui.SetTooltip(
                     "Reprices every red row above, one after another, through the game's own windows:\n"
-                    + "the ones somebody is under, and the ones nobody is paying. Ignored items are\n"
-                    + "skipped.");
+                    + "the ones somebody is under, the ones nobody is paying, and the ones with room to\n"
+                    + "raise. Ignored items are skipped.");
             }
         }
 
@@ -158,7 +166,7 @@ internal sealed class RetainerOverlay : Window
             ImGui.SetTooltip("Refetches the books these listings sit in. The floor from an hour ago is not a floor.");
     }
 
-    private void DrawUndercut(StoredSlot slot, int index, ref int undercut)
+    private void DrawUndercut(StoredSlot slot, int index, ref int undercut, ref int raise)
     {
         var plan = undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq);
         var ignored = undercutting.Ignored(slot.ItemId);
@@ -170,11 +178,23 @@ internal sealed class RetainerOverlay : Window
         }
 
         if (!ignored)
-            undercut++;
+        {
+            if (wanted.Why == UndercutWhy.RoomAbove)
+                raise++;
+            else
+                undercut++;
+        }
 
         ImGui.BeginDisabled(sellFill.Running is not null);
 
-        if (ImGui.SmallButton(wanted.Why == UndercutWhy.NobodyPays ? "reprice" : "undercut"))
+        var pressed = ImGui.SmallButton(wanted.Why switch
+        {
+            UndercutWhy.NobodyPays => "reprice",
+            UndercutWhy.RoomAbove => "raise",
+            _ => "undercut",
+        });
+
+        if (pressed)
             sellFill.Reprice(index, slot.ItemId, wanted.Target);
 
         ImGui.EndDisabled();
@@ -184,11 +204,18 @@ internal sealed class RetainerOverlay : Window
             ImGui.SetTooltip(
                 $"Reprices this listing to {wanted.Target:N0} through the game's own price dialog"
                 + (config.UndercutConfirms ? ".\n" : ", and leaves it for you to confirm.\n")
-                + (wanted.Why == UndercutWhy.NobodyPays
-                    ? $"Nobody is paying {slot.UnitPrice:N0}"
-                      + (wanted.UnitsAhead > 0 ? $", nor the {wanted.UnitsAhead:N0} units listed under it" : ", cheapest on the board or not")
-                      + $": what actually sells goes for about {wanted.Below:N0}, so that is what this sits under."
-                    : $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}.")
+                + wanted.Why switch
+                {
+                    UndercutWhy.NobodyPays =>
+                        $"Nobody is paying {slot.UnitPrice:N0}"
+                        + (wanted.UnitsAhead > 0 ? $", nor the {wanted.UnitsAhead:N0} units listed under it" : ", cheapest on the board or not")
+                        + $": what actually sells goes for about {wanted.Below:N0}, so that is what this sits under.",
+                    UndercutWhy.RoomAbove =>
+                        $"Nothing is under yours and the next listing sits at {wanted.Below:N0}: asking {wanted.Target:N0}\n"
+                        + $"keeps you the cheapest and is {wanted.Target - slot.UnitPrice:N0} more a unit, and recent sales say\n"
+                        + "somebody pays up there.",
+                    _ => $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}.",
+                }
                 + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays
                     ? "\n\nHQ: recent sales are not split by quality, so what people pay may be for NQ."
                     : "")
@@ -198,7 +225,12 @@ internal sealed class RetainerOverlay : Window
         ImGui.SameLine();
         Cell.Right(
             ignored ? Palette.Dim : Palette.Bad,
-            (wanted.Why == UndercutWhy.NobodyPays ? $"sells ~{wanted.Below:N0}" : $"{wanted.Below:N0}")
+            wanted.Why switch
+            {
+                UndercutWhy.NobodyPays => $"sells ~{wanted.Below:N0}",
+                UndercutWhy.RoomAbove => $"next {wanted.Below:N0}",
+                _ => $"{wanted.Below:N0}",
+            }
             + $" -> {wanted.Target:N0}" + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
     }
 }

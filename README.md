@@ -255,7 +255,11 @@ a tab per question:
 
   Room to raise is measured against the next listing rather than against past sales. A
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
-  history, and raising it earns four gil.
+  history, and raising it earns four gil. Where the room is real, big enough to be worth
+  the bother and with recent sales saying somebody pays up there, the row gets a raise
+  of its own: the next listing less the margin, filled in through the same price dialog
+  as any undercut. Overcutting yourself is the undercutting mistake in the other
+  direction, and it gets the same treatment.
 
   Sales that happened while I was offline are worked out rather than missed. The game
   announces a sale in chat only while you are logged in to hear it, so the rest come from the

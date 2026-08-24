@@ -11,7 +11,7 @@ namespace Rowena.Market;
 /// </remarks>
 internal sealed class Undercutting(Boards boards, Configuration config, Action save)
 {
-    /// <summary>What I would have to ask to be cheapest, or null when I already am.</summary>
+    /// <summary>The price this listing wants to be at, or null when it is already right: under whoever is in front, at what people pay, or up under the next listing when there is real room.</summary>
     public UndercutPlan? Plan(uint itemId, long mine, bool hq = false) =>
         Undercut.Of(mine, boards.Selling(itemId), config.UndercutBy, hq);
 

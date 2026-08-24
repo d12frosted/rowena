@@ -113,6 +113,95 @@ public class UndercutNobodyPaysTests
     }
 }
 
+public class UndercutRoomAboveTests
+{
+    private static OrderBook Book(long[] sales, params (long Price, int Units)[] listings) =>
+        OrderBook.Create(1, listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")), recentSales: sales);
+
+    [Fact]
+    public void CheapestWithRealRoomAboveIsRaised()
+    {
+        // Nothing under me, the next listing at double my ask, and sales saying people pay
+        // up there. Sitting at 100 is money left behind, not a position.
+        var plan = Undercut.Of(100, Book([190, 195, 200], (100, 1), (200, 3)), 5);
+
+        Assert.NotNull(plan);
+        Assert.Equal(UndercutWhy.RoomAbove, plan.Value.Why);
+        Assert.Equal(200, plan.Value.Below);
+        Assert.Equal(195, plan.Value.Target);
+        Assert.Equal(0, plan.Value.UnitsAhead);
+    }
+
+    [Fact]
+    public void ANarrowGapIsNotWorthTheBother()
+    {
+        // Eight gil of room is churn, not money. The bar is the diagnosis's own.
+        Assert.Null(Undercut.Of(100, Book([100, 105, 108], (100, 1), (108, 3)), 5));
+    }
+
+    [Fact]
+    public void RoomNobodyPaysUpInIsSomebodyElsesFantasy()
+    {
+        // The next listing at 100,000 over sales around 120. The gap is not on the table,
+        // it is somebody parking an item.
+        Assert.Null(Undercut.Of(100, Book([110, 120, 130], (100, 1), (100_000, 3)), 5));
+    }
+
+    [Fact]
+    public void NoSalesMeansNoRaise()
+    {
+        // Without a sale on record, nothing says anybody pays what the next listing asks.
+        Assert.Null(Undercut.Of(100, Book([], (100, 1), (200, 3)), 5));
+    }
+
+    [Fact]
+    public void ATieAtMyPriceDoesNotHideTheRoom()
+    {
+        // Listings at my price are indistinguishable from mine, and my own stacks tying each
+        // other is the common case. The ceiling is the next listing strictly above.
+        var plan = Undercut.Of(100, Book([190, 195, 200], (100, 4), (200, 3)), 5);
+
+        Assert.Equal(UndercutWhy.RoomAbove, plan!.Value.Why);
+        Assert.Equal(195, plan.Value.Target);
+    }
+
+    [Fact]
+    public void NobodyPayingWinsOverTheRoomAbove()
+    {
+        // Cheapest with room above, but my own ask is already past what people pay. The move
+        // is down to where things sell, not further up the wall.
+        var plan = Undercut.Of(1_000, Book([400, 400, 410, 420, 430], (1_000, 1), (5_000, 2)), 5);
+
+        Assert.Equal(UndercutWhy.NobodyPays, plan!.Value.Why);
+        Assert.Equal(405, plan.Value.Target);
+    }
+
+    [Fact]
+    public void TheCeilingIsTheNextListingOfAnyQuality()
+    {
+        // My HQ is cheapest outright. Raising past the NQ above me would hand every buyer
+        // who does not care about quality a cheaper listing than mine, so it is the ceiling.
+        var book = OrderBook.Create(
+            1,
+            [new Listing(100, 1, "Light", IsHq: true), new Listing(200, 5, "Light"), new Listing(500, 1, "Light", IsHq: true)],
+            recentSales: [190, 195, 200]);
+
+        var plan = Undercut.Of(100, book, 5, hq: true);
+
+        Assert.Equal(UndercutWhy.RoomAbove, plan!.Value.Why);
+        Assert.Equal(200, plan.Value.Below);
+        Assert.Equal(195, plan.Value.Target);
+    }
+
+    [Fact]
+    public void AMarginThatEatsTheRoomMeansNoMove()
+    {
+        // The room is real by the bar, but the margin lands the target under where I already
+        // am, and a raise that lowers the price is not a raise.
+        Assert.Null(Undercut.Of(100, Book([110, 112, 114], (100, 1), (115, 3)), 20));
+    }
+}
+
 public class UndercutQualityTests
 {
     private static OrderBook Book(params Listing[] listings) => OrderBook.Create(1, listings);
