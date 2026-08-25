@@ -136,6 +136,23 @@ internal sealed class MarketCache : IDisposable
     public bool IsStale(string scope, uint itemId) => IsStale(scope, itemId, Ttl);
 
     /// <summary>
+    /// When this item's book was last stored, or null if it never was.
+    /// </summary>
+    /// <remarks>
+    /// The time it was fetched rather than the time the source says it was uploaded. Those are
+    /// two different ages and both are real, but this is the one that answers "has my refresh
+    /// reached this row yet", which is the question a row is asked while a fetch is running.
+    /// </remarks>
+    public DateTimeOffset? FetchedAt(string scope, uint itemId) =>
+        books.TryGetValue((scope, itemId), out var snapshot) ? snapshot.Fetched : null;
+
+    /// <summary>How old this item's book is, on the shelf life the refetch itself runs on.</summary>
+    public Freshness FreshnessOf(string? scope, uint itemId) =>
+        string.IsNullOrWhiteSpace(scope)
+            ? new Freshness(Standing.Unknown, null)
+            : Freshness.Of(FetchedAt(scope, itemId), DateTimeOffset.UtcNow, Ttl);
+
+    /// <summary>
     /// Whether an item's book is older than the caller is willing to accept.
     /// </summary>
     /// <remarks>

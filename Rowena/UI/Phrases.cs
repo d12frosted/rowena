@@ -38,12 +38,20 @@ internal static class Phrases
         _ => $"{gil:N0}",
     };
 
-    /// <summary>An age, at the precision the age itself deserves.</summary>
+    /// <summary>
+    /// An age, at the precision the age itself deserves.
+    /// </summary>
+    /// <remarks>
+    /// Days at the top end because a listing can sit for a week without anybody asking the board
+    /// about it again, and "163 h" is a number you have to do arithmetic on before it means
+    /// anything.
+    /// </remarks>
     public static string Ago(TimeSpan span) => span switch
     {
         { TotalMinutes: < 1 } => "seconds",
         { TotalHours: < 1 } => $"{span.TotalMinutes:F0} min",
-        _ => $"{span.TotalHours:F0} h",
+        { TotalDays: < 1 } => $"{span.TotalHours:F0} h",
+        _ => $"{span.TotalDays:F0} d",
     };
 
     /// <summary>

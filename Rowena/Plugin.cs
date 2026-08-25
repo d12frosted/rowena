@@ -175,9 +175,7 @@ public sealed class Plugin : IDalamudPlugin
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
             gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, overviewTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
-        windows.AddWindow(new RetainerOverlay(
-            sellFill, undercutting, config, cells,
-            (itemId, _) => market.RefreshInBackground(scope.Selling, [itemId], true, FetchPriority.Interactive)));
+        windows.AddWindow(new RetainerOverlay(sellFill, undercutting, config, cells, market, scope));
 
         var headlines = new Headlines(trades, boards, balances, config);
 

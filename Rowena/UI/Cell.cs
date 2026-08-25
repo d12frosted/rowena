@@ -1,5 +1,6 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Rowena.Core.Market;
 
 namespace Rowena.UI;
 
@@ -64,6 +65,36 @@ internal static class Cell
             };
 
         Right(colour, Phrases.Absorb(days));
+    }
+
+    /// <summary>
+    /// How old the board reading behind a row is, and whether it can still be acted on.
+    /// </summary>
+    /// <remarks>
+    /// Muted while the answer is good for something, since at rest it is only there to be
+    /// glanced past. Warn once it is past its shelf life, or was never fetched at all: those
+    /// mean the same thing for the verdict beside it, that the verdict was reached on something
+    /// other than the board as it stands, and that wants a person before it wants a plan.
+    ///
+    /// Not on the Hot scale. That scale belongs to how long a sale takes and to nothing else;
+    /// this is two states and a number, not a gradient.
+    /// </remarks>
+    public static void Age(Freshness freshness)
+    {
+        Right(
+            freshness.Standing == Standing.Fresh ? Style.Muted : Style.Warn,
+            freshness.Age is { } age ? Phrases.Ago(age) : "none");
+
+        Style.Explain(freshness.Standing switch
+        {
+            Standing.Unknown =>
+                "Nobody has asked the board about this one yet. The column beside it is not saying\n"
+                + "there is nothing to do; it is saying nothing at all. Refresh and it will answer.",
+            Standing.Stale =>
+                $"Read {Phrases.Ago(freshness.Age!.Value)} ago, which is past the shelf life set in\n"
+                + "settings. Whatever the row beside it says was true then, not now.",
+            _ => $"Read {Phrases.Ago(freshness.Age!.Value)} ago.",
+        });
     }
 
     /// <summary>

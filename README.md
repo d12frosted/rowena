@@ -253,6 +253,16 @@ a tab per question:
   does not appear, rather than sending a click to whatever is open instead. Confirming can be
   left to you in settings.
 
+  Every row says how old the board reading behind it is, because the verdict beside it is
+  only worth that number. Past the shelf life the age turns amber, and a listing nobody has
+  looked up yet reads `none` rather than the same quiet dash a correctly priced one gets:
+  those two were indistinguishable, so the column had to be checked against the board by
+  hand, which is the work it exists to save. Refreshing counts the listings back as their
+  answers land and says so when it is done, rather than leaving you to guess whether a press
+  went anywhere. The count is of these listings, not of the fetcher's queue: a press made
+  during a sweep waits for the sweep, and a count off the queue would say nothing about
+  whether these twenty are current.
+
   Room to raise is measured against the next listing rather than against past sales. A
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
   history, and raising it earns four gil. Where the room is real, big enough to be worth
