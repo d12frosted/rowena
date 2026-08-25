@@ -25,20 +25,49 @@ namespace Rowena.UI;
 /// </remarks>
 internal sealed class RetainerOverlay : Window
 {
+    private static readonly string?[] Help =
+    [
+        null,
+        "What you are asking per unit, as the game has it.",
+        "How long ago the board behind this row was read. Everything to the right of it is only\n"
+        + "as good as this number, and a listing nobody has looked up yet says so rather than\n"
+        + "quietly reading as settled.",
+        "What the row wants doing, and what it would be cut or raised to.",
+    ];
+
+    /// <summary>How long the result of a refresh stays on screen once the refresh is over.</summary>
+    /// <remarks>
+    /// Long enough to be read on the way back to the retainer's list, short enough that it is
+    /// gone before it becomes another number to check. The ages in the column are the lasting
+    /// record; this is only the press closing its loop.
+    /// </remarks>
+    private static readonly TimeSpan Lingers = TimeSpan.FromSeconds(6);
+
     private readonly RetainerSellFill sellFill;
     private readonly Undercutting undercutting;
     private readonly Configuration config;
     private readonly ItemCells cells;
-    private readonly Action<uint, long> fetch;
+    private readonly MarketCache market;
+    private readonly PricingScope scope;
 
     private IDisposable? shell;
+
+    // The press being waited on: what was asked about, and when. Progress is counted from the
+    // listings themselves rather than from the fetcher's queue, because the queue is shared.
+    // "fetching 8 of 412" while a sweep runs says nothing about whether these twenty are done,
+    // and whether these twenty are done is the entire question.
+    private uint[] asked = [];
+    private DateTimeOffset askedAt;
+    private (int Back, int Of, DateTimeOffset At)? settled;
+    private string? watching;
 
     public RetainerOverlay(
         RetainerSellFill sellFill,
         Undercutting undercutting,
         Configuration config,
         ItemCells cells,
-        Action<uint, long> fetch)
+        MarketCache market,
+        PricingScope scope)
         : base("Rowena##retainer", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove
             | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize)
     {
@@ -46,7 +75,8 @@ internal sealed class RetainerOverlay : Window
         this.undercutting = undercutting;
         this.config = config;
         this.cells = cells;
-        this.fetch = fetch;
+        this.market = market;
+        this.scope = scope;
 
         RespectCloseHotkey = false;
         IsOpen = true;
@@ -78,6 +108,15 @@ internal sealed class RetainerOverlay : Window
         // column this is - and which retainer it is reading.
         Style.Masthead("Rowena", retainer.Name);
 
+        // A different retainer is a different question, and the last one's refresh is not this
+        // one's news. Walking between them otherwise left a count about twenty other listings.
+        if (watching != retainer.Name)
+        {
+            watching = retainer.Name;
+            asked = [];
+            settled = null;
+        }
+
         // In the list's own order, so the rows line up with the game's. Anything the list does
         // not show (it should show everything) goes last rather than missing.
         var order = sellFill.ListOrder();
@@ -92,18 +131,23 @@ internal sealed class RetainerOverlay : Window
         var undercut = 0;
         var raise = 0;
 
-        if (!ImGui.BeginTable("overlay", 3, ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable("overlay", 4, ImGuiTableFlags.RowBg))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, Style.Px(220));
         ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("age", ImGuiTableColumnFlags.WidthFixed, Style.Px(56));
         ImGui.TableSetupColumn("under -> yours", ImGuiTableColumnFlags.WidthFixed, Style.Px(250));
-        ImGui.TableHeadersRow();
+        Cell.Headers(Help);
 
         foreach (var (slot, index) in slots)
         {
             ImGui.TableNextRow();
             ImGui.PushID(index);
+
+            // Read once and used twice: the column says it, and the verdict beside it is
+            // downgraded from a green dash to a shrug when there is nothing behind it.
+            var freshness = market.FreshnessOf(scope.Selling, slot.ItemId);
 
             ImGui.TableNextColumn();
             cells.Draw(cells.Name(slot.ItemId), slot.ItemId);
@@ -112,7 +156,10 @@ internal sealed class RetainerOverlay : Window
             Cell.Right(Style.Muted, $"{slot.UnitPrice:N0}");
 
             ImGui.TableNextColumn();
-            DrawUndercut(slot, index, ref undercut, ref raise);
+            Cell.Age(freshness);
+
+            ImGui.TableNextColumn();
+            DrawUndercut(slot, index, freshness.Standing, ref undercut, ref raise);
 
             ImGui.PopID();
         }
@@ -167,20 +214,103 @@ internal sealed class RetainerOverlay : Window
         ImGui.SameLine();
 
         if (Style.Quiet("refresh", "Refetches the books these listings sit in. The floor from an hour ago is not a floor."))
-        {
-            foreach (var (slot, _) in slots)
-                fetch(slot.ItemId, slot.UnitPrice);
-        }
+            Ask(slots);
+
+        DrawRefreshState();
     }
 
-    private void DrawUndercut(StoredSlot slot, int index, ref int undercut, ref int raise)
+    /// <summary>Asks the board about every listing on this retainer, and starts watching for it.</summary>
+    private void Ask((StoredSlot Slot, int Index)[] slots)
+    {
+        var ids = slots.Select(entry => entry.Slot.ItemId).Distinct().ToArray();
+
+        settled = null;
+        askedAt = DateTimeOffset.UtcNow;
+        asked = ids;
+
+        market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive);
+    }
+
+    /// <summary>
+    /// Whether the last press is still going, and what it came to.
+    /// </summary>
+    /// <remarks>
+    /// Counted from the listings rather than from the fetcher, because the fetcher's queue is
+    /// shared with the sweeps and a count off it answers a question nobody asked. A press is
+    /// over when everything it asked about has been stored, or when the fetcher has gone quiet
+    /// without that happening: a batch that fails every attempt is given up on, and its ids
+    /// never land, so waiting on them is waiting forever.
+    ///
+    /// Which rows have landed is the age column's to say and is not said again here.
+    /// </remarks>
+    private void DrawRefreshState()
+    {
+        if (asked.Length > 0)
+        {
+            var back = Back();
+
+            if (back < asked.Length && market.Busy)
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(Style.Muted, $"fetching {back} of {asked.Length}");
+                Style.Explain(
+                    "Asking Universalis, a few listings a request, and the ages above fill in as the\n"
+                    + "answers land. A press made while a sweep is running waits for the sweep first.");
+
+                return;
+            }
+
+            settled = (back, asked.Length, DateTimeOffset.UtcNow);
+            asked = [];
+        }
+
+        if (settled is not { } run || DateTimeOffset.UtcNow - run.At >= Lingers)
+            return;
+
+        ImGui.SameLine();
+
+        if (run.Back == run.Of)
+        {
+            ImGui.TextColored(Style.Good, "up to date");
+            Style.Explain("Every listing here was read again just now.");
+
+            return;
+        }
+
+        // The reason goes in the tooltip rather than on the line. This window is pinned over
+        // the game while a retainer is open, and a red sentence living there is worse than the
+        // count, which is the part that has to be read.
+        ImGui.TextColored(Style.Warn, $"{run.Back} of {run.Of} came back");
+        Style.Explain(
+            (market.LastError is { } error ? $"{error}\n\n" : "")
+            + "The rest were given up on, so their ages above have not moved and the verdicts\n"
+            + "beside them are the ones they already had. Refresh to have another go.");
+    }
+
+    /// <summary>How many of the listings asked about have been stored since the press.</summary>
+    private int Back()
+    {
+        if (scope.Selling is not { Length: > 0 } selling)
+            return 0;
+
+        return asked.Count(id => market.FetchedAt(selling, id) is { } at && at >= askedAt);
+    }
+
+    private void DrawUndercut(StoredSlot slot, int index, Standing standing, ref int undercut, ref int raise)
     {
         var plan = undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq);
         var ignored = undercutting.Ignored(slot.ItemId);
 
         if (plan is not { } wanted)
         {
-            Cell.Right(Style.Good, "-");
+            // Green is a verdict, and there is none to give on a listing whose board has never
+            // been read: the same dash meant "correctly priced" and "no idea", which is how a
+            // column of dashes ends up being checked by hand anyway.
+            Cell.Right(standing == Standing.Unknown ? Style.Muted : Style.Good, "-");
+
+            if (standing == Standing.Unknown)
+                Style.Explain("Nothing has been read for this one, so there is nothing to say about it yet.");
+
             return;
         }
 
