@@ -86,7 +86,7 @@ internal sealed class HoardTab
 
         return new Note(
             Note.Waiting,
-            Palette.Plain,
+            Style.Plain,
             $"{current.Worth:N0} gil",
             "is sitting in your bags",
             $"{current.Rows.Length} stacks worth doing something with. "
@@ -134,29 +134,28 @@ internal sealed class HoardTab
     {
         var current = model.Current;
 
-        ImGui.TextUnformatted($"What you are holding, and what to do with it on {selling}");
+        Style.Muffled($"What you are holding, and what to do with it on {selling}.");
         DrawReach();
 
         if (current.Rows.Length == 0)
         {
-            ImGui.TextColored(
-                Palette.Dim,
+            Style.Nothing(
                 current.Unpriced > 0
-                    ? $"\n    {current.Unpriced} stacks, none of them priced yet. The summary sweep covers most\n"
-                      + "    of the game; press below to price what it has not."
-                    : "\n    Nothing in your bags worth selling, which is a tidier answer than most.");
+                    ? $"{current.Unpriced} stacks, none of them priced yet; the summary sweep covers most\n"
+                      + "of the game, and the rest are asked for as they are found"
+                    : "nothing in your bags worth selling, which is a tidier answer than most");
         }
         else
         {
             ImGui.TextColored(
-                Palette.Good,
+                Style.Good,
                 $"    {current.Worth:N0} gil across {current.Rows.Length} stacks, best counter each.");
         }
 
         if (current.Unpriced > 0)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"    {current.Unpriced} stacks are still being priced. They are asked for as they are found.");
         }
 
@@ -173,12 +172,12 @@ internal sealed class HoardTab
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("held", ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("board / vendor", ImGuiTableColumnFlags.WidthFixed, 130);
-        ImGui.TableSetupColumn("worth", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, 80);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 90);
+        ImGui.TableSetupColumn("held", ImGuiTableColumnFlags.WidthFixed, Style.Px(60));
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("board / vendor", ImGuiTableColumnFlags.WidthFixed, Style.Px(130));
+        ImGui.TableSetupColumn("worth", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
+        ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
         Cell.Headers(Help);
 
         foreach (var row in current.Rows)
@@ -191,21 +190,21 @@ internal sealed class HoardTab
             cells.Draw(row.Name, row.ItemId);
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, $"{row.Quantity:N0}");
+            Cell.Right(Style.Muted, $"{row.Quantity:N0}");
 
             ImGui.TableNextColumn();
             DrawWhere(row);
 
             ImGui.TableNextColumn();
             Cell.Right(
-                verdict.Call == HoardCall.Vendor ? Palette.Plain : Palette.Dim,
+                verdict.Call == HoardCall.Vendor ? Style.Plain : Style.Muted,
                 $"{verdict.EachOnBoard:N0} / {verdict.EachAtVendor:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Good, $"{verdict.Worth:N0}");
+            Cell.Right(Style.Good, $"{verdict.Worth:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(verdict.Slow ? Palette.Bad : Palette.Dim, Phrases.Absorb(verdict.DaysToSell));
+            Cell.Right(verdict.Slow ? Style.Bad : Style.Muted, Phrases.Absorb(verdict.DaysToSell));
 
             ImGui.TableNextColumn();
             DrawCall(verdict);
@@ -219,37 +218,35 @@ internal sealed class HoardTab
         var (colour, label, why) = verdict.Call switch
         {
             HoardCall.List when verdict.Slow => (
-                Palette.Plain, "list some",
+                Style.Plain, "list some",
                 $"The board pays {verdict.EachOnBoard:N0} against the vendor's {verdict.EachAtVendor:N0}, but it\n"
                 + "would take longer than your selling horizon to absorb this many. List what it\n"
                 + "will take and the rest is a storage decision rather than a pricing one."),
 
             HoardCall.List => (
-                Palette.Good, "list it",
+                Style.Good, "list it",
                 $"{verdict.EachOnBoard:N0} each after the city's cut, against {verdict.EachAtVendor:N0} from a vendor,\n"
                 + "and the board gets through this many comfortably."),
 
             HoardCall.Vendor => (
-                Palette.Plain, "vendor it",
+                Style.Plain, "vendor it",
                 $"A vendor pays {verdict.EachAtVendor:N0} and the board would leave you {verdict.EachOnBoard:N0}.\n"
                 + "No listing fee, no waiting, and nobody undercuts a vendor."),
 
             HoardCall.Keep => (
-                Palette.Dim, "keep it",
+                Style.Muted, "keep it",
                 "Wanted for something the craft table thinks is worth making, so this is not\n"
                 + "surplus. Nothing here will offer to sell the materials for the thing it just\n"
                 + "recommended."),
 
             _ => (
-                Palette.Dim, "nothing doing",
+                Style.Muted, "nothing doing",
                 "Nobody pays anything for this: no vendor price, and either nothing listed or\n"
                 + "nothing selling. It is a bag slot rather than an asset."),
         };
 
         ImGui.TextColored(colour, label);
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(why);
+        Style.Explain(why);
     }
 
     /// <summary>
@@ -266,7 +263,7 @@ internal sealed class HoardTab
             return;
 
         ImGui.TextColored(
-            Palette.Good,
+            Style.Good,
             $"    Best use of {plan.Count} free {(plan.Count == 1 ? "slot" : "slots")}: "
             + $"{RetainerSlots.Earns(plan):N0} gil over {config.SellingHorizon()} days, "
             + $"starting with {cells.Name(plan[0].ItemId)}.");
@@ -301,7 +298,7 @@ internal sealed class HoardTab
         if (known == 0)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 "    Bags and saddlebags only. Open a retainer once and what it holds is remembered\n"
                 + "    after that, which is the only way any of this is readable.");
 
@@ -311,7 +308,7 @@ internal sealed class HoardTab
         var age = oldest is { } at ? $", the oldest looked at {Phrases.Ago(DateTimeOffset.UtcNow - at)} ago" : "";
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             $"    Bags, saddlebags and {known} {(known == 1 ? "retainer" : "retainers")}{age}.");
     }
 
@@ -326,14 +323,14 @@ internal sealed class HoardTab
     {
         if (row.InRetainers == 0)
         {
-            ImGui.TextColored(Palette.Dim, "bags");
+            ImGui.TextColored(Style.Muted, "bags");
             return;
         }
 
         var holders = stock.Where(row.ItemId);
 
         ImGui.TextColored(
-            Palette.Plain,
+            Style.Plain,
             row.InBags > 0
                 ? $"{row.InBags} here, {row.InRetainers} out"
                 : holders.Count == 1 ? holders[0].Retainer : $"{holders.Count} retainers");

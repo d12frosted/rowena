@@ -176,7 +176,7 @@ internal sealed class GatherTab
 
         return new Note(
             Note.Expiring,
-            Palette.Good,
+            Style.Good,
             $"{soonest.OpenFor:F0} min",
             open.Length == 1
                 ? $"until {soonest.Name} shuts"
@@ -210,7 +210,7 @@ internal sealed class GatherTab
 
     public void Draw(string selling)
     {
-        ImGui.TextUnformatted("Worth gathering: what the board will take in a day, and what it pays");
+        Style.Muffled("Worth gathering: what the board will take in a day, and what it pays.");
 
         DrawSweep(selling);
         DrawFilters();
@@ -223,35 +223,35 @@ internal sealed class GatherTab
 
         if (scan.Running)
         {
-            ImGui.TextColored(Palette.Dim, $"  {scan.Detail}");
+            ImGui.TextColored(Style.Muted, $"  {scan.Detail}");
             return;
         }
 
-        if (ImGui.Button(scan.ReadyAt is null ? "Survey" : "Survey again"))
+        if (Style.Commit(scan.ReadyAt is null ? "survey" : "survey again"))
             sweep.Start(selling, config.GatherShortlist, config.SweepAge());
 
         ImGui.SameLine();
 
         if (scan.State == GatherSweep.Phase.Failed)
         {
-            ImGui.TextColored(Palette.Bad, scan.Detail);
+            ImGui.TextColored(Style.Bad, scan.Detail);
             return;
         }
 
         var age = scan.ReadyAt is { } at ? $"{Phrases.Ago(DateTimeOffset.UtcNow - at)} old, " : "";
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             scan.HasResults
                 ? $"  {age}{scan.Detail}"
-                : "  not surveyed yet. Seven hundred odd items, so this is seconds rather than minutes.");
+                : "  not surveyed yet; seven hundred odd items, so this is seconds rather than minutes");
     }
 
     private void DrawFilters()
     {
         var current = model.Current;
 
-        ImGui.SetNextItemWidth(140f);
+        ImGui.SetNextItemWidth(Style.Px(140f));
 
         if (ImGui.BeginCombo("##gather-job", config.GatherJob switch { 16 => "Miner", 17 => "Botanist", _ => "Either job" }))
         {
@@ -277,13 +277,10 @@ internal sealed class GatherTab
             model.Invalidate();
         }
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                $"Your miner is {gatherables.LevelOf(16)} and your botanist is {gatherables.LevelOf(17)}.\n"
-                + "Nodes above that are hidden rather than dimmed, since a list to go and gather\n"
-                + "from should be a list you can act on.");
-        }
+        Style.Explain(
+            $"Your miner is {gatherables.LevelOf(16)} and your botanist is {gatherables.LevelOf(17)}.\n"
+            + "Nodes above that are hidden rather than dimmed, since a list to go and gather\n"
+            + "from should be a list you can act on.");
 
         ImGui.SameLine();
 
@@ -312,7 +309,7 @@ internal sealed class GatherTab
             // Handed over rather than driven, the same division as the crafting list and
             // Artisan: this decides what is worth gathering, and the plugin that gathers does
             // the gathering.
-            if (ImGui.Button("Copy for GatherBuddy"))
+            if (Style.Row("copy for GatherBuddy"))
             {
                 // The auto-gather list rather than the gather window preset. The window preset
                 // is what the overlay shows; this is the one auto-gather works through, and it
@@ -327,28 +324,22 @@ internal sealed class GatherTab
                             : 0)));
             }
 
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    "One paste, as an auto-gather list.\n"
-                    + "\n"
-                    + "1. Press this.\n"
-                    + "2. Open GatherBuddy, Auto-Gather tab, and its list selector.\n"
-                    + "3. Press the clipboard button and give the list a name.\n"
-                    + "\n"
-                    + (current.Plan is null
-                        ? "Everything shown goes in, so filter first if you want less."
-                        : "The plan goes in with how many of each to gather, so the amounts come\n"
-                          + "across rather than staying in this table."));
-            }
+            Style.Explain(
+                "One paste, as an auto-gather list.\n"
+                + "\n"
+                + "1. Press this.\n"
+                + "2. Open GatherBuddy, Auto-Gather tab, and its list selector.\n"
+                + "3. Press the clipboard button and give the list a name.\n"
+                + "\n"
+                + (current.Plan is null
+                    ? "Everything shown goes in, so filter first if you want less."
+                    : "The plan goes in with how many of each to gather, so the amounts come\n"
+                      + "across rather than staying in this table."));
 
             ImGui.SameLine();
 
-            if (ImGui.Button("Copy names"))
+            if (Style.Quiet("copy names", "The same list as plain names, one per line, for anything else."))
                 ImGui.SetClipboardText(string.Join("\n", current.Rows.Select(row => row.Name)));
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("The same list as plain names, one per line, for anything else.");
         }
     }
 
@@ -371,7 +362,7 @@ internal sealed class GatherTab
     /// </remarks>
     private void DrawAim()
     {
-        ImGui.SetNextItemWidth(150f);
+        ImGui.SetNextItemWidth(Style.Px(150f));
 
         if (ImGui.BeginCombo("##gather-aim", Aims[(int)Aim].Name))
         {
@@ -383,15 +374,13 @@ internal sealed class GatherTab
                     model.Invalidate();
                 }
 
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(help);
+                Style.Explain(help);
             }
 
             ImGui.EndCombo();
         }
 
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(Aims[(int)Aim].Help);
+        Style.Explain(Aims[(int)Aim].Help);
     }
 
     private static readonly (GatherAim Aim, string Name, string Help)[] Aims =
@@ -411,7 +400,7 @@ internal sealed class GatherTab
 
     private void DrawSession()
     {
-        ImGui.SetNextItemWidth(130f);
+        ImGui.SetNextItemWidth(Style.Px(130f));
 
         var label = config.GatherSessionMinutes switch
         {
@@ -466,20 +455,18 @@ internal sealed class GatherTab
     {
         if (plan.Units == 0)
         {
-            ImGui.TextColored(
-                Palette.Bad,
-                "    Nothing worth the trip: no item here has a board that would take any of it.");
+            Style.Nothing("nothing worth the trip: no item here has a board that would take any of it");
             return;
         }
 
         ImGui.TextColored(
-            Palette.Good,
+            Style.Good,
             $"    {plan.Units:N0} items, about {plan.Worth:N0} gil, selling over {config.SellingHorizon()} days.");
 
         var spare = config.GatherSessionMinutes - plan.Minutes;
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             $"    {Rows(plan)} in the order to do them, across {plan.Minutes} of your {config.GatherSessionMinutes} minutes, "
             + (Measured
                 ? $"at the {PerHour} items an hour you actually gather. "
@@ -491,7 +478,7 @@ internal sealed class GatherTab
         if (plan.Timed > 0)
         {
             ImGui.TextColored(
-                Palette.Good,
+                Style.Good,
                 $"    {plan.Timed} of these are timed and their windows are open, or will be before you\n"
                 + "    are done. Take them first: a window is minutes, not hours.");
         }
@@ -499,7 +486,7 @@ internal sealed class GatherTab
         if (plan.Shut > 0)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"    {plan.Shut} timed items are shut for longer than this trip, so they are left out of it.\n"
                 + "    They are still in the ranking with the time until they come round.");
         }
@@ -515,13 +502,13 @@ internal sealed class GatherTab
         if (current.Rows.Length == 0)
         {
             if (sweep.Current.HasResults)
-                ImGui.TextColored(Palette.Dim, "    Nothing matches those filters.");
+                Style.Nothing("nothing matches those filters");
 
             return;
         }
 
         if (current.Hidden > 0)
-            ImGui.TextColored(Palette.Dim, $"    {current.Hidden} more hidden by the filters.");
+            ImGui.TextColored(Style.Muted, $"    {current.Hidden} more hidden by the filters.");
 
         if (current.Plan is { } plan)
             DrawPlan(plan);
@@ -534,14 +521,14 @@ internal sealed class GatherTab
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
 
         if (current.Plan is not null)
-            ImGui.TableSetupColumn("take", ImGuiTableColumnFlags.WidthFixed, 60);
+            ImGui.TableSetupColumn("take", ImGuiTableColumnFlags.WidthFixed, Style.Px(60));
 
-        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("each", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, 80);
-        ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("node", ImGuiTableColumnFlags.WidthFixed, 70);
-        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn("job", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("each", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("sales/day", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
+        ImGui.TableSetupColumn("gil/day", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("node", ImGuiTableColumnFlags.WidthFixed, Style.Px(70));
+        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
         Cell.Headers(current.Plan is null ? Help : PlannedHelp);
 
         foreach (var row in current.Rows)
@@ -554,23 +541,23 @@ internal sealed class GatherTab
             if (current.Plan is { } take)
             {
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Good, $"{take.Take[row.ItemId]:N0}");
+                Cell.Right(Style.Good, $"{take.Take[row.ItemId]:N0}");
             }
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(row.Reachable ? Palette.Dim : Palette.Bad, $"{row.Job} {row.Level}");
+            ImGui.TextColored(row.Reachable ? Style.Muted : Style.Warn, $"{row.Job} {row.Level}");
 
-            if (!row.Reachable && ImGui.IsItemHovered())
-                ImGui.SetTooltip("Above your level on that job.");
+            if (!row.Reachable)
+                Style.Explain("Above your level on that job.");
 
             ImGui.TableNextColumn();
             Cell.Right($"{row.Each:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, $"{row.SalesPerDay:F1}");
+            Cell.Right(Style.Muted, $"{row.SalesPerDay:F1}");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Good, $"{row.GilPerDay:N0}");
+            Cell.Right(Style.Good, $"{row.GilPerDay:N0}");
 
             ImGui.TableNextColumn();
             DrawWindow(row);
@@ -596,12 +583,12 @@ internal sealed class GatherTab
 
         if (mine == 0)
         {
-            ImGui.TextColored(Palette.Dim, "     -");
+            ImGui.TextColored(Style.Muted, "     -");
             return;
         }
 
         Cell.Right(
-            row.Backlogged ? Palette.Bad : Palette.Dim,
+            row.Backlogged ? Style.Bad : Style.Muted,
             row.Backlog is { } days ? $"{mine:N0} ({Phrases.Absorb(days)})" : $"{mine:N0} (never)");
 
         if (ImGui.IsItemHovered())
@@ -630,28 +617,22 @@ internal sealed class GatherTab
     {
         if (!row.Timed)
         {
-            ImGui.TextColored(Palette.Dim, "always");
+            ImGui.TextColored(Style.Muted, "always");
             return;
         }
 
         if (row.OpensIn <= 0)
         {
-            ImGui.TextColored(Palette.Good, $"{row.OpenFor:F0} min left");
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Open now. Go.");
+            ImGui.TextColored(Style.Good, $"{row.OpenFor:F0} min left");
+            Style.Explain("Open now. Go.");
 
             return;
         }
 
-        ImGui.TextColored(row.OpensIn <= 15 ? Palette.Plain : Palette.Dim, $"in {row.OpensIn:F0} min");
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                $"Shut. Comes round in {row.OpensIn:F0} minutes and stays for {row.WindowIs:F0}.\n"
-                + "Game hours, so a window is minutes rather than an afternoon.");
-        }
+        ImGui.TextColored(row.OpensIn <= 15 ? Style.Plain : Style.Muted, $"in {row.OpensIn:F0} min");
+        Style.Explain(
+            $"Shut. Comes round in {row.OpensIn:F0} minutes and stays for {row.WindowIs:F0}.\n"
+            + "Game hours, so a window is minutes rather than an afternoon.");
     }
 
     /// <summary>What the shortlist is worth against the books the cache holds now.</summary>

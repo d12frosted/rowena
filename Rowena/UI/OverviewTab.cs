@@ -54,10 +54,9 @@ internal sealed class OverviewTab(
 
         if (notes.Length == 0)
         {
-            ImGui.TextColored(
-                Palette.Dim,
-                "\n    Nothing to report yet. The other tabs fill this in as their prices arrive,\n"
-                + "    and the scans they rest on have to be run once each.");
+            Style.Nothing(
+                "nothing to report yet; the other tabs fill this in as their prices arrive,\n"
+                + "and the scans they rest on have to be run once each");
         }
         else
         {
@@ -91,8 +90,7 @@ internal sealed class OverviewTab(
 
         foreach (var band in notes.GroupBy(note => note.Band))
         {
-            ImGui.Spacing();
-            ImGui.TextColored(Palette.Dim, band.Key);
+            Style.Heading(band.Key);
 
             if (!ImGui.BeginTable($"overview-{band.Key}", 2, ImGuiTableFlags.PadOuterX))
                 continue;
@@ -129,11 +127,11 @@ internal sealed class OverviewTab(
         ImGui.TextUnformatted(note.Headline);
         ImGui.SameLine();
 
-        if (ImGui.SmallButton($"Go##{note.Goes}-{note.Headline}"))
+        if (Style.Row($"go##{note.Goes}-{note.Headline}"))
             show(note.Goes);
 
         ImGui.PushTextWrapPos();
-        ImGui.TextColored(Palette.Dim, note.Detail);
+        ImGui.TextColored(Style.Muted, note.Detail);
         ImGui.PopTextWrapPos();
     }
 
@@ -163,7 +161,7 @@ internal sealed class OverviewTab(
         ImGui.Spacing();
         ImGui.SetNextItemOpen(recent, ImGuiCond.Once);
 
-        if (!ImGui.CollapsingHeader($"While you were away ({lines.Count})###while-away"))
+        if (!ImGui.CollapsingHeader($"while you were away ({lines.Count})###while-away"))
             return;
 
         if (!ImGui.BeginTable("while-away", 2, ImGuiTableFlags.PadOuterX))
@@ -176,7 +174,7 @@ internal sealed class OverviewTab(
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, $"{Phrases.Ago(now - line.At)} ago");
+            ImGui.TextColored(Style.Muted, $"{Phrases.Ago(now - line.At)} ago");
             ImGui.TableNextColumn();
             ImGui.PushTextWrapPos();
             ImGui.TextColored(ColourOf(line.Kind), line.Text);
@@ -188,14 +186,14 @@ internal sealed class OverviewTab(
 
     /// <summary>
     /// The palette's meanings, applied to a notice: gil that came in or is there to take is
-    /// <see cref="Palette.Good"/>, a listing being beaten is <see cref="Palette.Bad"/>, and the
+    /// <see cref="Style.Good"/>, a listing being beaten is <see cref="Style.Bad"/>, and the
     /// briefing is context.
     /// </summary>
     private static Vector4 ColourOf(NoticeKind kind) => kind switch
     {
-        NoticeKind.Sale or NoticeKind.VendorFind => Palette.Good,
-        NoticeKind.Undercut => Palette.Bad,
-        _ => Palette.Dim,
+        NoticeKind.Sale or NoticeKind.VendorFind => Style.Good,
+        NoticeKind.Undercut => Style.Bad,
+        _ => Style.Muted,
     };
 
     /// <summary>
@@ -227,7 +225,7 @@ internal sealed class OverviewTab(
         {
             yield return new Note(
                 Note.Housekeeping,
-                Palette.Dim,
+                Style.Muted,
                 Phrases.Ago(DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(snapshot.At)),
                 "since the craft sweep, which has gone stale",
                 $"Older than the {config.SweepMaxAgeHours} hours you asked for, so the craft table is "

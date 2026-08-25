@@ -66,42 +66,38 @@ internal sealed class StatusStrip
         ImGui.SameLine();
 
         // Named for what it fetches. The sweep is also a refresh and shares none of this button's
-        // cost, so an unqualified "Refresh" was an invitation to press the wrong one.
-        if (ImGui.Button("Refresh prices"))
+        // cost, so an unqualified "refresh" was an invitation to press the wrong one.
+        if (Style.Row("refresh prices"))
             refresh();
 
         ImGui.SameLine();
 
         if (market.Busy)
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 market.Progress is { } progress ? $"fetching {progress.Done} of {progress.Total}" : "fetching...");
         else if (market.LastError is { } error)
-            ImGui.TextColored(Palette.Bad, error);
+            ImGui.TextColored(Style.Bad, error);
         else if (market.LastRefresh is { } at)
-            ImGui.TextColored(Palette.Dim, $"prices {Phrases.Ago(DateTimeOffset.UtcNow - at)} old");
+            ImGui.TextColored(Style.Muted, $"prices {Phrases.Ago(DateTimeOffset.UtcNow - at)} old");
         else
-            ImGui.TextColored(Palette.Dim, "no prices yet");
+            ImGui.TextColored(Style.Muted, "no prices yet");
 
         // Said only when it is up, since the interesting state is following rather than not.
         if (live.Connected)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Palette.Good, "  live");
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    $"Following the board as it changes. {live.Received:N0} changes seen, "
-                    + $"{live.Refetched:N0} worth refetching.");
-            }
+            ImGui.TextColored(Style.Good, "  live");
+            Style.Explain(
+                $"Following the board as it changes. {live.Received:N0} changes seen, "
+                + $"{live.Refetched:N0} worth refetching.");
         }
 
         var current = wallet.Current;
 
         // Gil is an item like the rest, so it gets the icon the rest get. Capless, so no warning.
         cells.Icon(GilItemId, 16f);
-        ImGui.SameLine(0f, 4f);
+        ImGui.SameLine(0f, Style.Px(4f));
         ImGui.TextUnformatted($"{current.Gil:N0}");
 
         foreach (var row in current.Rows)
@@ -112,31 +108,27 @@ internal sealed class StatusStrip
             // far away were paid for in a strip where the same currency kept changing shape.
             var text = row.Cap is { } limit ? $"{row.Held:N0}/{limit:N0}" : $"{row.Held:N0}";
 
-            Flow(16f + 4f + ImGui.CalcTextSize(text).X);
+            Flow(Style.Px(16f + 4f) + ImGui.CalcTextSize(text).X);
             cells.Icon(row.Currency.Id, 16f);
-            ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(row.NearCap ? Palette.Bad : Palette.Dim, text);
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    row.NearCap
-                        ? $"{row.Currency.Name}: nearly capped. Anything earned past the cap is simply lost."
-                        : row.Currency.Name);
-            }
+            ImGui.SameLine(0f, Style.Px(4f));
+            ImGui.TextColored(row.NearCap ? Style.Bad : Style.Muted, text);
+            Style.Explain(
+                row.NearCap
+                    ? $"{row.Currency.Name}: nearly capped. Anything earned past the cap is simply lost."
+                    : row.Currency.Name);
         }
 
         if (current.Gathering is { } gathering)
-            ImGui.TextColored(Palette.Dim, gathering);
+            ImGui.TextColored(Style.Muted, gathering);
 
         // A journey under way, wherever you are looking. Read live rather than from the
         // snapshot, since it changes on its own clock and a stale "waiting" reads as stuck.
         if (places.Status is { } going)
         {
-            ImGui.TextColored(Palette.Dim, going);
+            ImGui.TextColored(Style.Muted, going);
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("stop"))
+            if (Style.Row("stop"))
                 places.Cancel();
         }
     }
@@ -152,7 +144,7 @@ internal sealed class StatusStrip
     /// </remarks>
     private static void Flow(float width)
     {
-        ImGui.SameLine(0f, 14f);
+        ImGui.SameLine(0f, Style.Px(14f));
 
         if (width > ImGui.GetWindowContentRegionMax().X - ImGui.GetCursorPosX())
             ImGui.NewLine();

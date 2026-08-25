@@ -31,7 +31,7 @@ internal sealed class DiagnosticsPanel(
 {
     public void Draw()
     {
-        if (!ImGui.CollapsingHeader("Diagnostics"))
+        if (!ImGui.CollapsingHeader("diagnostics"))
             return;
 
         var on = config.Diagnostics;
@@ -39,25 +39,24 @@ internal sealed class DiagnosticsPanel(
         if (ImGui.Checkbox("Keep an account of what is happening", ref on))
             config.Diagnostics = on;
 
-        ImGui.TextColored(
-            Palette.Dim,
-            "    The state below is always live. The events are only kept while this is ticked, and\n"
-            + "    go to the Dalamud log as well.");
+        Style.MuffledWrapped(
+            "The state below is always live. The events are only kept while this is ticked, and "
+            + "go to the Dalamud log as well.");
 
-        ImGui.Spacing();
+        Style.Gap();
         DrawState();
 
         if (!config.Diagnostics)
             return;
 
-        ImGui.Spacing();
+        Style.Gap();
 
-        if (ImGui.Button("Copy all of it"))
+        if (Style.Row("copy all of it"))
             ImGui.SetClipboardText(Report());
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Clear"))
+        if (Style.Quiet("clear"))
             diagnostics.Clear();
 
         DrawEvents();
@@ -68,16 +67,16 @@ internal sealed class DiagnosticsPanel(
         if (!ImGui.BeginTable("diagnostic-state", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
-        ImGui.TableSetupColumn("What", ImGuiTableColumnFlags.WidthFixed, 150);
+        ImGui.TableSetupColumn("What", ImGuiTableColumnFlags.WidthFixed, Style.Px(150));
         ImGui.TableSetupColumn("Doing", ImGuiTableColumnFlags.WidthStretch);
 
         foreach (var (what, doing, good) in State())
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextColored(Palette.Dim, what);
+            ImGui.TextColored(Style.Muted, what);
             ImGui.TableNextColumn();
-            ImGui.TextColored(good ? Palette.Plain : Palette.Bad, doing);
+            ImGui.TextColored(good ? Style.Plain : Style.Bad, doing);
         }
 
         ImGui.EndTable();
@@ -185,12 +184,12 @@ internal sealed class DiagnosticsPanel(
 
         if (recent.Count == 0)
         {
-            ImGui.TextColored(Palette.Dim, "    Nothing noted yet.");
+            Style.Nothing("nothing noted yet");
             return;
         }
 
         // Newest first: the thing that just happened is the thing being looked for.
-        if (!ImGui.BeginChild("diagnostic-events", new(0, 220), true))
+        if (!ImGui.BeginChild("diagnostic-events", new(0, Style.Px(220)), true))
         {
             ImGui.EndChild();
             return;
@@ -198,7 +197,7 @@ internal sealed class DiagnosticsPanel(
 
         foreach (var entry in recent.Reverse())
         {
-            ImGui.TextColored(Palette.Dim, $"{entry.At:HH:mm:ss} {entry.Area,-6}");
+            ImGui.TextColored(Style.Muted, $"{entry.At:HH:mm:ss} {entry.Area,-6}");
             ImGui.SameLine();
             ImGui.TextUnformatted(entry.Message);
         }

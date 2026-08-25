@@ -204,7 +204,7 @@ internal sealed class ConvertTab
 
             yield return new Note(
                 full ? Note.Expiring : Note.Waiting,
-                full ? Palette.Bad : Palette.Plain,
+                full ? Style.Bad : Style.Plain,
                 full ? $"{group.Held:N0} {group.Unit}" : $"{best:N0} gil",
                 full
                     ? $"of {group.Currency.Name}, nearly capped and earning nothing"
@@ -218,7 +218,7 @@ internal sealed class ConvertTab
         {
             yield return new Note(
                 Note.Waiting,
-                Palette.Good,
+                Style.Good,
                 $"{flip.TotalFlipProfit:N0} gil",
                 "in flips your balance covers",
                 flip.Flips.FirstOrDefault() is { } top
@@ -263,37 +263,37 @@ internal sealed class ConvertTab
         if (market.Busy)
         {
             var progress = market.Progress is { } p ? $" {p.Done} of {p.Total}" : "...";
-            ImGui.TextColored(Palette.Dim, $"Fetching prices{progress}. The tables fill in as answers arrive.");
+            ImGui.TextColored(Style.Muted, $"Fetching prices{progress}. The tables fill in as answers arrive.");
             return;
         }
 
         if (readiness.Total == 0)
         {
-            ImGui.TextColored(Palette.Dim, "Nothing here needs a price.");
+            ImGui.TextColored(Style.Muted, "Nothing here needs a price.");
             return;
         }
 
         if (readiness.Missing == 0)
         {
-            ImGui.TextColored(Palette.Good, $"Ready: all {readiness.Total} items this tab needs are priced.");
+            ImGui.TextColored(Style.Good, $"Ready: all {readiness.Total} items this tab needs are priced.");
             return;
         }
 
         ImGui.TextColored(
-            Palette.Bad,
+            Style.Warn,
             $"Not ready: {readiness.Missing} of {readiness.Total} items have no price yet. "
             + "Refresh prices to fetch them.");
     }
 
     private void DrawSinks(SinkModel current)
     {
-        ImGui.TextUnformatted(
+        Style.Muffled(
             $"Sinks: what a bound currency is worth once converted and sold, "
-            + $"ranked by what {config.SellingHorizon()} days of selling would bank");
+            + $"ranked by what {config.SellingHorizon()} days of selling would bank.");
 
         if (current.Choices.Length == 0)
         {
-            ImGui.TextColored(Palette.Dim, "You hold none of the currencies anything here will take.");
+            Style.Nothing("you hold none of the currencies anything here will take");
             return;
         }
 
@@ -308,13 +308,13 @@ internal sealed class ConvertTab
             return;
 
         ImGui.TableSetupColumn("Trade", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("costs", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn($"banks in {config.SellingHorizon()}d", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 300);
+        ImGui.TableSetupColumn("costs", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
+        ImGui.TableSetupColumn($"a {group.Unit} earns", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("net per run", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn($"banks in {config.SellingHorizon()}d", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("held covers", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, Style.Px(85));
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, Style.Px(300));
         Cell.Headers(SinkHelp);
 
         foreach (var row in group.Rows)
@@ -330,22 +330,22 @@ internal sealed class ConvertTab
             // The price in the currency. It is the one number on the row the board cannot
             // change, so it is shown whether or not anything else could be priced.
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Plain, $"{row.PerRun:N0} {group.Unit}");
+            Cell.Right(Style.Plain, $"{row.PerRun:N0} {group.Unit}");
 
             // An unpriced row has nothing to say, and saying 0.00 would be a confident
             // answer where there is no data at all.
             if (!row.Priced)
             {
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Palette.Dim, "no prices yet");
+                ImGui.TextColored(Style.Muted, "no prices yet");
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
                 ImGui.TableNextColumn();
                 venues.Draw(row.Conversion.Id, row.Venue, trades.Where(row.Conversion));
                 continue;
@@ -354,7 +354,7 @@ internal sealed class ConvertTab
             ImGui.TableNextColumn();
             // The unit is printed in the cell, not only in the header. Two decimals beside a
             // column of millions reads as millions, and this number really is under a hundred.
-            Cell.Right(Palette.Plain, $"{row.Rate!.Value:F2} gil");
+            Cell.Right(Style.Plain, $"{row.Rate!.Value:F2} gil");
             if (ImGui.IsItemHovered())
             {
                 // Said as a yield rather than a price, because the column was read as one and
@@ -381,9 +381,10 @@ internal sealed class ConvertTab
             // leader is the row that banks the most, not the one with the prettiest rate.
             ImGui.TableNextColumn();
             var leader = group.Best is { } best && best > 0 && row.Banks == best;
-            Cell.Right(row.Banks > 0 ? leader ? Palette.Good : Palette.Plain : Palette.Dim, row.Banks > 0 ? $"{row.Banks:N0}" : "-");
+            Cell.Right(row.Banks > 0 ? leader ? Style.Good : Style.Plain : Style.Muted, row.Banks > 0 ? $"{row.Banks:N0}" : "-");
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(BanksExplained(group, row));
+
 
             ImGui.TableNextColumn();
 
@@ -395,13 +396,12 @@ internal sealed class ConvertTab
             }
             else if (row.Covers is 0 && row.PerRun > 0 && group.Held > 0)
             {
-                Cell.Right(Palette.Dim, $"{(double)group.Held / row.PerRun:P1}");
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip($"{group.Held:N0} of the {row.PerRun:N0} one run takes.");
+                Cell.Right(Style.Muted, $"{(double)group.Held / row.PerRun:P1}");
+                Style.Explain($"{group.Held:N0} of the {row.PerRun:N0} one run takes.");
             }
             else
             {
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
             }
 
             ImGui.TableNextColumn();
@@ -437,7 +437,7 @@ internal sealed class ConvertTab
             ImGui.SameLine();
         }
 
-        ImGui.SetNextItemWidth(340f);
+        ImGui.SetNextItemWidth(Style.Px(340f));
 
         if (!ImGui.BeginCombo("##sink-currency", label))
             return;
@@ -466,20 +466,20 @@ internal sealed class ConvertTab
 
     private void DrawFlips(FlipModel current)
     {
-        ImGui.TextUnformatted(
+        Style.Muffled(
             "Flips: buy the inputs on the board, hand them in, sell what comes out, "
-            + $"sized to what sells within {config.SellingHorizon()} days");
+            + $"sized to what sells within {config.SellingHorizon()} days.");
 
         if (current.Flips.Length == 0)
         {
-            ImGui.TextColored(Palette.Dim, "Nothing in the catalogue trades items for items.");
+            Style.Nothing("nothing in the catalogue trades items for items");
             return;
         }
 
         if (current.TotalFlipProfit > 0)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Palette.Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
+            ImGui.TextColored(Style.Good, $"  best split of your gil pays {current.TotalFlipProfit:N0}");
         }
 
         // Never a silent cap. The hidden rows are the ones that pay less than everything
@@ -487,7 +487,7 @@ internal sealed class ConvertTab
         if (current.HiddenFlips > 0)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"    the best {current.Flips.Length} of {current.Flips.Length + current.HiddenFlips}"
                 + (current.Unpriceable > 0 ? $", {current.Unpriceable} unpriceable" : ""));
         }
@@ -496,13 +496,13 @@ internal sealed class ConvertTab
             return;
 
         ImGui.TableSetupColumn("buy, then sell", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 300);
-        ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, 55);
-        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, 80);
-        ImGui.TableSetupColumn("outlay", ImGuiTableColumnFlags.WidthFixed, 120);
-        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 120);
-        ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, 70);
-        ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, 85);
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, Style.Px(300));
+        ImGui.TableSetupColumn("runs", ImGuiTableColumnFlags.WidthFixed, Style.Px(55));
+        ImGui.TableSetupColumn("you hold", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
+        ImGui.TableSetupColumn("outlay", ImGuiTableColumnFlags.WidthFixed, Style.Px(120));
+        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, Style.Px(120));
+        ImGui.TableSetupColumn("return", ImGuiTableColumnFlags.WidthFixed, Style.Px(70));
+        ImGui.TableSetupColumn("to clear", ImGuiTableColumnFlags.WidthFixed, Style.Px(85));
         Cell.Headers(FlipHelp);
 
         foreach (var row in current.Flips)
@@ -526,33 +526,33 @@ internal sealed class ConvertTab
             if (row.Problem is { } problem)
             {
                 ImGui.TableNextColumn();
-                Cell.Right(Palette.Dim, "-");
+                Cell.Right(Style.Muted, "-");
                 ImGui.TableNextColumn();
-                Cell.Right(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
+                Cell.Right(row.HeldCovers > 0 ? Style.Good : Style.Muted, $"{row.HeldCovers}");
                 ImGui.TableNextColumn();
-                ImGui.TextColored(Palette.Dim, problem);
+                ImGui.TextColored(Style.Muted, problem);
                 continue;
             }
 
-            var tint = row.Idle ? Palette.Dim : Palette.Plain;
+            var tint = row.Idle ? Style.Muted : Style.Plain;
 
             ImGui.TableNextColumn();
             Cell.Right(tint, $"{row.Runs}");
-            if (row.Idle && ImGui.IsItemHovered())
-                ImGui.SetTooltip(
+            if (row.Idle)
+                Style.Explain(
                     "The shared inputs pay more on another row, your gil will not cover a run, or the\n"
                     + $"board would not absorb even one within {config.SellingHorizon()} days.");
 
             ImGui.TableNextColumn();
-            Cell.Right(row.HeldCovers > 0 ? Palette.Good : Palette.Dim, $"{row.HeldCovers}");
-            if (row.HeldCovers > 0 && ImGui.IsItemHovered())
-                ImGui.SetTooltip("Runs your own stock already covers, retainers included. Not deducted from the outlay: what you hold is still worth what the board would pay for it.");
+            Cell.Right(row.HeldCovers > 0 ? Style.Good : Style.Muted, $"{row.HeldCovers}");
+            if (row.HeldCovers > 0)
+                Style.Explain("Runs your own stock already covers, retainers included. Not deducted from the outlay: what you hold is still worth what the board would pay for it.");
 
             ImGui.TableNextColumn();
             Cell.Right(tint, $"{row.Outlay:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(row.Idle ? Palette.Dim : row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
+            Cell.Right(row.Idle ? Style.Muted : row.Profit > 0 ? Style.Good : Style.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
             Cell.Right(tint, row.Roi is { } roi ? $"{roi:P1}" : "-");

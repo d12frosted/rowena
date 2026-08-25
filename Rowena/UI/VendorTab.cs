@@ -74,7 +74,7 @@ internal sealed class VendorTab
 
         return new Note(
             Note.Waiting,
-            Palette.Good,
+            Style.Good,
             $"{finds.Sum(find => find.Profit):N0} gil",
             "listed below what a vendor pays",
             $"Best is {best.Name}: {best.Units} units, {best.Profit:N0} gil, no market risk at all.",
@@ -125,7 +125,7 @@ internal sealed class VendorTab
 
     public void Draw(string buying)
     {
-        ImGui.TextUnformatted("Listed for less than a vendor pays: buy it, walk to any vendor, sell it");
+        Style.Muffled("Listed for less than a vendor pays: buy it, walk to any vendor, sell it.");
 
         DrawScan(buying);
         DrawTable();
@@ -137,11 +137,11 @@ internal sealed class VendorTab
 
         if (scan.Running)
         {
-            ImGui.TextColored(Palette.Dim, $"  {scan.Detail}");
+            ImGui.TextColored(Style.Muted, $"  {scan.Detail}");
             return;
         }
 
-        if (ImGui.Button(scan.ReadyAt is null ? "Scan the board" : "Scan again"))
+        if (Style.Commit(scan.ReadyAt is null ? "scan the board" : "scan again"))
         {
             sweep.Start(buying, config.VendorCandidatesToCost, config.SweepAge());
         }
@@ -150,7 +150,7 @@ internal sealed class VendorTab
 
         if (scan.State == VendorSweep.Phase.Failed)
         {
-            ImGui.TextColored(Palette.Bad, scan.Detail);
+            ImGui.TextColored(Style.Bad, scan.Detail);
             return;
         }
 
@@ -159,14 +159,14 @@ internal sealed class VendorTab
             // Said plainly: it is a hundred and seventy polite requests and should not start
             // itself the first time the tab happens to be opened.
             ImGui.TextColored(
-                Palette.Dim,
-                "  not scanned yet. Every marketable item, a hundred a request, so this takes a few minutes.");
+                Style.Muted,
+                "  not scanned yet; every marketable item, a hundred a request, so this takes a few minutes");
             return;
         }
 
         var age = scan.ReadyAt is { } at ? $"{Phrases.Ago(DateTimeOffset.UtcNow - at)} old, " : "";
 
-        ImGui.TextColored(scan.State == VendorSweep.Phase.Partial ? Palette.Bad : Palette.Dim, $"  {age}{scan.Detail}");
+        ImGui.TextColored(scan.State == VendorSweep.Phase.Partial ? Style.Bad : Style.Muted, $"  {age}{scan.Detail}");
     }
 
     private void DrawTable()
@@ -177,13 +177,12 @@ internal sealed class VendorTab
         {
             if (sweep.Current.HasResults)
             {
-                ImGui.TextColored(
-                    Palette.Dim,
+                Style.Nothing(
                     current.Uncosted > 0
-                        ? $"    {current.Uncosted} items are worth a look but have no book yet. Scan to cost them."
+                        ? $"{current.Uncosted} items are worth a look but have no book yet; scan to cost them"
                         : current.Hidden > 0
-                            ? $"    nothing over {config.VendorFindFloor:N0} gil. {current.Hidden} smaller finds are being hidden."
-                            : "    nothing is listed under its vendor price right now. This is the usual answer.");
+                            ? $"nothing over {config.VendorFindFloor:N0} gil; {current.Hidden} smaller finds are being hidden"
+                            : "nothing is listed under its vendor price right now, which is the usual answer");
             }
 
             return;
@@ -194,28 +193,28 @@ internal sealed class VendorTab
         // These are underpriced by definition, so somebody else can see them too and they do
         // not last. Worth refetching the moment before travelling rather than trusting a
         // number the scan left behind.
-        if (ImGui.Button("Recheck these"))
+        if (Style.Row("recheck these", "These are underpriced by definition, so they do not last. Refetch before travelling."))
             recheck([.. current.Finds.Select(find => find.ItemId)]);
 
         ImGui.SameLine();
 
         var oldest = current.Finds.Min(find => find.SeenAt);
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             oldest == default ? "  " : $"  prices {Phrases.Ago(DateTimeOffset.UtcNow - oldest)} old");
 
         if (current.Hidden > 0)
-            ImGui.TextColored(Palette.Dim, $"    {current.Hidden} more under {config.VendorFindFloor:N0} gil, hidden.");
+            ImGui.TextColored(Style.Muted, $"    {current.Hidden} more under {config.VendorFindFloor:N0} gil, hidden.");
 
         if (!ImGui.BeginTable("vendor-finds", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("vendor pays", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("listed at", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, 230);
+        ImGui.TableSetupColumn("vendor pays", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
+        ImGui.TableSetupColumn("listed at", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
+        ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, Style.Px(60));
+        ImGui.TableSetupColumn("profit", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("where", ImGuiTableColumnFlags.WidthFixed, Style.Px(230));
         Cell.Headers(Help);
 
         foreach (var row in current.Finds)
@@ -235,7 +234,7 @@ internal sealed class VendorTab
             Cell.Right($"{row.Units}");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Good, $"{row.Profit:N0}");
+            Cell.Right(Style.Good, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
             DrawWhere(row);
@@ -258,7 +257,7 @@ internal sealed class VendorTab
         var chosen = config.VendorWorld;
         var label = string.IsNullOrEmpty(chosen) ? "Any world" : chosen;
 
-        ImGui.SetNextItemWidth(200f);
+        ImGui.SetNextItemWidth(Style.Px(200f));
 
         if (!ImGui.BeginCombo("##vendor-world", label))
             return;
@@ -294,14 +293,14 @@ internal sealed class VendorTab
     {
         if (row.ByWorld is not [var best, ..])
         {
-            ImGui.TextColored(Palette.Dim, "unknown");
+            ImGui.TextColored(Style.Muted, "unknown");
             return;
         }
 
         var others = row.ByWorld.Count - 1;
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             others == 0
                 ? $"{best.World} (all {best.Units})"
                 : $"{best.World} {best.Units} of {row.Units}, +{others} more");
@@ -309,6 +308,7 @@ internal sealed class VendorTab
         if (!ImGui.IsItemHovered())
             return;
 
+        // Built only when hovered, since the join walks every world share.
         ImGui.SetTooltip(
             "Buying is per world, so each of these is its own trip:\n"
             + string.Join(
