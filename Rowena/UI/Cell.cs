@@ -98,6 +98,32 @@ internal static class Cell
     }
 
     /// <summary>
+    /// What to do about a floor that has fallen a long way under a listing.
+    /// </summary>
+    /// <remarks>
+    /// The accent goes on buying the cheap stock out, because that is the only one of these
+    /// that is an open want rather than a reason not to act. Taking a listing off the board
+    /// wants a person, so it warns; sitting tight and accepting a moved price are states at
+    /// rest and stay quiet. Nothing is drawn where there is no argument to make.
+    /// </remarks>
+    public static void Chase(ChaseVerdict chase, bool dim = false)
+    {
+        if (Phrases.Chase(chase.Call) is not { Length: > 0 } word)
+            return;
+
+        Right(
+            dim ? Style.Muted : chase.Call switch
+            {
+                ChaseCall.BuyOut => Style.Accent,
+                ChaseCall.Withdraw => Style.Warn,
+                _ => Style.Muted,
+            },
+            word);
+
+        Style.Explain(Phrases.ChaseWhy(chase));
+    }
+
+    /// <summary>
     /// The header row, with an explanation on the columns whose names are shorthand.
     /// </summary>
     /// <remarks>

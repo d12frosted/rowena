@@ -149,6 +149,11 @@ internal sealed class SellingTab
                     undercutTo = row.Undercut?.Target,
                     undercutBelow = row.Undercut?.Below,
                     undercutWhy = row.Undercut?.Why.ToString(),
+                    undercutMove = row.Undercut?.Move,
+                    chase = row.Chase?.Call.ToString(),
+                    chaseUnder = row.Chase?.UnitsUnder,
+                    chaseBuyOut = row.Chase?.BuyOutCost,
+                    chaseBack = row.Chase?.BuyOutBack,
                     ignored = row.Ignored,
                 }),
             },
@@ -218,25 +223,38 @@ internal sealed class SellingTab
             wanting == 0 ? Style.Good : Style.Accent,
             wanting == 0 ? "nothing needs doing" : $"{wanting} worth a look");
 
-        var undercut = current.Rows.Count(row => row.Undercut is { Why: not UndercutWhy.RoomAbove } && !row.Ignored);
-        var raise = current.Rows.Count(row => row.Undercut is { Why: UndercutWhy.RoomAbove } && !row.Ignored);
+        // Split from the routine ones because they are a different kind of thing. A steep move
+        // is a decision about what the item is worth, and lumping it in with the five-gil ones
+        // is how twenty of them get taken at once.
+        var open = current.Rows.Where(row => row.Undercut is not null && !row.Ignored).ToArray();
+        var think = open.Count(row => !Routine(row));
+        var undercut = open.Count(row => Routine(row) && row.Undercut!.Value.Why != UndercutWhy.RoomAbove);
+        var raise = open.Count(row => Routine(row) && row.Undercut!.Value.Why == UndercutWhy.RoomAbove);
 
-        if (undercut + raise > 0)
+        List<string> says = [];
+
+        if (undercut > 0)
+            says.Add($"{undercut} to reprice");
+
+        if (raise > 0)
+            says.Add($"{raise} to raise");
+
+        if (think > 0)
+            says.Add($"{think} to think about");
+
+        if (says.Count > 0)
         {
             ImGui.SameLine();
-            ImGui.TextColored(
-                Style.Accent,
-                (undercut, raise) switch
-                {
-                    (_, 0) => $"{undercut} to reprice",
-                    (0, _) => $"{raise} to raise",
-                    _ => $"{undercut} to reprice, {raise} to raise",
-                });
+            ImGui.TextColored(Style.Accent, string.Join(", ", says));
             Style.Explain(
                 "Listings with somebody cheaper in front of them, priced where nobody is buying,\n"
                 + "or so far under the next listing that gil is left behind, not counting the ones\n"
                 + "you said to leave alone. Open the retainer and the column beside its sell list\n"
-                + "does the rest.");
+                + "does the rest.\n\n"
+                + "The ones to think about would give up a quarter of the asking price or more,\n"
+                + "which is not competing with the listing in front but agreeing to a different\n"
+                + "price for the item. Each says what it thinks the answer is, and the overlay's\n"
+                + "\"reprice all\" leaves them alone.");
         }
 
         var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
@@ -365,9 +383,11 @@ internal sealed class SellingTab
                 ImGui.SetClipboardText($"{plan.Target}");
         }
 
+        // Quiet where the move is a decision rather than a chore: the accent belongs to what
+        // wants doing, and a quarter off the price is not something this is recommending.
         ImGui.SameLine();
         Cell.Right(
-            row.Ignored ? Style.Muted : Style.Accent,
+            row.Ignored || !Routine(row) ? Style.Muted : Style.Accent,
             plan.Why switch
             {
                 UndercutWhy.NobodyPays => $"~{plan.Target:N0}",
@@ -392,6 +412,9 @@ internal sealed class SellingTab
                         $"{plan.UnitsAhead:N0} units sit in front of yours, the cheapest at {plan.Below:N0}. Asking\n"
                         + $"{plan.Target:N0} puts you first, {config.UndercutBy:N0} under it.",
                 }
+                + (row.Chase is { } chase && Phrases.ChaseWhy(chase) is { Length: > 0 } advice
+                    ? $"\n\nThat gives up {-plan.Move:N0} a unit, {-plan.Share:P0} of what you are asking.\n{advice}"
+                    : "")
                 + (row.IsHq && plan.Why == UndercutWhy.NobodyPays
                     ? "\n\nThis listing is HQ and recent sales are not split by quality, so what people\n"
                       + "pay may be for NQ. Check before taking this number."
@@ -560,6 +583,11 @@ internal sealed class SellingTab
                 if (reading is not { } read)
                     continue;
 
+                // The listing's own city rate, the same one the diagnosis above was read
+                // against, so the cost of chasing and the verdict about it cannot disagree.
+                var wants = undercutting.Wants(
+                    itemId, group.Key.UnitPrice, group.Key.IsHq, TaxFor(first.CityId));
+
                 rows.Add(new Row(
                     itemId,
                     cells.Name(itemId),
@@ -569,7 +597,8 @@ internal sealed class SellingTab
                     group.Key.IsHq,
                     read,
                     Sold(itemId, recently),
-                    undercutting.Plan(itemId, group.Key.UnitPrice, group.Key.IsHq),
+                    wants?.Plan,
+                    wants?.Chase,
                     undercutting.Ignored(itemId)));
             }
         }
@@ -599,6 +628,15 @@ internal sealed class SellingTab
             mine.Max(sale => sale.At),
             mine.Count(sale => !sale.Announced));
     }
+
+    /// <summary>
+    /// Whether following this row's floor is a chore rather than a decision.
+    /// </summary>
+    /// <remarks>
+    /// A row with no reading yet counts as routine: the absence of an argument is not an
+    /// argument, and marking every unread listing as wanting thought would be noise.
+    /// </remarks>
+    private static bool Routine(Row row) => row.Chase is null or { Call: ChaseCall.Follow };
 
     private static int Urgency(ListingCall call) => call switch
     {
@@ -637,6 +675,7 @@ internal sealed class SellingTab
         ListingDiagnosis Reading,
         Mine? Sold,
         UndercutPlan? Undercut,
+        ChaseVerdict? Chase,
         bool Ignored);
 
     private sealed record Model(Row[] Rows);

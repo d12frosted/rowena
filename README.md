@@ -263,6 +263,30 @@ a tab per question:
   during a sweep waits for the sweep, and a count off the queue would say nothing about
   whether these twenty are current.
 
+  Each row shows the move it would make, from what you are asking now to what it would ask
+  instead. It used to show the floor and the target, which describes a different move
+  entirely: a listing at 4,000 going under a floor of 2,000 read as "2,000 -> 1,995", five
+  gil, when what is being given up is 2,005 a unit. What the target sits under is a fact
+  about somebody else and lives in the tooltip.
+
+  A move that gives up a quarter of the asking price or more is not competing with the
+  listing in front, it is agreeing to a different price for the item, so it gets an argument
+  rather than a button. A floor a long way under what the item has actually been selling for
+  is somebody clearing a retainer slot, and what follows depends on how much of it there is.
+  A couple of units are gone by the afternoon and matching them is a haircut for nothing, so
+  the row says to sit tight. Where they are cheap enough to be worth taking, the row prices
+  the buy-out instead: what the units under you cost to clear with the buyer's cut, against
+  what they fetch back at the going rate after the seller's, since somebody else's panic at
+  half price is the best-priced stock on the board and your own listing ends up first
+  without moving. Four hundred units is not a panic; where recent sales agree with them the
+  price really has moved, and where they do not, the row says to take the listing off the
+  board and come back, because the retainer slot is worth more on something that is selling.
+
+  Those rows are left out of "reprice all", and counted separately from it: one person
+  clearing a slot should not take a whole retainer down with it. Each still has its own
+  button. The argument only gets made where there is evidence for it, so a board that cannot
+  say how fast it sells gets the price and no advice.
+
   Room to raise is measured against the next listing rather than against past sales. A
   nugget at 895 with the next at 900 reads as a third under the going rate if you go by
   history, and raising it earns four gil. Where the room is real, big enough to be worth

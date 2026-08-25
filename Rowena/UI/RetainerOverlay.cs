@@ -32,7 +32,15 @@ internal sealed class RetainerOverlay : Window
         "How long ago the board behind this row was read. Everything to the right of it is only\n"
         + "as good as this number, and a listing nobody has looked up yet says so rather than\n"
         + "quietly reading as settled.",
-        "What the row wants doing, and what it would be cut or raised to.",
+        "What the row wants doing, and the move it would make: from what you are asking now to\n"
+        + "what it would ask instead. What it is going under sits in the tooltip, because that\n"
+        + "is a fact about somebody else and the move is the decision. A target marked ~ is\n"
+        + "what recent sales went for rather than a listing, and one marked ^ raises rather\n"
+        + "than cuts.",
+        "Said only where following the floor down would give up a quarter of the asking price\n"
+        + "or more. That is not competing with the listing in front, it is agreeing to a\n"
+        + "different price for the item, so the row argues instead of just offering a button.\n"
+        + "These are counted apart from the rest and left out of \"reprice all\".",
     ];
 
     /// <summary>How long the result of a refresh stays on screen once the refresh is over.</summary>
@@ -130,14 +138,16 @@ internal sealed class RetainerOverlay : Window
 
         var undercut = 0;
         var raise = 0;
+        var think = 0;
 
-        if (!ImGui.BeginTable("overlay", 4, ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable("overlay", 5, ImGuiTableFlags.RowBg))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, Style.Px(220));
         ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
         ImGui.TableSetupColumn("age", ImGuiTableColumnFlags.WidthFixed, Style.Px(56));
-        ImGui.TableSetupColumn("under -> yours", ImGuiTableColumnFlags.WidthFixed, Style.Px(250));
+        ImGui.TableSetupColumn("move", ImGuiTableColumnFlags.WidthFixed, Style.Px(215));
+        ImGui.TableSetupColumn("call", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
         Cell.Headers(Help);
 
         foreach (var (slot, index) in slots)
@@ -159,18 +169,18 @@ internal sealed class RetainerOverlay : Window
             Cell.Age(freshness);
 
             ImGui.TableNextColumn();
-            DrawUndercut(slot, index, freshness.Standing, ref undercut, ref raise);
+            DrawUndercut(slot, index, freshness.Standing, ref undercut, ref raise, ref think);
 
             ImGui.PopID();
         }
 
         ImGui.EndTable();
 
-        DrawFooter(slots, undercut, raise);
+        DrawFooter(slots, undercut, raise, think);
     }
 
     /// <summary>The tally, the run-everything button, and the run's progress while it goes.</summary>
-    private void DrawFooter((StoredSlot Slot, int Index)[] slots, int undercut, int raise)
+    private void DrawFooter((StoredSlot Slot, int Index)[] slots, int undercut, int raise, int think)
     {
         if (sellFill.Running is { } running)
         {
@@ -183,15 +193,28 @@ internal sealed class RetainerOverlay : Window
             return;
         }
 
+        List<string> says = [];
+
+        if (undercut > 0)
+            says.Add($"{undercut} to reprice");
+
+        if (raise > 0)
+            says.Add($"{raise} to raise");
+
+        if (think > 0)
+            says.Add($"{think} to think about");
+
         ImGui.TextColored(
-            undercut + raise == 0 ? Style.Good : Style.Accent,
-            (undercut, raise) switch
-            {
-                (0, 0) => "nothing wants repricing",
-                (_, 0) => $"{undercut} to reprice",
-                (0, _) => $"{raise} to raise",
-                _ => $"{undercut} to reprice, {raise} to raise",
-            });
+            says.Count == 0 ? Style.Good : Style.Accent,
+            says.Count == 0 ? "nothing wants repricing" : string.Join(", ", says));
+
+        if (think > 0)
+        {
+            Style.Explain(
+                "The ones to think about are giving up a quarter of the asking price or more, which\n"
+                + "is not competing with the listing in front but agreeing to a different price for\n"
+                + "the item. Each says what it thinks the answer is. \"reprice all\" leaves them alone.");
+        }
 
         if (undercut + raise > 0)
         {
@@ -201,12 +224,20 @@ internal sealed class RetainerOverlay : Window
                 "reprice all",
                 "Reprices every marked row above, one after another, through the game's own windows: "
                 + "the ones somebody is under, the ones nobody is paying, and the ones with room to "
-                + "raise. Ignored items are skipped."))
+                + "raise. Ignored items are skipped, and so is anything giving up a quarter of its "
+                + "price or more: one person clearing a retainer slot should not take a whole "
+                + "retainer down with it. Those still have their own button."))
             {
                 foreach (var (slot, index) in slots)
                 {
-                    if (!undercutting.Ignored(slot.ItemId) && undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq) is { } plan)
-                        sellFill.Reprice(index, slot.ItemId, plan.Target);
+                    if (undercutting.Ignored(slot.ItemId))
+                        continue;
+
+                    // Only the routine ones. A steep move is a decision, and a decision made by
+                    // a button that does twenty of them is not one.
+                    if (undercutting.Wants(slot.ItemId, slot.UnitPrice, slot.IsHq) is { } wants
+                        && wants.Chase.Call == ChaseCall.Follow)
+                        sellFill.Reprice(index, slot.ItemId, wants.Plan.Target);
                 }
             }
         }
@@ -296,12 +327,12 @@ internal sealed class RetainerOverlay : Window
         return asked.Count(id => market.FetchedAt(selling, id) is { } at && at >= askedAt);
     }
 
-    private void DrawUndercut(StoredSlot slot, int index, Standing standing, ref int undercut, ref int raise)
+    private void DrawUndercut(StoredSlot slot, int index, Standing standing, ref int undercut, ref int raise, ref int think)
     {
-        var plan = undercutting.Plan(slot.ItemId, slot.UnitPrice, slot.IsHq);
+        var wants = undercutting.Wants(slot.ItemId, slot.UnitPrice, slot.IsHq);
         var ignored = undercutting.Ignored(slot.ItemId);
 
-        if (plan is not { } wanted)
+        if (wants is not { } wanted)
         {
             // Green is a verdict, and there is none to give on a listing whose board has never
             // been read: the same dash meant "correctly priced" and "no idea", which is how a
@@ -314,17 +345,24 @@ internal sealed class RetainerOverlay : Window
             return;
         }
 
+        var (plan, chase) = wanted;
+        var settled = chase.Call != ChaseCall.Follow;
+
         if (!ignored)
         {
-            if (wanted.Why == UndercutWhy.RoomAbove)
+            if (settled)
+                think++;
+            else if (plan.Why == UndercutWhy.RoomAbove)
                 raise++;
             else
                 undercut++;
         }
 
+        var reasoning = Reasoning(slot, plan, chase, ignored);
+
         ImGui.BeginDisabled(sellFill.Running is not null);
 
-        var pressed = Style.Row(wanted.Why switch
+        var pressed = Style.Row(plan.Why switch
         {
             UndercutWhy.NobodyPays => "reprice",
             UndercutWhy.RoomAbove => "raise",
@@ -332,42 +370,69 @@ internal sealed class RetainerOverlay : Window
         });
 
         if (pressed)
-            sellFill.Reprice(index, slot.ItemId, wanted.Target);
+            sellFill.Reprice(index, slot.ItemId, plan.Target);
 
         ImGui.EndDisabled();
+        Style.Explain(reasoning);
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                $"Reprices this listing to {wanted.Target:N0} through the game's own price dialog"
-                + (config.UndercutConfirms ? ".\n" : ", and leaves it for you to confirm.\n")
-                + wanted.Why switch
-                {
-                    UndercutWhy.NobodyPays =>
-                        $"Nobody is paying {slot.UnitPrice:N0}"
-                        + (wanted.UnitsAhead > 0 ? $", nor the {wanted.UnitsAhead:N0} units listed under it" : ", cheapest on the board or not")
-                        + $": what actually sells goes for about {wanted.Below:N0}, so that is what this sits under.",
-                    UndercutWhy.RoomAbove =>
-                        $"Nothing is under yours and the next listing sits at {wanted.Below:N0}: asking {wanted.Target:N0}\n"
-                        + $"keeps you the cheapest and is {wanted.Target - slot.UnitPrice:N0} more a unit, and recent sales say\n"
-                        + "somebody pays up there.",
-                    _ => $"{wanted.UnitsAhead:N0} units sit in front, the cheapest at {wanted.Below:N0}.",
-                }
-                + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays
-                    ? "\n\nHQ: recent sales are not split by quality, so what people pay may be for NQ."
-                    : "")
-                + (ignored ? "\n\nYou said to leave this one alone; the button still works, it just does not count." : ""));
-        }
-
+        // The move, from where the price is now. The floor and the target side by side describe
+        // a different move entirely: a listing at 4,000 going under a floor of 2,000 reads as
+        // "2,000 -> 1,995", five gil, when what is given up is 2,005 a unit. What it is going
+        // under is a fact about somebody else, and lives in the tooltip.
         ImGui.SameLine();
         Cell.Right(
-            ignored ? Style.Muted : Style.Accent,
-            wanted.Why switch
+            ignored || settled ? Style.Muted : Style.Accent,
+            $"{plan.Mine:N0} -> "
+            + plan.Why switch
             {
-                UndercutWhy.NobodyPays => $"sells ~{wanted.Below:N0}",
-                UndercutWhy.RoomAbove => $"next {wanted.Below:N0}",
-                _ => $"{wanted.Below:N0}",
+                UndercutWhy.NobodyPays => "~",
+                UndercutWhy.RoomAbove => "^",
+                _ => "",
             }
-            + $" -> {wanted.Target:N0}" + (slot.IsHq && wanted.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
+            + $"{plan.Target:N0}"
+            + (slot.IsHq && plan.Why == UndercutWhy.NobodyPays ? " HQ?" : ""));
+
+        Style.Explain(reasoning);
+
+        // Exactly one thing on a row is the open want. Where following the floor is a decision
+        // rather than a chore, the decision is it, and the price beside it goes quiet.
+        ImGui.TableNextColumn();
+        Cell.Chase(chase, ignored);
     }
+
+    /// <summary>
+    /// The whole argument for one row, on whichever part of it the mouse lands.
+    /// </summary>
+    /// <remarks>
+    /// One text rather than three, because the row is one argument: the move, what it is
+    /// measured against, and what to do about it. Split up, the price carried the reasoning and
+    /// the verdict beside it carried none, which is the wrong way round.
+    /// </remarks>
+    private string Reasoning(StoredSlot slot, UndercutPlan plan, ChaseVerdict chase, bool ignored) =>
+        (plan.Move < 0
+            ? $"Asking {plan.Target:N0} instead of {plan.Mine:N0} gives up {-plan.Move:N0} a unit, "
+              + $"{-plan.Share:P0} of the price.\n"
+            : $"Asking {plan.Target:N0} instead of {plan.Mine:N0} is {plan.Move:N0} more a unit.\n")
+        + plan.Why switch
+        {
+            UndercutWhy.NobodyPays =>
+                $"Nobody is paying {plan.Mine:N0}"
+                + (plan.UnitsAhead > 0
+                    ? $", nor the {plan.UnitsAhead:N0} units listed under it"
+                    : ", cheapest on the board or not")
+                + $": what actually sells goes for about {plan.Below:N0}.",
+            UndercutWhy.RoomAbove =>
+                $"Nothing is under yours and the next listing sits at {plan.Below:N0}, so this keeps you\n"
+                + "the cheapest, and recent sales say somebody pays up there.",
+            _ => $"{plan.UnitsAhead:N0} units sit in front, the cheapest at {plan.Below:N0}.",
+        }
+        + (Phrases.ChaseWhy(chase) is { Length: > 0 } advice ? $"\n\n{advice}" : "")
+        + (slot.IsHq && plan.Why == UndercutWhy.NobodyPays
+            ? "\n\nHQ: recent sales are not split by quality, so what people pay may be for NQ."
+            : "")
+        + (ignored
+            ? "\n\nYou said to leave this one alone; the button still works, it just does not count."
+            : "")
+        + (config.UndercutConfirms ? "" : "\n\nThe price dialog is filled in and left for you to confirm.");
+
 }
