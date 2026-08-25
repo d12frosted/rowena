@@ -1,4 +1,5 @@
 using Rowena.Core.Conversions;
+using Rowena.Core.Market;
 
 namespace Rowena.UI;
 
@@ -52,6 +53,56 @@ internal static class Phrases
         { TotalHours: < 1 } => $"{span.TotalMinutes:F0} min",
         { TotalDays: < 1 } => $"{span.TotalHours:F0} h",
         _ => $"{span.TotalDays:F0} d",
+    };
+
+    /// <summary>What to do about a floor that has fallen a long way, in the words a row can hold.</summary>
+    public static string Chase(ChaseCall call) => call switch
+    {
+        ChaseCall.Wait => "sit tight",
+        ChaseCall.BuyOut => "buy it out",
+        ChaseCall.Withdraw => "delist",
+        ChaseCall.Accept => "price moved",
+        _ => "",
+    };
+
+    /// <summary>
+    /// The argument behind that word, with the numbers it is standing on.
+    /// </summary>
+    /// <remarks>
+    /// Shared between the tab and the overlay, because they are two views of one decision and
+    /// a reader who found them disagreeing would be right to stop trusting either.
+    /// </remarks>
+    public static string ChaseWhy(ChaseVerdict chase) => chase.Call switch
+    {
+        ChaseCall.Wait =>
+            $"Worth sitting out. The board gets through those {chase.UnitsUnder:N0} units in\n"
+            + $"{Absorb(chase.DaysToEat)}, and giving up {chase.Share:P0} to jump a queue that short is a\n"
+            + "haircut for nothing.",
+
+        ChaseCall.BuyOut =>
+            $"Worth buying rather than joining. Those {chase.UnitsUnder:N0} units cost {chase.BuyOutCost:N0} to take\n"
+            + "off the board, the buyer's cut included, and at what this has been selling for\n"
+            + $"({chase.Typical:N0}) they come back as {chase.BuyOutBack:N0} after the seller's cut. That clears\n"
+            + $"{chase.BuyOutBack - chase.BuyOutCost:N0} and leaves your own listing first without moving it.",
+
+        // Nothing sells here at any price, so the queue is beside the point: being first in it
+        // costs the cut and buys nothing.
+        ChaseCall.Withdraw when chase.DaysToEat is null =>
+            "Worth taking off the board for now. The board reports no sales at all for this, so\n"
+            + "there is no queue to wait out and no price that makes it move.",
+
+        ChaseCall.Withdraw =>
+            $"Worth taking off the board for now. {chase.UnitsUnder:N0} units sit under you, which is\n"
+            + $"{Absorb(chase.DaysToEat)} of queue, and they are priced well under what this has been\n"
+            + $"selling for ({chase.Typical:N0}). Matching them means selling at a fraction of the value,\n"
+            + "and the retainer slot is worth more on something that is moving.",
+
+        ChaseCall.Accept =>
+            $"This one probably is the new price. {chase.UnitsUnder:N0} units sit under you, which is\n"
+            + $"{Absorb(chase.DaysToEat)} of queue, and recent sales agree with them rather than with your\n"
+            + "price. Steep, but not somebody clearing a slot.",
+
+        _ => "",
     };
 
     /// <summary>

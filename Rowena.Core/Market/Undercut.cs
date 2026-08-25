@@ -13,10 +13,31 @@ public enum UndercutWhy
 }
 
 /// <summary>What repricing to where it would actually sell would mean.</summary>
+/// <param name="Mine">What I am asking now, so the size of the move can be read off the plan.</param>
 /// <param name="Target">The price to ask.</param>
 /// <param name="Below">What the target sits under: the cheapest listing in front, what people pay, or the next listing up.</param>
 /// <param name="UnitsAhead">How many units the board serves before mine.</param>
-public readonly record struct UndercutPlan(long Target, long Below, int UnitsAhead, UndercutWhy Why = UndercutWhy.Queue);
+public readonly record struct UndercutPlan(
+    long Mine,
+    long Target,
+    long Below,
+    int UnitsAhead,
+    UndercutWhy Why = UndercutWhy.Queue)
+{
+    /// <summary>
+    /// What the move does to my price, per unit. Negative cuts it, positive raises it.
+    /// </summary>
+    /// <remarks>
+    /// Carried because the two numbers a row naturally shows are the floor and the target, and
+    /// side by side they describe the wrong move. A listing at 4,000 undercutting a floor of
+    /// 2,000 reads as "2,000 -> 1,995", five gil, when what is actually being given up is
+    /// 2,005 a unit. The plan knows both ends, so nothing downstream has to reconstruct one.
+    /// </remarks>
+    public long Move => Target - Mine;
+
+    /// <summary>The move as a share of what I am asking, which is the part that reads as steep.</summary>
+    public double Share => Mine <= 0 ? 0d : (double)Move / Mine;
+}
 
 /// <summary>
 /// The reprice, priced.
@@ -57,10 +78,10 @@ public static class Undercut
         // (mine, or whoever is in front) is far above it. The factor is the diagnosis's own, so
         // the row that says "nobody pays this" and the button that fixes it agree.
         if (book.RecentSales.Count >= EnoughSales && paid > 0 && (below ?? mine) > paid * ListingDiagnosis.Rich)
-            return new UndercutPlan(Under(paid, margin), paid, units, UndercutWhy.NobodyPays);
+            return new UndercutPlan(mine, Under(paid, margin), paid, units, UndercutWhy.NobodyPays);
 
         if (below is { } floor)
-            return new UndercutPlan(Under(floor, margin), floor, units);
+            return new UndercutPlan(mine, Under(floor, margin), floor, units);
 
         // Cheapest, with more room above than being cheapest requires. The bars are the
         // diagnosis's again, so the row that says "you could ask more" and the button agree:
@@ -74,7 +95,7 @@ public static class Undercut
                && next - 1 >= mine * ListingDiagnosis.Worthwhile
                && paid >= (next - 1) * ListingDiagnosis.Supported
                && Under(next, margin) > mine
-            ? new UndercutPlan(Under(next, margin), next, units, UndercutWhy.RoomAbove)
+            ? new UndercutPlan(mine, Under(next, margin), next, units, UndercutWhy.RoomAbove)
             : null;
     }
 

@@ -32,6 +32,20 @@ public class UndercutTests
     }
 
     [Fact]
+    public void ThePlanCarriesWhatIAmAskingSoTheMoveCanBeSized()
+    {
+        // "2,000 -> 1,995" beside an ask of 4,000 reads as losing five gil. The move being
+        // made is 4,000 to 1,995, and the plan has to carry both ends of it to say so.
+        var plan = Undercut.Of(4_000, Book((2_000, 2), (4_000, 3)), 5);
+
+        Assert.NotNull(plan);
+        Assert.Equal(4_000, plan.Value.Mine);
+        Assert.Equal(1_995, plan.Value.Target);
+        Assert.Equal(-2_005, plan.Value.Move);
+        Assert.Equal(-0.50125d, plan.Value.Share, 5);
+    }
+
+    [Fact]
     public void ATieAtMyPriceIsNotAhead()
     {
         // The board does not say which listing at my price is mine, so a tie cannot be
@@ -117,6 +131,17 @@ public class UndercutRoomAboveTests
 {
     private static OrderBook Book(long[] sales, params (long Price, int Units)[] listings) =>
         OrderBook.Create(1, listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")), recentSales: sales);
+
+    [Fact]
+    public void ARaiseMovesTheOtherWay()
+    {
+        var plan = Undercut.Of(100, Book([190, 195, 200], (100, 1), (200, 3)), 5);
+
+        Assert.NotNull(plan);
+        Assert.Equal(UndercutWhy.RoomAbove, plan.Value.Why);
+        Assert.Equal(95, plan.Value.Move);
+        Assert.Equal(0.95d, plan.Value.Share, 5);
+    }
 
     [Fact]
     public void CheapestWithRealRoomAboveIsRaised()
