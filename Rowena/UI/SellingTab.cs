@@ -107,7 +107,7 @@ internal sealed class SellingTab
 
         return new Note(
             Note.AtRisk,
-            Palette.Bad,
+            Style.Bad,
             wanting.Length == 1 ? "1 listing" : $"{wanting.Length} listings",
             wanting.Length == 1
                 ? $"{worst.Name}, at a price it will not sell at"
@@ -156,7 +156,7 @@ internal sealed class SellingTab
 
     public void Draw(string selling)
     {
-        ImGui.TextUnformatted($"What you have listed on {selling}, and whether it is going anywhere");
+        Style.Muffled($"What you have listed on {selling}, and whether it is going anywhere.");
 
         var current = model.Current;
 
@@ -164,27 +164,23 @@ internal sealed class SellingTab
 
         if (board.ListedItems().Count == 0)
         {
-            ImGui.TextColored(
-                Palette.Dim,
+            Style.Nothing(
                 seen == 0
-                    ? "\n    Nothing known yet. Open each retainer once and the game says what it has out;\n"
-                      + "    it is remembered after that, so this only has to happen once a retainer."
-                    : $"\n    Nothing listed on the {(seen == 1 ? "retainer" : $"{seen} retainers")} opened so far.");
+                    ? "nothing known yet; open each retainer once and the game says what it has out,\n"
+                      + "and it is remembered after that, so this only has to happen once a retainer"
+                    : $"nothing listed on the {(seen == 1 ? "retainer" : $"{seen} retainers")} opened so far");
             return;
         }
 
-        if (ImGui.Button("Refresh prices"))
+        if (Style.Row("refresh prices", "Refetches the books your own listings are sitting in."))
             refresh([.. board.ListedItems()]);
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Refetches the books your own listings are sitting in.");
 
         ImGui.SameLine();
         DrawTally(current);
 
         if (current.Rows.Length == 0)
         {
-            ImGui.TextColored(Palette.Dim, "    No prices for them yet.");
+            Style.Nothing("no prices for them yet");
             return;
         }
 
@@ -196,35 +192,31 @@ internal sealed class SellingTab
     {
         if (current.Rows.Length == 0)
         {
-            ImGui.TextColored(Palette.Dim, "  fetching.");
+            ImGui.TextColored(Style.Muted, "  fetching...");
             return;
         }
 
         var worth = current.Rows.Sum(row => row.Reading.NetHolding * row.Units);
         var wanting = current.Rows.Count(row => row.Reading.Call is not (ListingCall.Hold or ListingCall.Wait));
 
-        ImGui.TextColored(Palette.Dim, $"  {current.Rows.Length} listings, {worth:N0} gil if it all sells. ");
+        ImGui.TextColored(Style.Muted, $"  {current.Rows.Length} listings, {worth:N0} gil if it all sells. ");
         ImGui.SameLine();
 
         var (seen, of) = board.RetainersSeen();
 
         if (of > seen)
         {
-            ImGui.TextColored(Palette.Bad, $"{seen} of {of} retainers seen. ");
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    "A retainer's listings are read when it is opened, so what the others have out\n"
-                    + "is not known yet. This list is what it is, not what you have.");
-            }
+            ImGui.TextColored(Style.Warn, $"{seen} of {of} retainers seen. ");
+            Style.Explain(
+                "A retainer's listings are read when it is opened, so what the others have out\n"
+                + "is not known yet. This list is what it is, not what you have.");
 
             ImGui.SameLine();
         }
 
         ImGui.TextColored(
-            wanting == 0 ? Palette.Good : Palette.Bad,
-            wanting == 0 ? "Nothing needs doing." : $"{wanting} worth a look.");
+            wanting == 0 ? Style.Good : Style.Accent,
+            wanting == 0 ? "nothing needs doing" : $"{wanting} worth a look");
 
         var undercut = current.Rows.Count(row => row.Undercut is { Why: not UndercutWhy.RoomAbove } && !row.Ignored);
         var raise = current.Rows.Count(row => row.Undercut is { Why: UndercutWhy.RoomAbove } && !row.Ignored);
@@ -233,22 +225,18 @@ internal sealed class SellingTab
         {
             ImGui.SameLine();
             ImGui.TextColored(
-                Palette.Bad,
+                Style.Accent,
                 (undercut, raise) switch
                 {
-                    (_, 0) => $"{undercut} to reprice.",
-                    (0, _) => $"{raise} to raise.",
-                    _ => $"{undercut} to reprice, {raise} to raise.",
+                    (_, 0) => $"{undercut} to reprice",
+                    (0, _) => $"{raise} to raise",
+                    _ => $"{undercut} to reprice, {raise} to raise",
                 });
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    "Listings with somebody cheaper in front of them, priced where nobody is buying,\n"
-                    + "or so far under the next listing that gil is left behind, not counting the ones\n"
-                    + "you said to leave alone. Open the retainer and the column beside its sell list\n"
-                    + "does the rest.");
-            }
+            Style.Explain(
+                "Listings with somebody cheaper in front of them, priced where nobody is buying,\n"
+                + "or so far under the next listing that gil is left behind, not counting the ones\n"
+                + "you said to leave alone. Open the retainer and the column beside its sell list\n"
+                + "does the rest.");
         }
 
         var recently = sales.Since(DateTimeOffset.UtcNow.AddDays(-SinceDays));
@@ -256,7 +244,7 @@ internal sealed class SellingTab
         if (recently.Count == 0)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"    Nothing of yours has sold in the {SinceDays} days this has been watching. Sales are\n"
                 + "    recorded as the game announces them, so this fills in as they happen.");
             return;
@@ -265,7 +253,7 @@ internal sealed class SellingTab
         var inferred = recently.Count(sale => !sale.Announced);
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             $"    You have sold {recently.Sum(sale => sale.Quantity):N0} things for "
             + $"{recently.Sum(sale => sale.Gil):N0} gil in the last {SinceDays} days."
             + (inferred > 0 ? $" {inferred} of those were worked out rather than announced." : ""));
@@ -277,15 +265,15 @@ internal sealed class SellingTab
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, 110);
-        ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, 50);
-        ImGui.TableSetupColumn("ahead", ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableSetupColumn("sells for", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("you sold", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, 80);
-        ImGui.TableSetupColumn("chasing costs", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("undercut to", ImGuiTableColumnFlags.WidthFixed, 150);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
+        ImGui.TableSetupColumn("units", ImGuiTableColumnFlags.WidthFixed, Style.Px(50));
+        ImGui.TableSetupColumn("ahead", ImGuiTableColumnFlags.WidthFixed, Style.Px(60));
+        ImGui.TableSetupColumn("sells for", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("you sold", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
+        ImGui.TableSetupColumn("chasing costs", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
+        ImGui.TableSetupColumn("undercut to", ImGuiTableColumnFlags.WidthFixed, Style.Px(150));
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, Style.Px(110));
         Cell.Headers(Help);
 
         foreach (var row in current.Rows)
@@ -299,19 +287,15 @@ internal sealed class SellingTab
 
             ImGui.TableNextColumn();
             Cell.Right($"{reading.Mine:N0}");
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    $"{reading.NetHolding:N0} kept per unit, from {row.Retainer} in {Cities.Name(row.CityId)}.\n"
-                    + $"The floor is {reading.Floor:N0}.");
-            }
+            Style.Explain(
+                $"{reading.NetHolding:N0} kept per unit, from {row.Retainer} in {Cities.Name(row.CityId)}.\n"
+                + $"The floor is {reading.Floor:N0}.");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, $"{row.Units:N0}");
+            Cell.Right(Style.Muted, $"{row.Units:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(reading.UnitsAhead == 0 ? Palette.Good : Palette.Plain, $"{reading.UnitsAhead:N0}");
+            Cell.Right(reading.UnitsAhead == 0 ? Style.Good : Style.Plain, $"{reading.UnitsAhead:N0}");
 
             ImGui.TableNextColumn();
             Cell.Right(Sold(reading), reading.TypicalSale is { } paid ? $"{paid:N0}" : "-");
@@ -321,11 +305,11 @@ internal sealed class SellingTab
 
             ImGui.TableNextColumn();
             Cell.Right(
-                reading.DaysToClear is null ? Palette.Bad : Palette.Dim,
+                reading.DaysToClear is null ? Style.Bad : Style.Muted,
                 Phrases.Absorb(reading.DaysToClear));
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, reading.Haircut == 0 ? "-" : $"-{reading.Haircut:N0}");
+            Cell.Right(Style.Muted, reading.Haircut == 0 ? "-" : $"-{reading.Haircut:N0}");
 
             ImGui.TableNextColumn();
             DrawUndercut(row);
@@ -351,49 +335,39 @@ internal sealed class SellingTab
 
         if (row.Undercut is not { } plan)
         {
-            Cell.Right(Palette.Good, "-");
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Nothing is listed below yours, it is priced where things sell, and the next\nlisting is close enough that raising would earn nothing worth the bother.");
+            Cell.Right(Style.Good, "-");
+            Style.Explain("Nothing is listed below yours, it is priced where things sell, and the next\nlisting is close enough that raising would earn nothing worth the bother.");
 
             ImGui.PopID();
             return;
         }
 
-        if (ImGui.SmallButton(row.Ignored ? "watch" : "ignore"))
+        if (Style.Quiet(
+            row.Ignored ? "watch" : "ignore",
+            row.Ignored
+                ? "Start filling the price dialog in for this item again."
+                : "Leave this item where it is. It still shows here, just not as something to do."))
         {
             undercutting.Ignore(row.ItemId, !row.Ignored);
             model.Invalidate();
         }
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                row.Ignored
-                    ? "Start filling the price dialog in for this item again."
-                    : "Leave this item where it is. It still shows here, just not as something to do.");
-        }
-
         ImGui.SameLine();
 
-        if (ImGui.SmallButton("set"))
+        if (Style.Row(
+            "set",
+            sellFill.Open() is { } open && open.ItemId == row.ItemId
+                ? $"Puts {plan.Target:N0} into the open price dialog. You still confirm it."
+                : $"Copies {plan.Target:N0} to the clipboard. To change the price, open {row.Retainer},\n"
+                  + "adjust this listing, and the dialog fills it in on its own."))
         {
             if (!sellFill.Fill(row.ItemId, plan.Target))
                 ImGui.SetClipboardText($"{plan.Target}");
         }
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                sellFill.Open() is { } open && open.ItemId == row.ItemId
-                    ? $"Puts {plan.Target:N0} into the open price dialog. You still confirm it."
-                    : $"Copies {plan.Target:N0} to the clipboard. To change the price, open {row.Retainer},\n"
-                      + "adjust this listing, and the dialog fills it in on its own.");
-        }
-
         ImGui.SameLine();
         Cell.Right(
-            row.Ignored ? Palette.Dim : Palette.Bad,
+            row.Ignored ? Style.Muted : Style.Accent,
             plan.Why switch
             {
                 UndercutWhy.NobodyPays => $"~{plan.Target:N0}",
@@ -438,8 +412,8 @@ internal sealed class SellingTab
     /// </remarks>
     private static System.Numerics.Vector4 Sold(ListingDiagnosis reading) =>
         reading.TypicalSale is not { } paid || paid <= 0
-            ? Palette.Dim
-            : reading.Mine > paid ? Palette.Bad : Palette.Good;
+            ? Style.Muted
+            : reading.Mine > paid ? Style.Warn : Style.Good;
 
     /// <summary>
     /// What my own retainers have managed with this lately.
@@ -454,23 +428,19 @@ internal sealed class SellingTab
     {
         if (row.Sold is not { Units: > 0 } mine)
         {
-            ImGui.TextColored(Palette.Dim, "     -");
+            ImGui.TextColored(Style.Muted, "     -");
             return;
         }
 
-        Cell.Right(Palette.Good, $"{mine.Units} @ {mine.Each:N0}");
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                $"You have sold {mine.Units} of these in the last {SinceDays} days for {mine.Gil:N0} gil,\n"
-                + $"which is {mine.Each:N0} each after fees. The last went "
-                + $"{Phrases.Ago(DateTimeOffset.UtcNow - mine.Last)} ago."
-                + (mine.Inferred > 0
-                    ? $"\n\n{mine.Inferred} of these were not announced in chat: the game only says so while\n"
-                      + "you are online, so they were read off the retainer's slots and purse instead."
-                    : ""));
-        }
+        Cell.Right(Style.Good, $"{mine.Units} @ {mine.Each:N0}");
+        Style.Explain(
+            $"You have sold {mine.Units} of these in the last {SinceDays} days for {mine.Gil:N0} gil,\n"
+            + $"which is {mine.Each:N0} each after fees. The last went "
+            + $"{Phrases.Ago(DateTimeOffset.UtcNow - mine.Last)} ago."
+            + (mine.Inferred > 0
+                ? $"\n\n{mine.Inferred} of these were not announced in chat: the game only says so while\n"
+                  + "you are online, so they were read off the retainer's slots and purse instead."
+                : ""));
     }
 
     private void DrawCall(Row row)
@@ -478,9 +448,7 @@ internal sealed class SellingTab
         var (colour, label, why) = Advice(row);
 
         ImGui.TextColored(colour, label);
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(why);
+        Style.Explain(why);
     }
 
     /// <summary>
@@ -498,52 +466,52 @@ internal sealed class SellingTab
         return reading.Call switch
         {
             ListingCall.Hold => (
-                Palette.Good, "nothing to do",
+                Style.Good, "nothing to do",
                 "Nothing is listed below yours, so you are next. Being undercut later is only\n"
                 + "worth reacting to if the queue that appears is a long one."),
 
             ListingCall.Wait => (
-                Palette.Good, "sit tight",
+                Style.Good, "sit tight",
                 $"{queue}, which the board gets through in {Phrases.Absorb(reading.DaysToClear)}.\n"
                 + $"Dropping to {reading.Floor:N0} to jump them would cost {reading.Haircut:N0} a unit and save\n"
                 + "you that wait. Rarely worth it."),
 
             ListingCall.Chase => (
-                Palette.Bad, "chase or leave it",
+                Style.Accent, "chase or leave it",
                 $"{queue}: at the rate this sells, the last of yours goes in\n"
                 + $"{Phrases.Absorb(reading.DaysToClear)}, which is longer than you said you wanted to be selling.\n"
                 + $"Matching the floor at {reading.Floor:N0} costs {reading.Haircut:N0} a unit. The other answer is\n"
                 + "to leave it and forget about it."),
 
             ListingCall.Vendor => (
-                Palette.Bad, "vendor pays more",
+                Style.Accent, "vendor pays more",
                 $"A vendor hands over {reading.VendorNet:N0} a unit. Selling on the board at your own\n"
                 + $"asking price leaves you {reading.NetHolding:N0} after the city's cut, so the board is the\n"
                 + "worse counter here even before anybody undercuts you."),
 
             ListingCall.Overpriced => (
-                Palette.Bad, "nobody pays this",
+                Style.Accent, "nobody pays this",
                 $"This has been changing hands at about {reading.TypicalSale:N0}, against your {reading.Mine:N0}.\n"
                 + "Being cheapest on the board is not the same as being priced where people are\n"
                 + "actually buying: a wall of listings nobody takes is not a market, and sitting\n"
                 + "in it is not a position."),
 
             ListingCall.Underpriced => (
-                Palette.Bad, "you could ask more",
+                Style.Accent, "you could ask more",
                 $"You could ask {reading.CouldAsk:N0} and still be the cheapest thing on the board, and\n"
                 + $"this has been selling at about {reading.TypicalSale:N0}, so somebody is paying up there.\n"
                 + $"Against your {reading.Mine:N0} that is {reading.CouldAsk - reading.Mine:N0} a unit left behind for a queue\n"
                 + "position nobody was competing for."),
 
             ListingCall.Unknown => (
-                Palette.Dim, "no rate yet",
+                Style.Muted, "no rate yet",
                 "How fast this sells is not known yet. A listings fetch cannot say: that endpoint\n"
                 + "counts sales where everything here counts units, and a sale is a listing bought\n"
                 + "however many units were in it. The summary that reports units a day has been\n"
                 + "asked for; until it lands there is nothing honest to say about the queue."),
 
             _ => (
-                Palette.Bad, "nothing sells",
+                Style.Bad, "nothing sells",
                 "The board reports no sales at all for this, so there is no queue to wait out and\n"
                 + "no price that makes it move. A vendor, or keep it."),
         };

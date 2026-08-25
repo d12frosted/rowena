@@ -39,17 +39,20 @@ internal sealed class ItemCells(
     public void Icon(uint itemId, float size = IconSize) => RawIcon(items.Get(itemId).Icon, size);
 
     /// <summary>Draws a game icon by its own id, or a matching gap.</summary>
+    /// <remarks>Sizes arrive in design pixels and are scaled here, once, for every caller.</remarks>
     public void RawIcon(uint iconId, float size = IconSize)
     {
+        var side = Style.Px(size);
+
         if (iconId != 0
             && textures.GetFromGameIcon(new GameIconLookup(iconId)).GetWrapOrDefault() is { } texture)
         {
-            ImGui.Image(texture.Handle, new Vector2(size, size));
+            ImGui.Image(texture.Handle, new Vector2(side, side));
             return;
         }
 
         // A gap the size of an icon, so rows without one still line up.
-        ImGui.Dummy(new Vector2(size, size));
+        ImGui.Dummy(new Vector2(side, side));
     }
 
     /// <summary>
@@ -64,8 +67,8 @@ internal sealed class ItemCells(
     {
         // The class and job icon set runs from 62000, offset by the ClassJob row.
         RawIcon(classJobId == 0 ? 0 : JobIconBase + classJobId, 16f);
-        ImGui.SameLine(0f, 4f);
-        ImGui.TextColored(Palette.Dim, abbreviation);
+        ImGui.SameLine(0f, Style.Px(4f));
+        ImGui.TextColored(Style.Muted, abbreviation);
     }
 
     /// <summary>
@@ -132,14 +135,14 @@ internal sealed class ItemCells(
         if (book?.Floor is { } floor)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"{floor:N0} gil on {scope.Selling}, {book.UnitsListed} listed, "
                 + $"{book.SaleVelocityPerDay:F1} sold a day");
             Depth(book);
         }
         else
         {
-            ImGui.TextColored(Palette.Bad, $"nothing listed on {scope.Selling ?? "your world"}");
+            ImGui.TextColored(Style.Bad, $"nothing listed on {scope.Selling ?? "your world"}");
         }
 
         Mine(itemId, book);
@@ -147,7 +150,7 @@ internal sealed class ItemCells(
         if (materials is { Count: > 0 })
         {
             ImGui.Separator();
-            ImGui.TextColored(Palette.Dim, inputsHeading);
+            ImGui.TextColored(Style.Muted, inputsHeading);
 
             foreach (var material in materials)
             {
@@ -157,13 +160,13 @@ internal sealed class ItemCells(
                 if (material.Sourced)
                     ImGui.TextUnformatted($"{material.Quantity}x {material.Name}   {material.Cost:N0}");
                 else
-                    ImGui.TextColored(Palette.Bad, $"{material.Quantity}x {material.Name}   not on the board");
+                    ImGui.TextColored(Style.Bad, $"{material.Quantity}x {material.Name}   not on the board");
             }
         }
 
         ImGui.Separator();
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             recipeId is null ? "right-click for actions" : "click to open the crafting log, right-click for more");
 
         ImGui.EndTooltip();
@@ -186,14 +189,14 @@ internal sealed class ItemCells(
         var units = listed.Sum(listing => listing.Quantity);
         var cheapest = listed.Min(listing => listing.UnitPrice);
 
-        ImGui.TextColored(Palette.Good, $"you have {units} listed, cheapest at {cheapest:N0}");
+        ImGui.TextColored(Style.Good, $"you have {units} listed, cheapest at {cheapest:N0}");
 
         // Undercut is only worth claiming against the same board the listing stands on, and
         // the floor here is the selling board's, which is where my retainers are.
         if (book?.Floor is { } floor && floor < cheapest)
         {
             ImGui.TextColored(
-                Palette.Bad,
+                Style.Bad,
                 $"    undercut: the board is at {floor:N0}, {cheapest - floor:N0} under you");
         }
     }
@@ -229,7 +232,7 @@ internal sealed class ItemCells(
         if (above > 0)
             parts.Add($"{above} dearer still");
 
-        ImGui.TextColored(Palette.Dim, string.Join(", ", parts));
+        ImGui.TextColored(Style.Muted, string.Join(", ", parts));
     }
 
     private void Menu(
@@ -258,7 +261,7 @@ internal sealed class ItemCells(
         if (materials is { Count: > 0 })
         {
             ImGui.Separator();
-            ImGui.TextColored(Palette.Dim, $"   {inputsHeading}");
+            ImGui.TextColored(Style.Muted, $"   {inputsHeading}");
 
             foreach (var material in materials)
             {
@@ -299,7 +302,7 @@ internal sealed class ItemCells(
 
         if (!actions.CanCraft)
         {
-            ImGui.TextColored(Palette.Dim, "   Artisan not found");
+            ImGui.TextColored(Style.Muted, "   Artisan not found");
         }
         else
         {
@@ -329,7 +332,7 @@ internal sealed class ItemCells(
             if (busy)
             {
                 ImGui.EndDisabled();
-                ImGui.TextColored(Palette.Dim, "   Artisan is busy");
+                ImGui.TextColored(Style.Muted, "   Artisan is busy");
             }
 
         }
@@ -345,17 +348,14 @@ internal sealed class ItemCells(
             if (ImGui.MenuItem(waiting == 0 ? "Add to Teamcraft list" : $"Add to Teamcraft list ({waiting} so far)"))
                 actions.Basket.Add(craftable, itemId, label, 1);
 
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    "Collects here first, then opens as one Teamcraft list.\n"
-                    + "Teamcraft works out the sub-crafts and exports to Artisan or Vulcan.");
-            }
+            Style.Explain(
+                "Collects here first, then opens as one Teamcraft list.\n"
+                + "Teamcraft works out the sub-crafts and exports to Artisan or Vulcan.");
         }
 
         if (!actions.CanMakeLists)
         {
-            ImGui.TextColored(Palette.Dim, "   AllaganTools not found");
+            ImGui.TextColored(Style.Muted, "   AllaganTools not found");
             return;
         }
 

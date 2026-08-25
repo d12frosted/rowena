@@ -19,7 +19,7 @@ internal sealed class VenueCell(Places places)
     {
         if (spots.Count == 0)
         {
-            ImGui.TextColored(Palette.Dim, fallback);
+            ImGui.TextColored(Style.Muted, fallback);
             return;
         }
 
@@ -34,7 +34,7 @@ internal sealed class VenueCell(Places places)
         ImGui.PushID(id);
 
         ImGui.TextColored(
-            nearby ? Palette.Plain : Palette.Dim,
+            nearby ? Style.Plain : Style.Muted,
             $"{shown.Npc}, {shown.Zone} ({shown.Map.X:F1}, {shown.Map.Y:F1})");
 
         var arrival = nearby ? null : places.ArrivalFor(shown);
@@ -61,7 +61,7 @@ internal sealed class VenueCell(Places places)
             // waits for the mesh, and says so in the strip while it does.
             if (going)
             {
-                ImGui.TextColored(Palette.Dim, places.Status ?? "");
+                ImGui.TextColored(Style.Muted, places.Status ?? "");
 
                 if (ImGui.MenuItem("Stop going there"))
                     places.Cancel();
@@ -77,7 +77,7 @@ internal sealed class VenueCell(Places places)
                 if (!places.HasNav)
                 {
                     ImGui.EndDisabled();
-                    ImGui.TextColored(Palette.Dim, "   vnavmesh not found");
+                    ImGui.TextColored(Style.Muted, "   vnavmesh not found");
                 }
             }
             else
@@ -93,7 +93,7 @@ internal sealed class VenueCell(Places places)
                 {
                     ImGui.EndDisabled();
                     ImGui.TextColored(
-                        Palette.Dim,
+                        Style.Muted,
                         arrival is null ? "   no aetheryte in that zone" : "   Lifestream not found");
                 }
             }

@@ -28,7 +28,7 @@ internal static class Cell
     }
 
     /// <summary>Right-aligns text in the colour a table uses for everything unremarkable.</summary>
-    public static void Right(string text) => Right(Palette.Plain, text);
+    public static void Right(string text) => Right(Style.Plain, text);
 
     /// <summary>
     /// How long a sale takes, coloured by how much that should worry you.
@@ -46,23 +46,21 @@ internal static class Cell
         // "<1 day", since the reason is that the board pays less than the vendor after tax.
         if (vendored)
         {
-            Right(dim ? Palette.Dim : Palette.Good, "vendor");
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("A vendor pays more than the board nets after tax, so the output is sold\nto one on the spot. No waiting, no undercutting.");
+            Right(dim ? Style.Muted : Style.Good, "vendor");
+            Style.Explain("A vendor pays more than the board nets after tax, so the output is sold\nto one on the spot. No waiting, no undercutting.");
 
             return;
         }
 
         var colour = dim
-            ? Palette.Dim
+            ? Style.Muted
             : days switch
             {
-                null => Palette.Bad,
-                < 1d => Palette.Good,
-                < 3d => Palette.Warm,
-                < 7d => Palette.Hot,
-                _ => Palette.Bad,
+                null => Style.Bad,
+                < 1d => Style.Good,
+                < 3d => Style.Warn,
+                < 7d => Style.Hot,
+                _ => Style.Bad,
             };
 
         Right(colour, Phrases.Absorb(days));
@@ -89,8 +87,8 @@ internal static class Cell
             ImGui.TableSetColumnIndex(column);
             ImGui.TableHeader(ImGui.TableGetColumnName(column));
 
-            if (help[column] is { } text && ImGui.IsItemHovered())
-                ImGui.SetTooltip(text);
+            if (help[column] is { } text)
+                Style.Explain(text);
         }
     }
 }

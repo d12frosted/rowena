@@ -180,6 +180,25 @@ internal sealed class Balances(IObjectTable objects, AllaganToolsIpc allaganTool
         return manager is null ? 0 : manager->GetInventoryItemCount(itemId);
     }
 
+    /// <summary>The character being read, or null while nobody is logged in.</summary>
+    public string? Character
+    {
+        get
+        {
+            try
+            {
+                var name = objects.LocalPlayer?.Name.TextValue;
+                return string.IsNullOrWhiteSpace(name) ? null : name;
+            }
+            catch (Exception error)
+            {
+                // Worth surviving rather than throwing: the masthead just goes without.
+                log.Warning(error, "Could not read the character's name.");
+                return null;
+            }
+        }
+    }
+
     /// <summary>
     /// The world you are logged in to. Where your retainers stand, and so the only board you can
     /// actually sell on.

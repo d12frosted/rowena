@@ -31,6 +31,8 @@ internal sealed class RetainerOverlay : Window
     private readonly ItemCells cells;
     private readonly Action<uint, long> fetch;
 
+    private IDisposable? shell;
+
     public RetainerOverlay(
         RetainerSellFill sellFill,
         Undercutting undercutting,
@@ -55,14 +57,26 @@ internal sealed class RetainerOverlay : Window
 
     public override void PreDraw()
     {
+        shell = Style.Shell();
+
         if (sellFill.ListEdge() is { } edge)
             ImGui.SetNextWindowPos(new Vector2(edge.X, edge.Y));
+    }
+
+    public override void PostDraw()
+    {
+        shell?.Dispose();
+        shell = null;
     }
 
     public override void Draw()
     {
         if (sellFill.ActiveRetainer() is not { } retainer)
             return;
+
+        // No title bar on an overlay, so the masthead is the only thing saying whose
+        // column this is - and which retainer it is reading.
+        Style.Masthead("Rowena", retainer.Name);
 
         // In the list's own order, so the rows line up with the game's. Anything the list does
         // not show (it should show everything) goes last rather than missing.
@@ -81,9 +95,9 @@ internal sealed class RetainerOverlay : Window
         if (!ImGui.BeginTable("overlay", 3, ImGuiTableFlags.RowBg))
             return;
 
-        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, 220);
-        ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("under -> yours", ImGuiTableColumnFlags.WidthFixed, 250);
+        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, Style.Px(220));
+        ImGui.TableSetupColumn("asking", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("under -> yours", ImGuiTableColumnFlags.WidthFixed, Style.Px(250));
         ImGui.TableHeadersRow();
 
         foreach (var (slot, index) in slots)
@@ -95,7 +109,7 @@ internal sealed class RetainerOverlay : Window
             cells.Draw(cells.Name(slot.ItemId), slot.ItemId);
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, $"{slot.UnitPrice:N0}");
+            Cell.Right(Style.Muted, $"{slot.UnitPrice:N0}");
 
             ImGui.TableNextColumn();
             DrawUndercut(slot, index, ref undercut, ref raise);
@@ -113,30 +127,34 @@ internal sealed class RetainerOverlay : Window
     {
         if (sellFill.Running is { } running)
         {
-            ImGui.TextColored(Palette.Plain, $"Repricing, {running.Done} done, {running.Left} to go.");
+            ImGui.TextColored(Style.Plain, $"repricing, {running.Done} done, {running.Left} to go");
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("stop"))
+            if (Style.Row("stop"))
                 sellFill.Stop();
 
             return;
         }
 
         ImGui.TextColored(
-            undercut + raise == 0 ? Palette.Good : Palette.Bad,
+            undercut + raise == 0 ? Style.Good : Style.Accent,
             (undercut, raise) switch
             {
-                (0, 0) => "Nothing wants repricing.",
-                (_, 0) => $"{undercut} to reprice.",
-                (0, _) => $"{raise} to raise.",
-                _ => $"{undercut} to reprice, {raise} to raise.",
+                (0, 0) => "nothing wants repricing",
+                (_, 0) => $"{undercut} to reprice",
+                (0, _) => $"{raise} to raise",
+                _ => $"{undercut} to reprice, {raise} to raise",
             });
 
         if (undercut + raise > 0)
         {
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("reprice all"))
+            if (Style.Commit(
+                "reprice all",
+                "Reprices every marked row above, one after another, through the game's own windows: "
+                + "the ones somebody is under, the ones nobody is paying, and the ones with room to "
+                + "raise. Ignored items are skipped."))
             {
                 foreach (var (slot, index) in slots)
                 {
@@ -144,26 +162,15 @@ internal sealed class RetainerOverlay : Window
                         sellFill.Reprice(index, slot.ItemId, plan.Target);
                 }
             }
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    "Reprices every red row above, one after another, through the game's own windows:\n"
-                    + "the ones somebody is under, the ones nobody is paying, and the ones with room to\n"
-                    + "raise. Ignored items are skipped.");
-            }
         }
 
         ImGui.SameLine();
 
-        if (ImGui.SmallButton("refresh"))
+        if (Style.Quiet("refresh", "Refetches the books these listings sit in. The floor from an hour ago is not a floor."))
         {
             foreach (var (slot, _) in slots)
                 fetch(slot.ItemId, slot.UnitPrice);
         }
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Refetches the books these listings sit in. The floor from an hour ago is not a floor.");
     }
 
     private void DrawUndercut(StoredSlot slot, int index, ref int undercut, ref int raise)
@@ -173,7 +180,7 @@ internal sealed class RetainerOverlay : Window
 
         if (plan is not { } wanted)
         {
-            Cell.Right(Palette.Good, "-");
+            Cell.Right(Style.Good, "-");
             return;
         }
 
@@ -187,7 +194,7 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.BeginDisabled(sellFill.Running is not null);
 
-        var pressed = ImGui.SmallButton(wanted.Why switch
+        var pressed = Style.Row(wanted.Why switch
         {
             UndercutWhy.NobodyPays => "reprice",
             UndercutWhy.RoomAbove => "raise",
@@ -224,7 +231,7 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.SameLine();
         Cell.Right(
-            ignored ? Palette.Dim : Palette.Bad,
+            ignored ? Style.Muted : Style.Accent,
             wanted.Why switch
             {
                 UndercutWhy.NobodyPays => $"sells ~{wanted.Below:N0}",

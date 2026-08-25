@@ -147,7 +147,7 @@ internal sealed class CraftTab
 
         return new Note(
             Note.Waiting,
-            Palette.Plain,
+            Style.Plain,
             $"{best.Profit:N0} gil",
             $"a run of {best.Item}, the best thing to make",
             $"{best.Materials:N0} in materials, about {best.GilPerDay:N0} a day at what the board takes.",
@@ -203,52 +203,41 @@ internal sealed class CraftTab
         ImGui.SameLine();
 
         // Two routes because they cost very different amounts of effort and only one is portable.
-        if (ImGui.Button("Copy for Artisan"))
+        if (Style.Row(
+            "copy for Artisan",
+            "One paste, straight into the plugin that crafts. Sub-crafts included,\n"
+            + "in order, so the list works from the top down.\n"
+            + "\n"
+            + "1. Press this.\n"
+            + "2. Open Artisan, Crafting Lists tab.\n"
+            + "3. Press \"Import List From Clipboard (Artisan Export)\"."))
             basket.CopyForArtisan();
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "One paste, straight into the plugin that crafts. Sub-crafts included,\n"
-                + "in order, so the list works from the top down.\n"
-                + "\n"
-                + "1. Press this.\n"
-                + "2. Open Artisan, Crafting Lists tab.\n"
-                + "3. Press \"Import List From Clipboard (Artisan Export)\".");
-        }
-
         ImGui.SameLine();
 
-        if (ImGui.Button("Open in Teamcraft"))
+        if (Style.Row(
+            "open in Teamcraft",
+            "The long way round, but it works out the sub-crafts and reaches any tool.\n"
+            + "\n"
+            + "1. Press this; the list opens on ffxivteamcraft.com.\n"
+            + "2. In Artisan: Crafting Lists, then the Teamcraft \"Import\" button.\n"
+            + "3. On the site, find the pre-crafts section, press \"Copy as Text\",\n"
+            + "   and paste into Artisan's Pre-craft Items box.\n"
+            + "4. Do the same for the final items section.\n"
+            + "5. Name the list and press Import."))
             basket.Open();
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "The long way round, but it works out the sub-crafts and reaches any tool.\n"
-                + "\n"
-                + "1. Press this; the list opens on ffxivteamcraft.com.\n"
-                + "2. In Artisan: Crafting Lists, then the Teamcraft \"Import\" button.\n"
-                + "3. On the site, find the pre-crafts section, press \"Copy as Text\",\n"
-                + "   and paste into Artisan's Pre-craft Items box.\n"
-                + "4. Do the same for the final items section.\n"
-                + "5. Name the list and press Import.");
-        }
-
         ImGui.SameLine();
 
-        if (ImGui.Button("Copy link"))
+        if (Style.Quiet("copy link", "The same Teamcraft link, for pasting into a browser yourself."))
             basket.CopyLink();
 
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("The same Teamcraft link, for pasting into a browser yourself.");
-
         ImGui.SameLine();
 
-        if (ImGui.Button("Clear"))
+        if (Style.Quiet("clear"))
             basket.Clear();
 
-        ImGui.TextColored(Palette.Dim, "    Artisan is one paste. Teamcraft is five steps but reaches any tool.");
+        ImGui.TextColored(Style.Muted, "    Artisan is one paste. Teamcraft is five steps but reaches any tool.");
 
         uint? removing = null;
 
@@ -256,21 +245,20 @@ internal sealed class CraftTab
         {
             ImGui.PushID((int)item.RecipeId);
 
-            if (ImGui.SmallButton("-"))
+            if (Style.Quiet("-"))
                 basket.Adjust(item.RecipeId, -1);
 
-            ImGui.SameLine(0f, 2f);
+            ImGui.SameLine(0f, Style.Px(2f));
 
-            if (ImGui.SmallButton("+"))
+            if (Style.Quiet("+"))
                 basket.Adjust(item.RecipeId, 1);
 
-            ImGui.SameLine(0f, 6f);
+            ImGui.SameLine(0f, Style.Px(6f));
             cells.Icon(item.ItemId, 16f);
-            ImGui.SameLine(0f, 4f);
-            ImGui.TextColored(Palette.Dim, $"{item.Quantity}x {item.Name}");
-            ImGui.SameLine();
+            ImGui.SameLine(0f, Style.Px(4f));
+            ImGui.TextColored(Style.Muted, $"{item.Quantity}x {item.Name}");
 
-            if (ImGui.SmallButton("remove"))
+            if (Style.TrailingRemove("Take this off the list."))
                 removing = item.RecipeId;
 
             ImGui.PopID();
@@ -289,12 +277,12 @@ internal sealed class CraftTab
         // one run's numbers rather than half of two.
         var scan = sweep.Current;
 
-        ImGui.TextUnformatted("Ranked by what they would earn in a day");
+        Style.Muffled("Ranked by what they would earn in a day.");
         ImGui.SameLine();
 
         if (scan.Running)
         {
-            ImGui.TextColored(Palette.Dim, $"  {scan.Detail}");
+            ImGui.TextColored(Style.Muted, $"  {scan.Detail}");
 
             // The ranking below is the previous one, and stays up rather than being replaced by an
             // empty screen for the several minutes a run takes. Said out loud, because a table that
@@ -302,32 +290,30 @@ internal sealed class CraftTab
             if (scan.ReadyAt is { } previous)
             {
                 ImGui.TextColored(
-                    Palette.Dim,
+                    Style.Muted,
                     $"    still the ranking from {Phrases.Ago(DateTimeOffset.UtcNow - previous)} ago, "
                     + "improving as prices arrive");
             }
         }
         else
         {
-            if (ImGui.Button(scan.ReadyAt is null ? "Sweep" : "Re-sweep"))
+            if (Style.Commit(scan.ReadyAt is null ? "sweep" : "sweep again"))
                 sweep.Start(buying, selling, config.FurnishingShortlist, config.SweepAge());
-
-            ImGui.SameLine();
 
             ImGui.SameLine();
 
             // The sweep decides what is worth costing and that holds for hours; what those
             // things cost does not. Asking again is a few requests rather than a few minutes.
-            if (scan.HasResults && ImGui.Button("Recheck prices"))
+            if (scan.HasResults && Style.Row("recheck prices"))
                 recheck();
 
             if (scan.State == CraftSweep.Phase.Failed)
-                ImGui.TextColored(Palette.Bad, scan.Detail);
+                ImGui.TextColored(Style.Bad, scan.Detail);
             else if (scan.ReadyAt is null)
                 // Said plainly, because it is minutes of small polite requests and should not start
                 // itself the first time the window happens to open.
                 ImGui.TextColored(
-                    Palette.Dim, "  not swept yet. Eight ids a request, so this takes a few minutes.");
+                    Style.Muted, "  not swept yet; eight ids a request, so this takes a few minutes");
             else
                 DrawFinished();
         }
@@ -341,7 +327,7 @@ internal sealed class CraftTab
                 ", ",
                 scan.Blockers.Take(4).Select(blocker => $"{blocker.Material} ({blocker.Blocks})"));
 
-            ImGui.TextColored(Palette.Dim, $"    blocked mostly by: {worst}");
+            ImGui.TextColored(Style.Muted, $"    blocked mostly by: {worst}");
         }
     }
 
@@ -364,7 +350,7 @@ internal sealed class CraftTab
         // Coloured when the run had holes in it, because "nothing was found" and "most of it never
         // arrived" must not look the same at a glance.
         ImGui.TextColored(
-            incomplete ? Palette.Bad : Palette.Dim,
+            incomplete ? Style.Bad : Style.Muted,
             $"  {age}{scan.Detail}"
             + (current.Crafts.Length > 0
                 ? $", showing {current.Crafts.Length} of {current.Ranked}"
@@ -395,22 +381,22 @@ internal sealed class CraftTab
         // Nothing to learn from ordering by job, and the alternative reading of a click on it,
         // "show me only mine", is a filter rather than a sort.
         ImGui.TableSetupColumn(
-            "job", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 62);
+            "job", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, Style.Px(62));
 
-        ImGui.TableSetupColumn("materials", NumberColumn, 100);
-        ImGui.TableSetupColumn("profit", NumberColumn, 100);
-        ImGui.TableSetupColumn("return", NumberColumn, 70);
-        ImGui.TableSetupColumn("sales/day", NumberColumn, 75);
-        ImGui.TableSetupColumn("gil/day", NumberColumn | ImGuiTableColumnFlags.DefaultSort, 100);
+        ImGui.TableSetupColumn("materials", NumberColumn, Style.Px(100));
+        ImGui.TableSetupColumn("profit", NumberColumn, Style.Px(100));
+        ImGui.TableSetupColumn("return", NumberColumn, Style.Px(70));
+        ImGui.TableSetupColumn("sales/day", NumberColumn, Style.Px(75));
+        ImGui.TableSetupColumn("gil/day", NumberColumn | ImGuiTableColumnFlags.DefaultSort, Style.Px(100));
 
         // What sort of market, which is a fact about the board rather than a number to rank on.
         ImGui.TableSetupColumn(
-            "market", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 74);
+            "market", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, Style.Px(74));
 
         // The last column is a control, not a fact, so it has no name and no sort. Building
         // the list is what this table is for, and it should not live only in a menu.
         ImGui.TableSetupColumn(
-            "", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 26);
+            "", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, Style.Px(26));
         Cell.Headers(Help);
         ReadSort();
 
@@ -427,31 +413,27 @@ internal sealed class CraftTab
             if (!row.CanMake)
             {
                 ImGui.SameLine();
-                ImGui.TextColored(Palette.Bad, $"lv{row.Level}");
-
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.SetTooltip(
-                        $"Your {row.Job} is {levels.Of(row.JobId)} and this wants {row.Level}.\n"
-                        + "Shown rather than hidden: it is still worth knowing what the money is,\n"
-                        + "and a levelling target with a price on it is a better reason than most.");
-                }
+                ImGui.TextColored(Style.Warn, $"lv{row.Level}");
+                Style.Explain(
+                    $"Your {row.Job} is {levels.Of(row.JobId)} and this wants {row.Level}.\n"
+                    + "Shown rather than hidden: it is still worth knowing what the money is,\n"
+                    + "and a levelling target with a price on it is a better reason than most.");
             }
 
             ImGui.TableNextColumn();
             Cell.Right($"{row.Materials:N0}");
 
             ImGui.TableNextColumn();
-            Cell.Right(row.Profit > 0 ? Palette.Good : Palette.Bad, $"{row.Profit:N0}");
+            Cell.Right(row.Profit > 0 ? Style.Good : Style.Bad, $"{row.Profit:N0}");
 
             ImGui.TableNextColumn();
             Cell.Right(row.Roi is { } roi ? $"{roi:P0}" : "-");
 
             ImGui.TableNextColumn();
-            Cell.Right(Palette.Dim, $"{row.SalesPerDay:F1}");
+            Cell.Right(Style.Muted, $"{row.SalesPerDay:F1}");
 
             ImGui.TableNextColumn();
-            Cell.Right(row.GilPerDay > 0 ? Palette.Good : Palette.Dim, $"{row.GilPerDay:N0}");
+            Cell.Right(row.GilPerDay > 0 ? Style.Good : Style.Muted, $"{row.GilPerDay:N0}");
             if (ImGui.IsItemHovered())
             {
                 // Worth saying out loud on every row. The figure is the whole market's daily
@@ -477,11 +459,8 @@ internal sealed class CraftTab
             {
                 ImGui.PushID((int)addable);
 
-                if (ImGui.SmallButton("+"))
+                if (Style.Quiet("+", "Add one to the list you are building above."))
                     basket.Add(addable, row.ItemId, row.Item, 1);
-
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Add one to the list you are building above.");
 
                 ImGui.PopID();
             }
@@ -615,43 +594,41 @@ internal sealed class CraftTab
         var (colour, label, why) = nature.Character switch
         {
             MarketCharacter.Hot => (
-                Palette.Good, "hot",
+                Style.Good, "hot",
                 $"{supply} It sells about as fast as it is listed, so what you make moves.\n"
                 + "Everybody else can see that too, so expect company and undercutting."),
 
             MarketCharacter.Steady => (
-                Palette.Plain, "steady",
+                Style.Plain, "steady",
                 $"{supply} It moves, the price holds, and nobody is fighting over it."),
 
             MarketCharacter.Niche => (
-                Palette.Good, "niche",
+                Style.Good, "niche",
                 $"{supply} Slow, but almost nobody is selling it. Patient money, and the sort of\n"
                 + "market a person can have to themselves because it is not worth mass producing."),
 
             MarketCharacter.Swingy => (
-                Palette.Plain, "swingy",
+                Style.Plain, "swingy",
                 $"{supply} Recent prices vary by about {nature.Spread:P0} of the middle one, so the\n"
                 + "profit on this row is a number with a wide error bar rather than a promise."),
 
             MarketCharacter.Glutted => (
-                Palette.Bad, "glutted",
+                Style.Bad, "glutted",
                 $"{supply} Whatever the margin says, you are behind all of it, and adding more is\n"
                 + "how a glut is made."),
 
             MarketCharacter.Dead => (
-                Palette.Bad, "dead",
+                Style.Bad, "dead",
                 "The board reports no sales at all. Not slow: shut."),
 
             _ => (
-                Palette.Dim, "no rate yet",
+                Style.Muted, "no rate yet",
                 "How fast this sells is not known yet, so what sort of market it is cannot be said.\n"
                 + "The summary that reports units a day has been asked for."),
         };
 
         ImGui.TextColored(colour, label);
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(why);
+        Style.Explain(why);
     }
 
     /// <remarks>

@@ -41,7 +41,7 @@ internal sealed class SettingsTab(
     {
         var changed = false;
 
-        Group("Where you are pricing");
+        Group("where you are pricing");
 
         changed |= Text(
             "Buying board", config.Scope, value => config.Scope = value,
@@ -53,11 +53,11 @@ internal sealed class SettingsTab(
             "Empty means the world you are logged in to. Your retainers sell where they stand, so this\n"
             + "is not the same board as the one above and should usually be a single world.");
 
-        Group("What I have actually been managing");
+        Group("what I have actually been managing");
 
         DrawRealised();
 
-        Group("Prices");
+        Group("prices");
 
         changed |= Number(
             "Refetch after (minutes)", config.PriceTtlMinutes, value => config.PriceTtlMinutes = value,
@@ -86,7 +86,7 @@ internal sealed class SettingsTab(
             "The record of what your retainers sold, and for how much, reaches back this far. Half a\n"
             + "year by default: what sells well for you is a question about months, not a fortnight.");
 
-        Group("Undercutting");
+        Group("undercutting");
 
         changed |= Number(
             "Gil under the cheapest listing in front", config.UndercutBy, value => config.UndercutBy = Math.Max(0, value),
@@ -117,7 +117,7 @@ internal sealed class SettingsTab(
             "One row per listing, in the list's order, with the undercut price and a button that\n"
             + "opens the game's price dialog on that listing with the price filled in.");
 
-        Group("The craft sweep");
+        Group("the craft sweep");
 
         changed |= Toggle(
             "Only look at furnishings", config.CraftFurnishingsOnly, value => config.CraftFurnishingsOnly = value,
@@ -160,7 +160,7 @@ internal sealed class SettingsTab(
             "A hundred, comfortably. A summary carries no depth, which is why the first pass of a\n"
             + "sweep can be this wide and the second cannot.");
 
-        Group("Gathering");
+        Group("gathering");
 
         changed |= Number(
             "How many of one thing you gather a day", config.GatherPerDayCap, value => config.GatherPerDayCap = value,
@@ -199,7 +199,7 @@ internal sealed class SettingsTab(
             "How many survive the survey and get a full book fetched. The survey itself covers every\n"
             + "marketable gatherable and costs about eight requests.");
 
-        Group("The vendor scan");
+        Group("the vendor scan");
 
         changed |= Number(
             "Smallest find worth showing", config.VendorFindFloor, value => config.VendorFindFloor = value,
@@ -211,7 +211,7 @@ internal sealed class SettingsTab(
             "How many of the scan's candidates get a full book fetched, widest margin first. The\n"
             + "survey is cheap and wide; this is the expensive half, eight ids a request.");
 
-        Group("Live prices");
+        Group("live prices");
 
         changed |= Toggle(
             "Follow the board as it changes", config.LiveMarket, value => config.LiveMarket = value,
@@ -219,7 +219,7 @@ internal sealed class SettingsTab(
             + "signal, not prices: what it names is refetched properly, since the feed sends only what\n"
             + "moved and a book rebuilt from those would drift. Cheaper for them than asking repeatedly.");
 
-        Group("Login and alerts");
+        Group("login and alerts");
 
         changed |= Toggle(
             "Brief me when I log in", config.BriefOnLogin, value => config.BriefOnLogin = value,
@@ -262,42 +262,42 @@ internal sealed class SettingsTab(
             "Gil a unit, net. Every window in the game turning up on the Overview would be noise;\n"
             + "the ones worth crossing a zone for are not.");
 
-        Group("The strip across the top");
+        Group("the strip across the top");
 
         changed |= DrawPinnedCurrencies();
 
-        Group("Hand-off");
+        Group("hand-off");
 
         changed |= Text(
             "Artisan list name", config.ArtisanListName, value => config.ArtisanListName = value,
             "The name the imported crafting list arrives under.");
 
-        Group("What the game has told us");
+        Group("what the game has told us");
 
         DrawTaxRates();
 
-        Group("The catalogue");
+        Group("the catalogue");
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             "Which trades exist is a file, so you can add your own. Reload reads it again without\n"
             + "touching the plugin; a broken edit keeps the trades you already have and says what\n"
             + "was wrong with it.");
 
         ImGui.TextUnformatted(catalogue.Path);
 
-        if (ImGui.Button("Copy path"))
+        if (Style.Quiet("copy path"))
             ImGui.SetClipboardText(catalogue.Path);
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Reload"))
+        if (Style.Row("reload"))
             Reload();
 
         if (reloadReport is { } report)
-            ImGui.TextColored(reloadFailed ? Palette.Bad : Palette.Dim, report);
+            ImGui.TextColored(reloadFailed ? Style.Bad : Style.Muted, report);
 
-        Group("When something is not working");
+        Group("when something is not working");
 
         diagnostics.Draw();
 
@@ -325,7 +325,7 @@ internal sealed class SettingsTab(
         if (realised.Share is not { } share)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 "    Every gil a day figure here is a ceiling: it assumes you take every sale at\n"
                 + $"    today's price. How far short of it you land is not measured yet, because\n"
                 + $"    {realised.Missing}.\n"
@@ -336,17 +336,17 @@ internal sealed class SettingsTab(
         }
 
         ImGui.TextColored(
-            Palette.Good,
+            Style.Good,
             $"    You have been taking about {share:P0} of a market, from {realised.Seen} sales of your own\n"
             + "    against what those boards turned over in the same time.");
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             $"    Weighed over {realised.Coverage:P0} of your recent sales. The rest are things Universalis\n"
             + "    reports no sale rate for, which no amount of waiting fixes.");
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             "    So a row promising a million a day is nearer "
             + $"{realised.Expect(1_000_000):N0}. The rankings still order by\n"
             + "    the ceiling, which is the right order; this is what the number means.");
@@ -364,24 +364,21 @@ internal sealed class SettingsTab(
         if (clock.PerHour is not { } rate)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 $"    Nothing measured yet: {clock.Tally.Seconds / 60:F0} minutes of gathering watched so far,\n"
                 + "    and ten are wanted before a rate off it is worth quoting.");
             return;
         }
 
         ImGui.TextColored(
-            Palette.Good,
+            Style.Good,
             $"    Measured: {rate:F0} items an hour, from {clock.Tally.Items:N0} items over "
             + $"{clock.Tally.Seconds / 60:F0} minutes.");
 
         ImGui.SameLine();
 
-        if (ImGui.SmallButton("Forget it"))
+        if (Style.Quiet("forget it", "For when it stops describing how you gather: a new job, or better gear."))
             clock.Forget();
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("For when it stops describing how you gather: a new job, or better gear.");
     }
 
     /// <summary>
@@ -403,7 +400,7 @@ internal sealed class SettingsTab(
     private bool DrawPinnedCurrencies()
     {
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             "Always shown, whatever the balance, in this order. Anything unticked appears only once\n"
             + "it is into the last tenth of its cap, in red, since what is earned past the cap is lost.");
 
@@ -459,7 +456,7 @@ internal sealed class SettingsTab(
             changed |= PinBox(currency);
 
         if (near.Length < rest.Length
-            && ImGui.CollapsingHeader($"Everything else ({rest.Length - near.Length})##pinrest"))
+            && ImGui.CollapsingHeader($"everything else ({rest.Length - near.Length})##pinrest"))
         {
             foreach (var currency in rest.Except(near))
                 changed |= PinBox(currency);
@@ -503,7 +500,7 @@ internal sealed class SettingsTab(
         if (board.SellerRates is not { Count: > 0 } rates)
         {
             ImGui.TextColored(
-                Palette.Dim,
+                Style.Muted,
                 "The seller's cut is nought to five percent by city and moves daily. Open a market\n"
                 + "board once and the game says what it is today; until then the worst is assumed.");
             return;
@@ -512,7 +509,7 @@ internal sealed class SettingsTab(
         var cheapest = rates.OrderBy(entry => entry.Value).First();
 
         ImGui.TextColored(
-            Palette.Dim,
+            Style.Muted,
             $"Selling from {Cities.Name(cheapest.Key)} costs {cheapest.Value:P0} today, the cheapest of them. "
             + "Rowena prices\nwith the worst of the cities you actually have retainers in.");
 
@@ -520,7 +517,7 @@ internal sealed class SettingsTab(
             return;
 
         ImGui.TableSetupColumn("City", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("seller pays", ImGuiTableColumnFlags.WidthFixed, 90);
+        ImGui.TableSetupColumn("seller pays", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
         Cell.Headers([null, null]);
 
         foreach (var (city, rate) in rates.OrderBy(entry => entry.Value))
@@ -529,7 +526,7 @@ internal sealed class SettingsTab(
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(Cities.Name(city));
             ImGui.TableNextColumn();
-            Cell.Right(rate <= cheapest.Value ? Palette.Good : Palette.Plain, $"{rate:P0}");
+            Cell.Right(rate <= cheapest.Value ? Style.Good : Style.Plain, $"{rate:P0}");
         }
 
         ImGui.EndTable();
@@ -560,14 +557,13 @@ internal sealed class SettingsTab(
 
     private static void Group(string title)
     {
-        ImGui.Spacing();
-        ImGui.TextUnformatted(title);
+        Style.Heading(title);
         ImGui.Separator();
     }
 
     private static bool Number(string label, int value, Action<int> set, string caption)
     {
-        ImGui.SetNextItemWidth(NumberWidth);
+        ImGui.SetNextItemWidth(Style.Px(NumberWidth));
 
         var edited = value;
         var changed = ImGui.InputInt(label, ref edited);
@@ -593,7 +589,7 @@ internal sealed class SettingsTab(
 
     private static bool Text(string label, string value, Action<string> set, string caption)
     {
-        ImGui.SetNextItemWidth(TextWidth);
+        ImGui.SetNextItemWidth(Style.Px(TextWidth));
 
         var edited = value;
         var changed = ImGui.InputText(label, ref edited, 64);
@@ -608,7 +604,7 @@ internal sealed class SettingsTab(
     private static void Caption(string caption)
     {
         ImGui.Indent();
-        ImGui.TextColored(Palette.Dim, caption);
+        ImGui.TextColored(Style.Muted, caption);
         ImGui.Unindent();
         ImGui.Spacing();
     }

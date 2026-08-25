@@ -49,6 +49,7 @@ internal sealed class MainWindow : Window
     private Tab? pending;
     private bool restoreAttempted;
     private long persistedSweepAt;
+    private IDisposable? shell;
 
     public MainWindow(
         Trades trades,
@@ -153,10 +154,24 @@ internal sealed class MainWindow : Window
             .Distinct(),
     ];
 
+    /// <summary>The shell wraps the frame, not the contents, so the chrome itself is ours.</summary>
+    public override void PreDraw() => shell = Style.Shell();
+
+    public override void PostDraw()
+    {
+        shell?.Dispose();
+        shell = null;
+    }
+
     public override void Draw()
     {
         var buying = scope.Buying;
         var selling = scope.Selling;
+
+        // Whose ledger this is. The name repeats the title bar on purpose: the masthead is
+        // the anchor that stays in view once the bar has scrolled the mind away, and the
+        // character is the context every number below assumes.
+        Style.Masthead("Rowena", balances.Character ?? "");
 
         strip.Draw(buying, selling);
         ImGui.Separator();
@@ -297,7 +312,7 @@ internal sealed class MainWindow : Window
     /// if the game were not running.
     /// </remarks>
     private static void NoBoard() =>
-        ImGui.TextColored(Palette.Bad, "Not logged in, so there is no board to price against.");
+        Style.Nothing("not logged in, so there is no board to price against");
 
     /// <summary>
     /// Rebuilds the last sweep's shortlist from what came back off disk.
