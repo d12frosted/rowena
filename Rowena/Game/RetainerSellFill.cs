@@ -329,7 +329,7 @@ internal sealed class RetainerSellFill : IDisposable
     private void Finish()
     {
         if (done > 0)
-            notices.Add(NoticeKind.Sale, done == 1 ? "Repriced 1 listing." : $"Repriced {done} listings.", count: done);
+            notices.Add(NoticeKind.Reprice, done == 1 ? "Repriced 1 listing." : $"Repriced {done} listings.", count: done);
 
         diagnostics.Note("undercut", $"run finished, {done} repriced");
         done = 0;
@@ -341,7 +341,7 @@ internal sealed class RetainerSellFill : IDisposable
         var left = queue.Count + (current is null ? 0 : 1);
 
         diagnostics.Note("undercut", $"stopped: {why}; {done} repriced, {left} left alone");
-        notices.Add(NoticeKind.Sale, $"Repricing stopped: {why}. {done} done, {left} left alone.", count: done);
+        notices.Add(NoticeKind.Reprice, $"Repricing stopped: {why}. {done} done, {left} left alone.", count: done);
 
         queue.Clear();
         current = null;
