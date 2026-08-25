@@ -64,5 +64,24 @@ public class AwayDigestTests
     }
 
     [Fact]
+    public void RepricingIsNotTakings()
+    {
+        var lines = AwayDigest.Fold(
+        [
+            At(30, NoticeKind.Reprice, "Repriced 5 listings.", count: 5),
+            At(25, NoticeKind.Reprice, "Repriced 4 listings.", count: 4),
+            At(20, NoticeKind.Sale, "Sold while you were away: 2x Mythrite Ore for 3,788 gil.", count: 2, gil: 3_788),
+        ]);
+
+        Assert.Equal(
+            [
+                "Sold while you were away: 2x Mythrite Ore for 3,788 gil.",
+                "Repriced 4 listings.",
+                "Repriced 5 listings.",
+            ],
+            lines.Select(line => line.Text));
+    }
+
+    [Fact]
     public void NothingFoldsToNothing() => Assert.Empty(AwayDigest.Fold([]));
 }

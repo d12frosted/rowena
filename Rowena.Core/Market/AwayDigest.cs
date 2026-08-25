@@ -6,6 +6,13 @@ public enum NoticeKind
     /// <summary>Something a retainer sold. Folded: five sales are one line with one total.</summary>
     Sale,
 
+    /// <summary>
+    /// A repricing run: how many listings it changed, or why it stopped. Never folded into
+    /// the sales line, since repricing brings in no gil and counting it there reads as a
+    /// sale that paid nothing.
+    /// </summary>
+    Reprice,
+
     /// <summary>Somebody listed below one of yours.</summary>
     Undercut,
 

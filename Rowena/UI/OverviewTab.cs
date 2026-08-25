@@ -187,7 +187,7 @@ internal sealed class OverviewTab(
     /// <summary>
     /// The palette's meanings, applied to a notice: gil that came in or is there to take is
     /// <see cref="Style.Good"/>, a listing being beaten is <see cref="Style.Bad"/>, and the
-    /// briefing is context.
+    /// briefing and a finished repricing run are context.
     /// </summary>
     private static Vector4 ColourOf(NoticeKind kind) => kind switch
     {
