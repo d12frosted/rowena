@@ -30,7 +30,8 @@ internal readonly record struct Spot(
 /// script whose arguments name the next step, and the scrip and tomestone exchanges sit a
 /// further level down behind an InclusionShop, the category picker, with the real shops
 /// hanging off its categories and series. Each indirection is followed until a shop id
-/// falls out. Seal shops are GCShop rows reached the same way. Every route ends in an NPC
+/// falls out. Seal shops are GCShop rows reached the same way. The gemstone traders take
+/// none of these routes and are read from FateShop instead. Every route ends in an NPC
 /// id, and the Level sheet says where each NPC is placed, on which map.
 ///
 /// An exchange is often offered in several cities, Rowena's representatives being the
@@ -182,6 +183,17 @@ internal sealed class Vendors(IDataManager data, IPluginLog log)
         {
             foreach (var dataRef in npc.ENpcData)
                 Follow(dataRef.RowId, npc.RowId, 0);
+        }
+
+        // The gemstone traders, whose counters appear in nobody's ENpcData. FateShop is
+        // keyed by the trader itself, so the row id is the NPC and no following is needed.
+        foreach (var row in data.GetExcelSheet<FateShop>())
+        {
+            foreach (var shop in row.SpecialShop)
+            {
+                if (shop.RowId != 0)
+                    Offer(shop.RowId, row.RowId);
+            }
         }
 
         var vendorNpcs = npcsByShop.Values.SelectMany(npcs => npcs).ToHashSet();

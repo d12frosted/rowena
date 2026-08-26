@@ -18,7 +18,7 @@ namespace Rowena.Game;
 /// existed, and a retired tomestone exchange would otherwise come back as a trade priced
 /// in a currency the counter no longer takes. Offered means reachable from an NPC's data,
 /// or listed in an InclusionShopSeries, which is how the scrip exchanges are wired to
-/// their vendors.
+/// their vendors, or named in a FateShop, which is how the gemstone traders are.
 ///
 /// Costs are encoded three ways, and the encoding was pinned against known counters rather
 /// than guessed: a cost type of 0 names an item id directly, 2 is a slot in the live
@@ -226,10 +226,20 @@ internal sealed class SpecialShops(IDataManager data, Vendors vendors, IPluginLo
     /// The shops somewhere in the world actually offers, with who offers them.
     /// </summary>
     /// <remarks>
-    /// Two routes: named directly in an NPC's data, or listed in an InclusionShopSeries,
-    /// the category-picker interface the scrip and tomestone exchanges sit behind. The
+    /// Three routes: named directly in an NPC's data, listed in an InclusionShopSeries,
+    /// the category-picker interface the scrip and tomestone exchanges sit behind, or
+    /// named in a FateShop, which is where the gemstone traders keep their counters. The
     /// series route has no single NPC to name, which is fine: those shops carry real
     /// names of their own.
+    ///
+    /// FateShop is keyed by the trader's own NPC id rather than pointing at one, so it is
+    /// both routes at once: it says which counters exist and who stands at them. Without
+    /// it every bicolor gemstone trade was missing, since nothing else in the sheets
+    /// mentions those shops at all.
+    ///
+    /// It reaches the Endwalker and Dawntrail traders. The eight Shadowbringers counters
+    /// are in the SpecialShop sheet too, but no sheet references them from anywhere, so
+    /// there is nobody to name as offering them and they stay out.
     /// </remarks>
     private Dictionary<uint, string> Offered()
     {
@@ -256,6 +266,19 @@ internal sealed class SpecialShops(IDataManager data, Vendors vendors, IPluginLo
         {
             if (shopIds.Contains(row.SpecialShop.RowId))
                 offered.TryAdd(row.SpecialShop.RowId, "special shop");
+        }
+
+        foreach (var row in data.GetExcelSheet<FateShop>())
+        {
+            var trader = residents.GetRowOrDefault(row.RowId)?.Singular.ExtractText();
+
+            foreach (var shop in row.SpecialShop)
+            {
+                if (shopIds.Contains(shop.RowId))
+                    offered.TryAdd(
+                        shop.RowId,
+                        string.IsNullOrWhiteSpace(trader) ? "special shop" : trader);
+            }
         }
 
         return offered;
