@@ -64,7 +64,11 @@ done
 BUILD_DIR="$REPO_ROOT/$PLUGIN/bin/$CONFIG"
 INSTALL_DIR="$XOM_ROOT/devPlugins/$PLUGIN"
 DALAMUD_CONFIG="$XOM_ROOT/dalamudConfig.json"
-BACKUP="$XOM_ROOT/dalamudConfig.json.rowena-backup"
+# Both the backup and the "is this ours?" test are named after the plugin, so a
+# sibling plugin installed by its own copy of this script cannot be mistaken for
+# this one, nor have its backup overwritten.
+MARKER="$(printf '%s' "$PLUGIN" | tr '[:upper:]' '[:lower:]')"
+BACKUP="$XOM_ROOT/dalamudConfig.json.$MARKER-backup"
 PLUGIN_CONFIG_DIR="$XOM_ROOT/pluginConfigs/$PLUGIN"
 
 [ -d "$XOM_ROOT" ] || die "XIV on Mac setup not found at: $XOM_ROOT (set XOM_ROOT to override)"
@@ -89,12 +93,13 @@ windows_path() {
 # with $type and $values wrappers, so both that shape and a plain array are
 # handled.
 config_tool() {
-    python3 - "$DALAMUD_CONFIG" "$(windows_path "$INSTALL_DIR/$PLUGIN.dll")" "$1" <<'PYTHON'
+    python3 - "$DALAMUD_CONFIG" "$(windows_path "$INSTALL_DIR/$PLUGIN.dll")" "$1" "$MARKER" <<'PYTHON'
 import json
 import pathlib
 import sys
 
 config_path, target, action = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+marker = sys.argv[4]
 LIST_TYPE = (
     "System.Collections.Generic.List`1[[Dalamud.Configuration.DevPluginLocationSettings, Dalamud]],"
     " System.Private.CoreLib"
@@ -129,7 +134,7 @@ def is_target(entry):
 # moved location before, and leaving a stale entry behind means dalamud logs an
 # error about a path that no longer matters on every startup.
 def is_ours(entry):
-    return "rowena" in path_of(entry).lower()
+    return marker in path_of(entry).lower()
 
 
 def save():
