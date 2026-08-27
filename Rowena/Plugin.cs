@@ -182,7 +182,7 @@ public sealed class Plugin : IDalamudPlugin
         serverBar = new ServerBar(
             DtrBar, Framework, market, headlines,
             () => mainWindow.Show(MainWindow.Tab.Sinks),
-            () => mainWindow.Show(MainWindow.Tab.Flips));
+            () => mainWindow.Show(MainWindow.Tab.Overview));
 
         briefing = new Briefing(
             ClientState, Framework, notices, market, sweep, headlines, config, diagnostics,
