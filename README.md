@@ -522,8 +522,9 @@ picked it off a menu, and linking an item is a thing people do by hand all day.
 
 Logging in earns one line on the Overview, once the prices have been refetched: what is near its
 cap, what the flips pay and which one pays most, how old the furnishing sweep is. The
-server info bar carries the single most urgent of those all the time, and opens the tab
-it came from when clicked. `/rowena brief` says the line again on demand.
+server info bar is a boxed R that opens the window, growing text only for a cap warning
+or a fetch in flight; anything subtler waits in the window. `/rowena brief` says the line
+again on demand.
 
 Two alerts, each said once when it becomes true and not again until it has stopped being
 true: a currency entering the last tenth of its cap, a flip whose return crosses a

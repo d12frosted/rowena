@@ -1,4 +1,5 @@
 using Dalamud.Game.Gui.Dtr;
+using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
 using Rowena.Market;
 
@@ -9,21 +10,28 @@ namespace Rowena.UI;
 /// </summary>
 /// <remarks>
 /// The window answers questions when asked; this is the one fact worth knowing without
-/// asking. A currency running into its cap comes first, because past the cap earning is
-/// simply lost and nothing in the game says so. Otherwise, what the best split of your gil
-/// across the flips would pay. When neither has anything to say the entry hides, since a
-/// bar slot that always says something trains you to read none of it.
+/// asking. A currency running into its cap, because past the cap earning is simply lost
+/// and nothing in the game says so; or a fetch in flight, so its progress can be read
+/// without opening anything. When neither has anything to say the entry is the bare
+/// icon: one character of launcher, and its very shortness is the all-clear.
 ///
-/// Clicking opens the window on the tab the headline came from, where its working is.
+/// The slot is introduced by a boxed R rather than the plugin's name: the bar is the
+/// scarcest line of screen in the game, and the tooltip spells the name out for anyone
+/// still learning the glyph.
+///
+/// Clicking a cap warning opens the window on the Sinks tab, where its working is;
+/// otherwise the Overview. A fetch is readable from either, since the status strip
+/// reporting it is on every tab.
 ///
 /// Recomputed on its own clock, a few seconds rather than the window's half-second: it
-/// runs whether or not anything is open, and the allocation behind the flip figure is not
-/// frame-cheap. The books it reads are whatever the cache holds; the bar inherits their
-/// age and adds no fetching of its own.
+/// runs whether or not anything is open. The books it reads are whatever the cache holds;
+/// the bar inherits their age and adds no fetching of its own.
 /// </remarks>
 internal sealed class ServerBar : IDisposable
 {
     private static readonly TimeSpan Every = TimeSpan.FromSeconds(5);
+
+    private static readonly string Icon = SeIconChar.BoxedLetterR.ToIconString();
 
     private readonly IDtrBarEntry entry;
     private readonly IFramework framework;
@@ -31,7 +39,7 @@ internal sealed class ServerBar : IDisposable
     private readonly Headlines headlines;
 
     private DateTime nextAt;
-    private bool showingFlips;
+    private bool showingCap;
 
     public ServerBar(
         IDtrBar bar,
@@ -39,7 +47,7 @@ internal sealed class ServerBar : IDisposable
         MarketCache market,
         Headlines headlines,
         Action openSinks,
-        Action openFlips)
+        Action openOverview)
     {
         this.framework = framework;
         this.market = market;
@@ -47,10 +55,7 @@ internal sealed class ServerBar : IDisposable
 
         entry = bar.Get("Rowena");
         entry.Shown = false;
-
-        // Where the click lands follows the headline: a cap warning is answered by sinks, a
-        // profit figure by flips. Whatever was last shown is where the working is.
-        entry.OnClick = _ => (showingFlips ? openFlips : openSinks)();
+        entry.OnClick = _ => (showingCap ? openSinks : openOverview)();
 
         framework.Update += Tick;
     }
@@ -69,38 +74,28 @@ internal sealed class ServerBar : IDisposable
         // A second while fetching, so the percentage moves; the usual few seconds otherwise.
         nextAt = DateTime.UtcNow + (market.Busy ? TimeSpan.FromSeconds(1) : Every);
 
-        // A fetch in flight outranks everything: the other headlines are read off the books it
-        // is about to replace, and a bar that says "flips pay 6M" while the numbers behind it
-        // are being refetched is confidently stale.
         if (market.Busy && market.Progress is { Total: > 0 } progress)
         {
-            entry.Text = $"Rowena: fetching {100 * progress.Done / progress.Total}%";
-            entry.Tooltip = $"{progress.Done} of {progress.Total} items answered. Click to watch.";
+            entry.Text = $"{Icon} fetching {100 * progress.Done / progress.Total}%";
+            entry.Tooltip = $"Rowena: {progress.Done} of {progress.Total} items answered. Click to watch.";
             entry.Shown = true;
+            showingCap = false;
             return;
         }
 
         if (NearCap() is { } warning)
         {
-            entry.Text = $"Rowena: {warning.Line}";
+            entry.Text = $"{Icon} {warning.Line}";
             entry.Tooltip = warning.Detail;
             entry.Shown = true;
-            showingFlips = false;
+            showingCap = true;
             return;
         }
 
-        if (BestFlips() is { } profit and > 0)
-        {
-            showingFlips = true;
-            entry.Text = $"Rowena: flips pay {Phrases.CompactGil(profit)}";
-            entry.Tooltip =
-                $"The best split of your gil across the flips pays {profit:N0} gil\n"
-                + "at current depth. Click for the working.";
-            entry.Shown = true;
-            return;
-        }
-
-        entry.Shown = false;
+        entry.Text = Icon;
+        entry.Tooltip = "Rowena. Nothing urgent; click to open.";
+        entry.Shown = true;
+        showingCap = false;
     }
 
     /// <summary>The currency closest to its cap, once it is into the last tenth.</summary>
@@ -111,9 +106,7 @@ internal sealed class ServerBar : IDisposable
 
         return (
             $"{Phrases.UnitOf(near.Currency)} {near.Held:N0}/{near.Cap:N0}",
-            $"{near.Currency.Name} is nearly capped. Anything earned past the cap\n"
-            + "is simply lost; the Sinks tab knows what spending it pays.");
+            $"Rowena: {near.Currency.Name} is nearly capped. Anything earned past the\n"
+            + "cap is simply lost; the Sinks tab knows what spending it pays.");
     }
-
-    private long? BestFlips() => headlines.BestFlips()?.Total;
 }
