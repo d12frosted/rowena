@@ -25,9 +25,11 @@ namespace Rowena.Game;
 /// folded together by <see cref="KnownListings"/> and that is what <see cref="Listed"/> serves.
 ///
 /// What is deliberately not taken from here is the board as an order book. A listing carries
-/// no world, so a view cannot be attributed to a world or a data centre, and filing
-/// cross-world listings under the wrong board would quietly corrupt the one thing this plugin
-/// is careful about. Until that can be established, Universalis stays the source for depth.
+/// no world, so a view that merely happened past cannot be attributed to a world or a data
+/// centre, and filing cross-world listings under the wrong board would quietly corrupt the
+/// one thing this plugin is careful about. A view this plugin asked for itself is different,
+/// because the asker knows where it was standing: that is <see cref="BoardRequests"/>, and
+/// for everything else Universalis stays the source for depth.
 /// </remarks>
 internal sealed class BoardWatcher : IDisposable
 {

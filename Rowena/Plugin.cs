@@ -38,6 +38,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Briefing briefing;
     private readonly Places places;
     private readonly BoardWatcher boardWatcher;
+    private readonly BoardRequests boardRequests;
     private readonly LiveMarket live;
     private readonly HttpClient http;
     private readonly Configuration config;
@@ -88,6 +89,7 @@ public sealed class Plugin : IDalamudPlugin
         };
 
         boardWatcher = new BoardWatcher(MarketBoard, config, Save, diagnostics, Log);
+        boardRequests = new BoardRequests(MarketBoard, Framework, balances, market, config, diagnostics, Log);
         live = new LiveMarket(
             new MarketFeed(message => diagnostics.Note("live", message)),
             market, Framework, scope, new Worlds(DataManager, Log), config, diagnostics, Log);
@@ -175,7 +177,7 @@ public sealed class Plugin : IDalamudPlugin
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
             gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, overviewTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
-        windows.AddWindow(new RetainerOverlay(sellFill, undercutting, config, cells, market, scope));
+        windows.AddWindow(new RetainerOverlay(sellFill, undercutting, config, cells, market, scope, boardRequests));
 
         var headlines = new Headlines(trades, boards, balances, config);
 
@@ -204,8 +206,13 @@ public sealed class Plugin : IDalamudPlugin
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
                 ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
-                ["recheck listings"] = () => market.RefreshInBackground(
-                    scope.Selling, [.. boardWatcher.ListedItems()], true, FetchPriority.Interactive),
+                ["recheck listings"] = () =>
+                {
+                    // The same first-choice-then-fallback the overlay's refresh makes.
+                    if (!boardRequests.Refresh(scope.Selling, [.. boardWatcher.ListedItems()]))
+                        market.RefreshInBackground(
+                            scope.Selling, [.. boardWatcher.ListedItems()], true, FetchPriority.Interactive);
+                },
                 ["watch"] = () => Log.Information($"Watch: {watch.Report}"),
                 ["capture detail"] = () => Log.Information(realised.Detail),
                 ["realised"] = () => Log.Information(
@@ -408,6 +415,7 @@ public sealed class Plugin : IDalamudPlugin
         briefing.Dispose();
         serverBar.Dispose();
         places.Dispose();
+        boardRequests.Dispose();
         boardWatcher.Dispose();
         live.Dispose();
         market.Dispose();

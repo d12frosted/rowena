@@ -452,6 +452,17 @@ public sealed class Configuration : IPluginConfiguration
     /// </remarks>
     public bool LiveMarket { get; set; } = true;
 
+    /// <summary>
+    /// Whether a refresh may ask the game server itself instead of Universalis.
+    /// </summary>
+    /// <remarks>
+    /// Only ever where the answer is attributable: the world the character is standing on.
+    /// Exact where Universalis is however old its last upload is, and slower, one item a
+    /// second against a hundred a request, which is the right trade at a retainer bell and
+    /// the wrong one for a sweep.
+    /// </remarks>
+    public bool BoardRefresh { get; set; } = true;
+
     /// <summary>Whether logging in earns one line in chat saying what is worth knowing.</summary>
     public bool BriefOnLogin { get; set; } = true;
 

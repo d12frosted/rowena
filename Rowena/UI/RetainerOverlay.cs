@@ -57,6 +57,7 @@ internal sealed class RetainerOverlay : Window
     private readonly ItemCells cells;
     private readonly MarketCache market;
     private readonly PricingScope scope;
+    private readonly BoardRequests requests;
 
     private IDisposable? shell;
 
@@ -75,7 +76,8 @@ internal sealed class RetainerOverlay : Window
         Configuration config,
         ItemCells cells,
         MarketCache market,
-        PricingScope scope)
+        PricingScope scope,
+        BoardRequests requests)
         : base("Rowena##retainer", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove
             | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.AlwaysAutoResize)
     {
@@ -85,6 +87,7 @@ internal sealed class RetainerOverlay : Window
         this.cells = cells;
         this.market = market;
         this.scope = scope;
+        this.requests = requests;
 
         RespectCloseHotkey = false;
         IsOpen = true;
@@ -244,13 +247,23 @@ internal sealed class RetainerOverlay : Window
 
         ImGui.SameLine();
 
-        if (Style.Quiet("refresh", "Refetches the books these listings sit in. The floor from an hour ago is not a floor."))
+        if (Style.Quiet(
+            "refresh",
+            "Re-reads the books these listings sit in, from the board itself when you are standing\n"
+            + "on it, which is exact, and from Universalis otherwise. The floor from an hour ago is\n"
+            + "not a floor."))
             Ask(slots);
 
         DrawRefreshState();
     }
 
     /// <summary>Asks the board about every listing on this retainer, and starts watching for it.</summary>
+    /// <remarks>
+    /// The board itself first: at a bell the character is standing on the very world these
+    /// listings sell on, so the game's own answer is exact where Universalis's is whatever
+    /// somebody last uploaded. Universalis remains the answer when the boards differ, or when
+    /// asking the game has been turned off.
+    /// </remarks>
     private void Ask((StoredSlot Slot, int Index)[] slots)
     {
         var ids = slots.Select(entry => entry.Slot.ItemId).Distinct().ToArray();
@@ -259,7 +272,8 @@ internal sealed class RetainerOverlay : Window
         askedAt = DateTimeOffset.UtcNow;
         asked = ids;
 
-        market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive);
+        if (!requests.Refresh(scope.Selling, ids))
+            market.RefreshInBackground(scope.Selling, ids, true, FetchPriority.Interactive);
     }
 
     /// <summary>
@@ -280,13 +294,16 @@ internal sealed class RetainerOverlay : Window
         {
             var back = Back();
 
-            if (back < asked.Length && market.Busy)
+            if (back < asked.Length && (requests.Busy || market.Busy))
             {
                 ImGui.SameLine();
                 ImGui.TextColored(Style.Muted, $"fetching {back} of {asked.Length}");
-                Style.Explain(
-                    "Asking Universalis, a few listings a request, and the ages above fill in as the\n"
-                    + "answers land. A press made while a sweep is running waits for the sweep first.");
+                Style.Explain(requests.Busy
+                    ? "Asking the board itself, one item a second, and the ages above fill in as it\n"
+                      + "answers. Exact but slow; anything the board goes quiet on falls back to\n"
+                      + "Universalis rather than landing nowhere."
+                    : "Asking Universalis, a few listings a request, and the ages above fill in as the\n"
+                      + "answers land. A press made while a sweep is running waits for the sweep first.");
 
                 return;
             }
