@@ -617,10 +617,17 @@ My own listings, because a listing carrying one of my retainer ids is mine where
 board view came from. An item's tooltip says what I have out and at what price, and says so
 in red when the board has gone under me.
 
-What is deliberately not taken from the game is the board as an order book. A listing
-carries no world, so a view cannot be attributed to a world or a data centre, and filing
-cross-world listings under the wrong board would quietly corrupt the one thing this plugin
-is careful about. Universalis stays the source for depth.
+The board as an order book is taken only on one condition: that the view can be attributed
+to a world. A listing carries no world, so a view that merely happened past cannot be, and
+filing cross-world listings under the wrong board would quietly corrupt the one thing this
+plugin is careful about. But a request the plugin sends itself is answered about the world
+the character is standing on, so there the missing fact is known before it is asked. That
+is what the refresh at the retainer does: it asks the game server one item at a time, the
+way a price check does, and banks each answer as an exact book, sales history included.
+Slow, about a second an item, which is the right trade for twenty listings at a bell and
+the wrong one for a sweep of nine hundred; anything the board goes quiet on, and every
+refresh made anywhere but on that world, still goes to Universalis. A setting turns it
+off. For everything else, breadth and history at scale, Universalis stays the source.
 
 ## Checking the numbers against the board
 

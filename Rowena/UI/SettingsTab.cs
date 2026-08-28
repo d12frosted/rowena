@@ -219,6 +219,13 @@ internal sealed class SettingsTab(
             + "signal, not prices: what it names is refetched properly, since the feed sends only what\n"
             + "moved and a book rebuilt from those would drift. Cheaper for them than asking repeatedly.");
 
+        changed |= Toggle(
+            "Refresh from the board itself", config.BoardRefresh, value => config.BoardRefresh = value,
+            "A refresh pressed at the retainer asks the game server rather than Universalis, the way\n"
+            + "a price check does: exact, current, and about the very board these listings sell on.\n"
+            + "Slower, one item a second, and only while standing on that world; everything else,\n"
+            + "and anything the board goes quiet on, still goes to Universalis.");
+
         Group("login and alerts");
 
         changed |= Toggle(

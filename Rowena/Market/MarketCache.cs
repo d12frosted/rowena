@@ -572,6 +572,20 @@ internal sealed class MarketCache : IDisposable
             ? book.WithVelocity(summary.Summary.SaleVelocityPerDay)
             : book;
 
+    /// <summary>
+    /// Takes in a book somebody else fetched, exactly as if the worker had.
+    /// </summary>
+    /// <remarks>
+    /// The board requests read the game's own packets and land here, so there is one cache
+    /// however a book arrived: stamped now, given the surveyed sale rate when one is held,
+    /// and announced through <see cref="BookChanged"/> like any other.
+    /// </remarks>
+    public void Absorb(string scope, OrderBook book)
+    {
+        StoreBooks(scope, new Dictionary<uint, OrderBook> { [book.ItemId] = book }, [book.ItemId]);
+        LastRefresh = DateTimeOffset.UtcNow;
+    }
+
     /// <summary>Everything held, for writing to disk.</summary>
     public IEnumerable<(string Scope, OrderBook Book, DateTimeOffset Fetched)> ExportBooks() =>
         books.Select(entry => (entry.Key.Scope, entry.Value.Book, entry.Value.Fetched));
