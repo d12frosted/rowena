@@ -127,7 +127,10 @@ public class CompletenessTests
 public class CredibleFloorTests
 {
     private static OrderBook Listed(long price, params long[] sales) =>
-        OrderBook.Create(1, [new Listing(price, 1, "Phoenix")], recentSales: sales);
+        OrderBook.Create(
+            1,
+            [new Listing(price, 1, "Phoenix")],
+            recentSales: [.. sales.Select(paid => new Sale(paid, default))]);
 
     [Fact]
     public void AFloorNobodyCouldBePayingIsNotAPrice()
@@ -188,7 +191,10 @@ public class RecentSalesTests
         var book = UniversalisJson.ParseItem(Fixtures.Read(Fixtures.MountToken));
 
         Assert.NotEmpty(book.RecentSales);
-        Assert.All(book.RecentSales, price => Assert.True(price > 0));
+        Assert.All(book.RecentSales, sale => Assert.True(sale.UnitPrice > 0));
+
+        // The when as well as the what: recency is what makes the median honest.
+        Assert.All(book.RecentSales, sale => Assert.True(sale.At > DateTimeOffset.UnixEpoch));
     }
 }
 

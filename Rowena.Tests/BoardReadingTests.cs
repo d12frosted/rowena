@@ -99,10 +99,10 @@ public class BoardReadingTests
         Assert.False(reading.SalesSeen);
 
         reading.Add([Offer(100)]);
-        reading.Sales([120, 110, 130]);
+        reading.Sales([new Sale(120, Noon), new Sale(110, Noon), new Sale(130, Noon)]);
 
         Assert.True(reading.SalesSeen);
-        Assert.Equal([120, 110, 130], reading.Book(Noon).RecentSales);
+        Assert.Equal([new Sale(120, Noon), new Sale(110, Noon), new Sale(130, Noon)], reading.Book(Noon).RecentSales);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class BoardReadingTests
         var reading = new BoardReading(1, "Shiva");
 
         reading.Add([Offer(100)]);
-        reading.Sales([120]);
+        reading.Sales([new Sale(120, Noon)]);
 
         Assert.False(reading.Book(Noon).RateKnown);
     }

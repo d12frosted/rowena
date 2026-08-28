@@ -118,7 +118,7 @@ public static class Chase
         var units = under.Sum(listing => listing.Quantity);
         var days = book.SaleVelocityPerDay > 0 ? units / book.SaleVelocityPerDay : (double?)null;
 
-        var typical = book.RecentSales.Count >= Undercut.EnoughSales && Median(book.RecentSales) is > 0 and var paid
+        var typical = book.RecentSales.Count >= OrderBook.EnoughSales && book.TypicalSale is > 0 and var paid
             ? paid
             : (long?)null;
 
@@ -172,11 +172,5 @@ public static class Chase
             return ChaseCall.Wait;
 
         return dumped ? ChaseCall.Withdraw : ChaseCall.Accept;
-    }
-
-    private static long Median(IReadOnlyList<long> values)
-    {
-        var sorted = values.Order().ToArray();
-        return sorted.Length == 0 ? 0 : sorted[sorted.Length / 2];
     }
 }

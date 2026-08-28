@@ -35,7 +35,7 @@ public sealed class BoardReading(uint itemId, string world)
     public const int MostListings = 100;
 
     private readonly List<Listing> listings = [];
-    private IReadOnlyList<long> sales = [];
+    private IReadOnlyList<Sale> sales = [];
 
     /// <summary>Whether the pages have said all they are going to.</summary>
     public bool Ended { get; private set; }
@@ -63,9 +63,9 @@ public sealed class BoardReading(uint itemId, string world)
     }
 
     /// <summary>Takes the sales in, per unit and newest first, as the history packet has them.</summary>
-    public void Sales(IReadOnlyList<long> unitPrices)
+    public void Sales(IReadOnlyList<Sale> paid)
     {
-        sales = unitPrices;
+        sales = paid;
         SalesSeen = true;
     }
 

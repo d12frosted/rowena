@@ -26,7 +26,7 @@ public sealed class OrderBook
         DateTimeOffset retrieved,
         bool complete,
         MarketSource source,
-        IReadOnlyList<long> recentSales)
+        IReadOnlyList<Sale> recentSales)
     {
         ItemId = itemId;
         Listings = listings;
@@ -77,7 +77,51 @@ public sealed class OrderBook
     public MarketSource Source { get; }
 
     /// <summary>What the item actually changed hands for lately, newest first.</summary>
-    public IReadOnlyList<long> RecentSales { get; }
+    public IReadOnlyList<Sale> RecentSales { get; }
+
+    /// <summary>How many recent sales it takes before "what people pay" is worth acting on.</summary>
+    /// <remarks>A couple of fire-sale buys should not drag a legitimately dear item down to them.</remarks>
+    public const int EnoughSales = 5;
+
+    /// <summary>How far back a sale still describes the market rather than its history.</summary>
+    public static readonly TimeSpan Lately = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// What people pay, weighted towards the people paying it now.
+    /// </summary>
+    /// <remarks>
+    /// The median of the last week's sales, when a week is enough of them to speak; the
+    /// median of everything held, when it is not. Measured, on a parasol asking 340,989:
+    /// twenty sales split into an old cluster at 126,000 and a last-week cluster at 300,000,
+    /// and the time-blind median quoted the old one, calling for a reprice to half of what
+    /// the five most recent buyers had just paid. A median is robust against a fire sale;
+    /// only the window makes it honest about a market that moved.
+    ///
+    /// Ages are measured against <see cref="Retrieved"/> rather than the reader's clock, so
+    /// a book answers the same way for as long as it is held: its sales do not slide out of
+    /// the window while the book itself goes stale, which is <see cref="Freshness"/>'s to say.
+    /// </remarks>
+    public long? TypicalSale
+    {
+        get
+        {
+            if (RecentSales.Count == 0)
+                return null;
+
+            // Guarded subtraction: a book that never said when it was retrieved sits at the
+            // epoch, and a week before the beginning of time is not a DateTimeOffset.
+            var cutoff = Retrieved - DateTimeOffset.MinValue <= Lately
+                ? DateTimeOffset.MinValue
+                : Retrieved - Lately;
+
+            var lately = RecentSales
+                .Where(sale => sale.At >= cutoff)
+                .Select(sale => sale.UnitPrice)
+                .ToArray();
+
+            return Median(lately.Length >= EnoughSales ? lately : [.. RecentSales.Select(sale => sale.UnitPrice)]);
+        }
+    }
 
     /// <summary>
     /// The floor, when anybody could plausibly be paying it.
@@ -101,12 +145,7 @@ public sealed class OrderBook
         if (Floor is not { } floor)
             return null;
 
-        if (RecentSales.Count == 0)
-            return floor;
-
-        var typical = Median(RecentSales);
-
-        return typical > 0 && floor > typical * factor ? null : floor;
+        return TypicalSale is > 0 and var typical && floor > typical * factor ? null : floor;
     }
 
     private static long Median(IReadOnlyList<long> values)
@@ -127,7 +166,7 @@ public sealed class OrderBook
         DateTimeOffset retrieved = default,
         bool complete = true,
         MarketSource source = MarketSource.Universalis,
-        IReadOnlyList<long>? recentSales = null)
+        IReadOnlyList<Sale>? recentSales = null)
     {
         var sorted = listings.OrderBy(listing => listing.UnitPrice).ToArray();
         return new OrderBook(itemId, sorted, saleVelocityPerDay, retrieved, complete, source, recentSales ?? []);

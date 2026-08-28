@@ -638,7 +638,7 @@ internal sealed class CraftTab
     /// </remarks>
     private MarketNature Nature(uint itemId) =>
         boards.Selling(itemId) is { RateKnown: true } book
-            ? MarketNature.Of(book.UnitsListed, book.SaleVelocityPerDay, book.RecentSales)
+            ? MarketNature.Of(book.UnitsListed, book.SaleVelocityPerDay, [.. book.RecentSales.Select(sale => sale.UnitPrice)])
             : new MarketNature(MarketCharacter.Unknown, null, null);
 
     /// <summary>What each material costs, for the tooltip.</summary>

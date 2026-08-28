@@ -13,7 +13,7 @@ public class ListingDiagnosisTests
             1,
             listings.Select(l => new Listing(l.Price, l.Quantity, "")),
             velocity,
-            recentSales: sales ?? []);
+            recentSales: [.. (sales ?? []).Select(price => new Sale(price, default))]);
 
     private static ListingDiagnosis? Diagnose(
         long mine,

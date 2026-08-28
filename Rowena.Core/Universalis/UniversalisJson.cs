@@ -153,16 +153,22 @@ public static class UniversalisJson
         // is, and it errs towards doubt, which is the safe direction.
         var complete = requested <= 0 || listings.Count < requested;
 
-        // What it actually changed hands for, which is the only evidence that a listed price
-        // is one anybody pays.
-        var sales = new List<long>();
+        // What it actually changed hands for, and when: the when is what lets "what people
+        // pay" mean lately rather than a median over however far back the history reaches.
+        var sales = new List<Sale>();
 
         if (item.TryGetProperty("recentHistory", out var history))
         {
             foreach (var sale in history.EnumerateArray())
             {
                 if (sale.TryGetProperty("pricePerUnit", out var paid) && paid.ValueKind == JsonValueKind.Number)
-                    sales.Add(paid.GetInt64());
+                {
+                    sales.Add(new Sale(
+                        paid.GetInt64(),
+                        sale.TryGetProperty("timestamp", out var at) && at.ValueKind == JsonValueKind.Number
+                            ? DateTimeOffset.FromUnixTimeSeconds(at.GetInt64())
+                            : default));
+                }
             }
         }
 
