@@ -73,7 +73,10 @@ public class UndercutTests
 public class UndercutNobodyPaysTests
 {
     private static OrderBook Book(long[] sales, params (long Price, int Units)[] listings) =>
-        OrderBook.Create(1, listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")), recentSales: sales);
+        OrderBook.Create(
+            1,
+            listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")),
+            recentSales: [.. sales.Select(price => new Sale(price, default))]);
 
     private static readonly long[] Paid = [1_200, 1_300, 1_450, 1_450, 1_500, 1_490, 1_400];
 
@@ -130,7 +133,10 @@ public class UndercutNobodyPaysTests
 public class UndercutRoomAboveTests
 {
     private static OrderBook Book(long[] sales, params (long Price, int Units)[] listings) =>
-        OrderBook.Create(1, listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")), recentSales: sales);
+        OrderBook.Create(
+            1,
+            listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")),
+            recentSales: [.. sales.Select(price => new Sale(price, default))]);
 
     [Fact]
     public void ARaiseMovesTheOtherWay()
@@ -209,7 +215,7 @@ public class UndercutRoomAboveTests
         var book = OrderBook.Create(
             1,
             [new Listing(100, 1, "Light", IsHq: true), new Listing(200, 5, "Light"), new Listing(500, 1, "Light", IsHq: true)],
-            recentSales: [190, 195, 200]);
+            recentSales: [new Sale(190, default), new Sale(195, default), new Sale(200, default)]);
 
         var plan = Undercut.Of(100, book, 5, hq: true);
 

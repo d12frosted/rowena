@@ -111,7 +111,7 @@ public readonly record struct ListingDiagnosis(
             mine,
             tax.NetProceeds(mine),
             tax.NetProceeds(floor),
-            book.RecentSales.Count > 0 ? Median(book.RecentSales) : null,
+            book.TypicalSale,
             ahead == 0 ? Headroom(book, mine) : null,
             vendorPrice > 0 ? vendorPrice : null);
 
@@ -164,12 +164,6 @@ public readonly record struct ListingDiagnosis(
         book.Listings.FirstOrDefault(listing => listing.UnitPrice > mine) is { UnitPrice: > 0 } next
             ? next.UnitPrice - 1
             : null;
-
-    private static long Median(IReadOnlyList<long> values)
-    {
-        var sorted = values.Order().ToArray();
-        return sorted.Length == 0 ? 0 : sorted[sorted.Length / 2];
-    }
 
     /// <summary>What chasing the floor costs per unit, which is the number worth seeing first.</summary>
     public long Haircut => Math.Max(0, NetHolding - NetChasing);

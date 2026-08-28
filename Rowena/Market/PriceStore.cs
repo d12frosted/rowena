@@ -13,9 +13,9 @@ namespace Rowena.Market;
 /// <param name="C">Whether the book was known to hold every listing there is.</param>
 /// <param name="P">Where it came from, as <see cref="MarketSource"/>.</param>
 /// <param name="W">The world each listing stands on, alongside L.</param>
-/// <param name="H">What it recently sold for, which is how a fantasy floor is spotted.</param>
+/// <param name="H">What it recently sold for and when, as [price, unix seconds] pairs.</param>
 internal sealed record StoredBook(
-    string S, uint I, long T, double V, long[][] L, bool C, int P, string[] W, long[] H);
+    string S, uint I, long T, double V, long[][] L, bool C, int P, string[] W, long[][] H);
 
 internal sealed record StoredSweep(long At, int Candidates, string[] Shortlist);
 
@@ -50,7 +50,7 @@ internal sealed class PriceStore(string path, IPluginLog log)
     /// than guessed at: prices are cheap to fetch again and a wrong guess about, say, whether
     /// a book was complete would be believed for as long as the file lived.
     /// </remarks>
-    private const int CurrentVersion = 5;
+    private const int CurrentVersion = 6;
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
@@ -73,7 +73,7 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         entry.Book.Complete,
                         (int)entry.Book.Source,
                         [.. entry.Book.Listings.Select(listing => listing.World)],
-                        [.. entry.Book.RecentSales])),
+                        [.. entry.Book.RecentSales.Select(sale => new[] { sale.UnitPrice, sale.At.ToUnixTimeSeconds() })])),
                 ],
                 [
                     .. summaries.Select(entry => new StoredSummary(
@@ -155,7 +155,13 @@ internal sealed class PriceStore(string path, IPluginLog log)
                         fetched,
                         book.C,
                         (MarketSource)book.P,
-                        book.H ?? []),
+                        [
+                            .. (book.H ?? [])
+                                .Where(pair => pair.Length >= 1)
+                                .Select(pair => new Sale(
+                                    pair[0],
+                                    pair.Length >= 2 ? DateTimeOffset.FromUnixTimeSeconds(pair[1]) : default)),
+                        ]),
                     fetched));
             }
 

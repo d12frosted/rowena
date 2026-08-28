@@ -433,10 +433,26 @@ internal sealed class BoardRequests : IDisposable
             if (current is not { } pending || history.ItemId != pending.ItemId)
                 return;
 
-            pending.Reading.Sales([.. history.HistoryListings.Select(sale => (long)sale.SalePrice)]);
+            pending.Reading.Sales(
+            [
+                .. history.HistoryListings.Select(sale => new Sale((long)sale.SalePrice, When(sale.PurchaseTime))),
+            ]);
+
             pending.LastHeard = DateTime.UtcNow;
         }
     }
+
+    /// <summary>
+    /// A packet's time as an offset, whatever kind of DateTime it arrived wearing.
+    /// </summary>
+    /// <remarks>
+    /// An unmarked kind is taken as UTC, which the unix stamps in the packets are. Being an
+    /// hour or three out would not matter anyway: the consumer is a week-wide window.
+    /// </remarks>
+    private static DateTimeOffset When(DateTime at) =>
+        at.Kind == DateTimeKind.Unspecified
+            ? new DateTimeOffset(at, TimeSpan.Zero)
+            : new DateTimeOffset(at.ToUniversalTime(), TimeSpan.Zero);
 
     /// <summary>The item being waited on: its reading so far, and how long it has left.</summary>
     private sealed class Pending(uint itemId, BoardReading reading, int requestId, DateTime deadline)

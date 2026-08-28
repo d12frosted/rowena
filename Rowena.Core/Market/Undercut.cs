@@ -59,10 +59,6 @@ public readonly record struct UndercutPlan(
 /// </remarks>
 public static class Undercut
 {
-    /// <summary>How many recent sales it takes before "what people pay" is worth acting on.</summary>
-    /// <remarks>A couple of fire-sale buys should not drag a legitimately dear item down to them.</remarks>
-    public const int EnoughSales = 5;
-
     /// <param name="hq">The quality of my listing, which decides who counts as in front of it.</param>
     public static UndercutPlan? Of(long mine, OrderBook? book, long margin, bool hq = false)
     {
@@ -72,12 +68,12 @@ public static class Undercut
         var ahead = book.Listings.Where(listing => listing.UnitPrice < mine && listing.Serves(hq)).ToArray();
         var units = ahead.Sum(listing => listing.Quantity);
         long? below = ahead.Length == 0 ? null : ahead.Min(listing => listing.UnitPrice);
-        var paid = Median(book.RecentSales);
+        var paid = book.TypicalSale ?? 0;
 
         // What people pay, if enough of them have, and whether the cheapest thing on the board
         // (mine, or whoever is in front) is far above it. The factor is the diagnosis's own, so
         // the row that says "nobody pays this" and the button that fixes it agree.
-        if (book.RecentSales.Count >= EnoughSales && paid > 0 && (below ?? mine) > paid * ListingDiagnosis.Rich)
+        if (book.RecentSales.Count >= OrderBook.EnoughSales && paid > 0 && (below ?? mine) > paid * ListingDiagnosis.Rich)
             return new UndercutPlan(mine, Under(paid, margin), paid, units, UndercutWhy.NobodyPays);
 
         if (below is { } floor)
@@ -100,10 +96,4 @@ public static class Undercut
     }
 
     private static long Under(long price, long margin) => Math.Max(1, price - Math.Max(0, margin));
-
-    private static long Median(IReadOnlyList<long> values)
-    {
-        var sorted = values.Order().ToArray();
-        return sorted.Length == 0 ? 0 : sorted[sorted.Length / 2];
-    }
 }

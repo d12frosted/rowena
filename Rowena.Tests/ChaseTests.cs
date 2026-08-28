@@ -15,7 +15,7 @@ public class ChaseTests
             1,
             listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")),
             perDay,
-            recentSales: sales);
+            recentSales: [.. sales.Select(price => new Sale(price, default))]);
 
     private static ChaseVerdict Read(long mine, OrderBook book, int patience = Patience) =>
         Read(mine, book, MarketTax.None, patience);
@@ -181,7 +181,7 @@ public class ChaseTests
                 new Listing(4_989, 1, "Light", IsHq: true),
             ],
             10d,
-            recentSales: Sold(4_989));
+            recentSales: [.. Sold(4_989).Select(price => new Sale(price, default))]);
 
         var plan = Undercut.Of(4_989, book, 5, hq: true);
         var verdict = Chase.Of(plan!.Value, book, MarketTax.None, Patience, hq: true);

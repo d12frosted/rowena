@@ -238,7 +238,9 @@ a tab per question:
   the price that would put it first (the cheapest listing ahead, less a margin from settings,
   five gil by default), and opening that listing's price dialog on the retainer fills the
   number in. A row nobody is paying for gets a target too, cheapest on the board or not: what
-  recent sales went for, less the margin, once there are enough sales to trust. The front of
+  recent sales went for, less the margin, once there are enough sales to trust. Recent means
+  the last week when a week is enough of them to speak, because a market that moved leaves
+  half its history describing a price that no longer exists. The front of
   a wall nobody buys from is not a position. Only the field: the game's confirm button is still the one that commits it.
   Items you would rather leave where they are can be ignored per item; the number stays on
   the row, the dialog is left alone, and the ignore clears once nothing of that item is
