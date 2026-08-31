@@ -95,5 +95,37 @@ public static class Undercut
             : null;
     }
 
+    /// <summary>
+    /// What to ask for something that is not listed yet.
+    /// </summary>
+    /// <remarks>
+    /// The same reading as a reprice with the one thing a reprice has taken out: there is no
+    /// price of mine to move from, so there is no move to size and no queue of mine to be at
+    /// the back of. What is left is where the ask should sit, and the two answers had better
+    /// agree, since a stack listed from the bags is repriced by the column upstairs the moment
+    /// it is out.
+    ///
+    /// An empty board asks what people pay rather than that less the margin: undercutting
+    /// nobody by five gil is five gil given to nobody.
+    /// </remarks>
+    public static long? Fresh(OrderBook? book, long margin, bool hq = false)
+    {
+        if (book is null)
+            return null;
+
+        var serving = book.Listings.Where(listing => listing.Serves(hq)).ToArray();
+        long? floor = serving.Length == 0 ? null : serving.Min(listing => listing.UnitPrice);
+        var paid = book.TypicalSale ?? 0;
+
+        // A wall of listings nobody takes is not a market and its front is not a position, so
+        // what people pay is the price rather than what the wall asks. The bar is the
+        // diagnosis's, so this and the reprice column cannot disagree about the same board.
+        if (book.RecentSales.Count >= OrderBook.EnoughSales && paid > 0
+            && (floor is null || floor > paid * ListingDiagnosis.Rich))
+            return floor is null ? paid : Under(paid, margin);
+
+        return floor is { } price ? Under(price, margin) : null;
+    }
+
     private static long Under(long price, long margin) => Math.Max(1, price - Math.Max(0, margin));
 }

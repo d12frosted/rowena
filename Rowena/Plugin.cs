@@ -165,8 +165,12 @@ public sealed class Plugin : IDalamudPlugin
         var keeping = new Keeping(config, Save);
         var unlocks = new Unlocks(DataManager, Log);
 
+        // One reading of a pile, for the tab that ranks everything I own and the panel at the
+        // bell that ranks what is within reach of it.
+        var pile = new Pile(boards, market, config, itemNames, keeping, unlocks);
+
         var hoardTab = new HoardTab(
-            balances, retainerStock, boardWatcher, boards, market, cells, config, keeping, unlocks, diagnostics,
+            balances, retainerStock, boardWatcher, boards, cells, config, pile, keeping, diagnostics,
             () => craftTab.Wants());
 
         var overviewTab = new OverviewTab(
@@ -182,7 +186,9 @@ public sealed class Plugin : IDalamudPlugin
             trades, market, balances, scope, gatherBuddy, cells, places, live, diagnostics, sweep, vendorSweep,
             gatherSweep, convertTab, craftTab, vendorTab, gatherTab, sellingTab, hoardTab, overviewTab, settingsTab, config, Save);
         windows.AddWindow(mainWindow);
-        windows.AddWindow(new RetainerOverlay(sellFill, undercutting, config, cells, market, scope, boardRequests));
+        windows.AddWindow(new RetainerOverlay(
+            sellFill, undercutting, config, cells, market, scope, boardRequests, pile, balances, retainerStock,
+            boards, boardWatcher, diagnostics, () => craftTab.Wants()));
 
         var headlines = new Headlines(trades, boards, balances, config);
 

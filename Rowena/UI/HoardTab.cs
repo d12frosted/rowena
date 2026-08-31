@@ -49,26 +49,23 @@ internal sealed class HoardTab
     private readonly RetainerStock stock;
     private readonly BoardWatcher board;
     private readonly Boards boards;
-    private readonly MarketCache market;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly Pile pile;
     private readonly Keeping keeping;
-    private readonly Unlocks unlocks;
     private readonly Func<IReadOnlySet<uint>> wanted;
 
     private readonly Rebuilt<Model> model;
-    private readonly HashSet<uint> asked = [];
 
     public HoardTab(
         Balances balances,
         RetainerStock stock,
         BoardWatcher board,
         Boards boards,
-        MarketCache market,
         ItemCells cells,
         Configuration config,
+        Pile pile,
         Keeping keeping,
-        Unlocks unlocks,
         Diagnostics diagnostics,
         Func<IReadOnlySet<uint>> wanted)
     {
@@ -76,11 +73,10 @@ internal sealed class HoardTab
         this.stock = stock;
         this.board = board;
         this.boards = boards;
-        this.market = market;
         this.cells = cells;
         this.config = config;
+        this.pile = pile;
         this.keeping = keeping;
-        this.unlocks = unlocks;
         this.wanted = wanted;
 
         model = new Rebuilt<Model>("hoard", Build, diagnostics);
@@ -418,128 +414,52 @@ internal sealed class HoardTab
     }
 
     /// <summary>Prices the bags off the cheap summaries.</summary>
+    /// <summary>Prices the bags off the shared reading of a pile.</summary>
     private Model Build()
     {
-        if (boards.Scope.Selling is not { } selling)
-            return new Model([], 0, 0, [], []);
-
-        var tax = boards.Tax;
-        var needed = wanted();
-        var rows = new List<Row>();
-        var missing = new List<uint>();
-
         var carried = balances.Carrying();
         var stored = stock.Held();
 
-        foreach (var itemId in carried.Keys.Concat(stored.Keys).Distinct())
-        {
-            var inBags = carried.GetValueOrDefault(itemId);
-            var inRetainers = stored.GetValueOrDefault(itemId);
-            var quantity = inBags + inRetainers;
+        var holdings = carried.Keys
+            .Concat(stored.Keys)
+            .Distinct()
+            .ToDictionary(
+                itemId => itemId,
+                itemId => carried.GetValueOrDefault(itemId) + stored.GetValueOrDefault(itemId));
 
-            var vendor = boards.Vendor(itemId);
+        var reading = pile.Read(holdings, wanted());
 
-            // A full book when one has been fetched, the cheap summary otherwise. The book is
-            // the better answer and is what the background fetch actually stores, so asking
-            // only the summaries meant the stacks this tab had just asked about stayed unknown
-            // however long it waited.
-            var priced = Priced(selling, itemId);
-
-            // No summary for something the board trades is an unanswered question, not a board
-            // price of nothing. Treated as nothing it would read as a confident "vendor it" for
-            // every stack the sweep has not reached, which is the one mistake this whole plugin
-            // exists to avoid: a missing number is not a small number.
-            if (priced is null && boards.Marketable(itemId))
-            {
-                missing.Add(itemId);
-                continue;
-            }
-
-            if (priced is null && vendor <= 0)
-                continue;
-
-            var verdict = Liquidation.Of(
-                quantity,
-                priced?.Floor,
-                priced?.SalesPerDay ?? 0d,
-                vendor,
-                tax,
-                config.SellingHorizon(),
-                config.SlotFloor,
-                Kept(itemId, needed));
-
-            if (verdict.Call == HoardCall.Worthless)
-                continue;
-
-            rows.Add(new Row(itemId, cells.Name(itemId), quantity, inBags, inRetainers, verdict));
-        }
-
-        // The big survey runs against the board you buy on, and a bag is priced against the one
-        // you sell on, so a handful of stacks are usually unknown here even after it. Asked for
-        // once each rather than on every rebuild, at the priority that yields to anything a
-        // person is waiting on.
-        if (missing.Except(asked).ToArray() is { Length: > 0 } fresh)
-        {
-            asked.UnionWith(fresh);
-            market.RefreshInBackground(selling, fresh, false, FetchPriority.Background);
-        }
+        var rows = reading.Stacks
+            .Select(stack => new Row(
+                stack.ItemId,
+                cells.Name(stack.ItemId),
+                stack.Quantity,
+                carried.GetValueOrDefault(stack.ItemId),
+                stored.GetValueOrDefault(stack.ItemId),
+                stack.Verdict))
+            .ToArray();
 
         // Twenty a retainer, less whatever is already out. Only what the board is the better
         // counter for competes for a slot: a vendor needs no slot and no waiting.
         var slots = Math.Max(0, stock.Seen.Known * SlotsEach - board.Known().Count);
 
+        // A slot holds a stack, so what competes for one is a stack of each rather than the pile.
         var plan = RetainerSlots.Fill(
             rows.Where(row => row.Verdict.Call == HoardCall.List)
                 .Select(row => new SlotCandidate(
-                    row.ItemId, row.Quantity, row.Verdict.Worth, row.Verdict.DaysToSell)),
-            slots,
-            config.SellingHorizon());
+                    row.ItemId,
+                    row.Verdict.Listable,
+                    row.Verdict.Listable * row.Verdict.EachOnBoard,
+                    row.Verdict.Realised)),
+            slots);
 
         return new Model(
             [.. rows.OrderByDescending(row => row.Verdict.Worth)],
             rows.Sum(row => row.Verdict.Call == HoardCall.Keep ? 0 : row.Verdict.Worth),
-            missing.Count,
-            [.. missing],
+            reading.Unpriced.Count,
+            [.. reading.Unpriced],
             plan);
     }
-
-    /// <summary>
-    /// Why a stack is not for sale, if it is not.
-    /// </summary>
-    /// <remarks>
-    /// My own word first, because it is the only one of the three that was given deliberately:
-    /// if I have said a thing is mine, nothing the sheets or the craft list say should talk me
-    /// out of it. The game's word comes next, since it is the one that cannot be recovered from
-    /// by earning the gil back.
-    /// </remarks>
-    private KeepWhy Kept(uint itemId, IReadOnlySet<uint> needed) =>
-        keeping.Mine(itemId) ? KeepWhy.Mine
-            : unlocks.Learned(itemId) is false ? KeepWhy.Unlearned
-                : needed.Contains(itemId) ? KeepWhy.Wanted
-                    : KeepWhy.Surplus;
-
-    /// <summary>What a stack fetches and how fast, from whichever source has an answer.</summary>
-    private readonly record struct Priceable(long? Floor, double SalesPerDay);
-
-    /// <summary>
-    /// The best price on hand, without asking for a new one.
-    /// </summary>
-    /// <remarks>
-    /// A book refuses a floor no recent sale supports, which matters more here than anywhere:
-    /// this table is telling somebody what their own things are worth, and a fantasy listing
-    /// would inflate a pile they might then decide to keep.
-    ///
-    /// A book that does not yet know how fast it moves is no use here either, whatever its
-    /// floor: the whole verdict turns on whether the board will take the stack. Falling back to
-    /// the summary covers it, and failing that the stack waits rather than being called dead
-    /// and sent to a vendor.
-    /// </remarks>
-    private Priceable? Priced(string selling, uint itemId) =>
-        boards.Selling(itemId) is { RateKnown: true } book
-            ? new Priceable(book.CredibleFloor(), book.SaleVelocityPerDay)
-            : market.Summary(selling, itemId) is { } summary
-                ? new Priceable(summary.Floor, summary.SaleVelocityPerDay)
-                : null;
 
     private sealed record Row(
         uint ItemId,

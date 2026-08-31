@@ -263,3 +263,50 @@ public class UndercutQualityTests
         Assert.Equal(545, plan!.Value.Target);
     }
 }
+
+/// <summary>What to ask for something that is not listed yet.</summary>
+public class UndercutFreshTests
+{
+    private static OrderBook Book(long[] sales, params (long Price, int Units)[] listings) =>
+        OrderBook.Create(
+            1,
+            listings.Select(listing => new Listing(listing.Price, listing.Units, "Light")),
+            recentSales: [.. sales.Select(price => new Sale(price, default))]);
+
+    private static readonly long[] Paid = [1_200, 1_300, 1_450, 1_450, 1_500, 1_490, 1_400];
+
+    [Fact]
+    public void NoBookMeansNoPrice() => Assert.Null(Undercut.Fresh(null, 5));
+
+    [Fact]
+    public void TheAskSitsTheMarginUnderTheCheapestListing() =>
+        Assert.Equal(1_395, Undercut.Fresh(Book(Paid, (1_400, 2), (1_600, 5)), 5));
+
+    [Fact]
+    public void AnEmptyBoardAsksWhatPeopleHaveBeenPaying() =>
+        Assert.Equal(1_450, Undercut.Fresh(Book(Paid), 5));
+
+    [Fact]
+    public void AnEmptyBoardNobodyHasBoughtFromHasNothingToSay() =>
+        Assert.Null(Undercut.Fresh(Book([]), 5));
+
+    [Fact]
+    public void AWallNobodyPaysIsNotAPriceToUndercut()
+    {
+        // The same reading the repricing makes: a board where every listing sits far above
+        // what trades is not a queue to join at five gil under.
+        Assert.Equal(1_445, Undercut.Fresh(Book(Paid, (389_994, 1), (400_000, 3)), 5));
+    }
+
+    [Fact]
+    public void AnHqStackIsPricedAgainstWhatWouldServeAnHqBuyer()
+    {
+        // Cheap NQ in front is not in front of an HQ listing, so it is not what to undercut.
+        var book = OrderBook.Create(
+            1,
+            [new Listing(500, 3, "Light"), new Listing(2_000, 2, "Light", IsHq: true)]);
+
+        Assert.Equal(1_995, Undercut.Fresh(book, 5, hq: true));
+        Assert.Equal(495, Undercut.Fresh(book, 5));
+    }
+}

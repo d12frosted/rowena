@@ -35,6 +35,7 @@ public enum KeepWhy
 /// <summary>What a stack is worth and what to do with it.</summary>
 /// <param name="Worth">What the whole stack fetches, taken to the better counter.</param>
 /// <param name="Realised">What a market slot would earn for holding it over the horizon, which is not what it is worth.</param>
+/// <param name="Listable">How many of it one market slot would hold, which is a stack rather than a pile.</param>
 /// <param name="Keep">Why it is being kept, which is the whole of the reason when the call is to keep it.</param>
 /// <param name="Slow">True when the board would take longer than the horizon to absorb it.</param>
 public readonly record struct HoardVerdict(
@@ -45,6 +46,7 @@ public readonly record struct HoardVerdict(
     double? DaysToSell,
     bool Slow,
     long Realised = 0,
+    int Listable = 0,
     KeepWhy Keep = KeepWhy.Surplus);
 
 /// <summary>
@@ -55,6 +57,10 @@ public readonly record struct HoardVerdict(
 /// enough that the pile wins. It is not a hard question, only a repetitive one: for each
 /// stack, does the board pay more than the vendor, will the board take it in any reasonable
 /// time, and is it wanted for something anyway.
+///
+/// Everything about a slot is about a stack rather than a pile. A slot holds one stack, so what
+/// it earns and whether it is worth having are both read off what fits in it; what the whole
+/// pile is worth is a separate number and stays one.
 ///
 /// That last one is why this takes an outside opinion rather than working it out. Telling
 /// somebody to vendor the materials for the thing the craft table just told them to make
@@ -76,6 +82,7 @@ public static class Liquidation
         MarketTax tax,
         int horizonDays,
         long slotFloor,
+        int slotHolds,
         KeepWhy keep)
     {
         var board = floor is { } price ? tax.NetProceeds(price) : 0;
@@ -83,10 +90,18 @@ public static class Liquidation
         var days = salesPerDay > 0 ? quantity / salesPerDay : (double?)null;
         var slow = days is null or > 0 && (days is null || days > horizonDays);
 
+        // A slot holds a stack, not a pile. Fourteen hundred of something that stacks to nine
+        // hundred and ninety-nine is two slots and a bit, and judging one slot on all fourteen
+        // hundred credits it with what two of them would earn.
+        var listable = slotHolds > 0 ? Math.Min(quantity, slotHolds) : quantity;
+
         // What a slot would earn for holding this, rather than what is in it. The same measure
         // the slot plan ranks on, because the question the floor asks is the plan's question
         // asked once: is this worth one of the twenty.
-        var realised = RetainerSlots.Realised(quantity * board, days, horizonDays);
+        var realised = RetainerSlots.Realised(
+            listable * board,
+            salesPerDay > 0 ? listable / salesPerDay : null,
+            horizonDays);
 
         // Before anything about counters, because keeping is not a verdict about what a thing
         // fetches. A stack nobody pays for is still not clutter when it is the last copy of
@@ -94,7 +109,15 @@ public static class Liquidation
         if (keep != KeepWhy.Surplus)
         {
             return new HoardVerdict(
-                HoardCall.Keep, quantity * Math.Max(board, vendor), board, vendor, days, slow, realised, keep);
+                HoardCall.Keep,
+                quantity * Math.Max(board, vendor),
+                board,
+                vendor,
+                days,
+                slow,
+                realised,
+                listable,
+                keep);
         }
 
         // A board that never sells is not a counter, whatever it is asking. The vendor is the
@@ -121,6 +144,6 @@ public static class Liquidation
             _ => 0L,
         };
 
-        return new HoardVerdict(call, worth, board, vendor, days, slow, realised);
+        return new HoardVerdict(call, worth, board, vendor, days, slow, realised, listable);
     }
 }

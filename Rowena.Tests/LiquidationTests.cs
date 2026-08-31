@@ -12,8 +12,9 @@ public class LiquidationTests
         long vendor,
         KeepWhy keep = KeepWhy.Surplus,
         int horizonDays = 7,
-        long slotFloor = 0) =>
-        Liquidation.Of(quantity, floor, velocity, vendor, MarketTax.None, horizonDays, slotFloor, keep);
+        long slotFloor = 0,
+        int slotHolds = 999) =>
+        Liquidation.Of(quantity, floor, velocity, vendor, MarketTax.None, horizonDays, slotFloor, slotHolds, keep);
 
     [Fact]
     public void SomethingWorthMoreOnTheBoardIsWorthListing()
@@ -38,7 +39,7 @@ public class LiquidationTests
     {
         // A hundred on the board is ninety-five after the city takes its cut, so a vendor
         // paying ninety-six wins on a sticker price that looks lower.
-        var call = Liquidation.Of(10, 100, 50, 96, MarketTax.Standard, 7, 0, KeepWhy.Surplus);
+        var call = Liquidation.Of(10, 100, 50, 96, MarketTax.Standard, 7, 0, 999, KeepWhy.Surplus);
 
         Assert.Equal(HoardCall.Vendor, call.Call);
     }
@@ -155,6 +156,32 @@ public class LiquidationTests
         var call = Of(10, 30, 50, 5, KeepWhy.Mine, slotFloor: 500);
 
         Assert.Equal(HoardCall.Keep, call.Call);
+    }
+
+    [Fact]
+    public void ASlotHoldsOneStackAndIsJudgedOnThatMuch()
+    {
+        // Measured: 1,425 Hardsilver Sand, which is two slots and a bit rather than one. Judged
+        // on the whole pile, a slot claimed to earn what two of them would.
+        var call = Of(1_425, 683, 500, 2, slotHolds: 999);
+
+        Assert.Equal(999, call.Listable);
+        Assert.Equal(999 * 683, call.Realised);
+        Assert.Equal(1_425 * 683, call.Worth);
+    }
+
+    [Fact]
+    public void AStackSmallerThanTheSlotIsJudgedWhole() =>
+        Assert.Equal(40, Of(40, 100, 50, 2, slotHolds: 999).Listable);
+
+    [Fact]
+    public void OnlyWhatFitsInTheSlotCountsTowardsTheFloor()
+    {
+        // Two hundred of something worth three, on a board that takes ten a day. The pile is
+        // six hundred gil and a slot holding ninety-nine of it earns a fraction of that.
+        var call = Of(200, 3, 10, 1, slotFloor: 500, slotHolds: 99);
+
+        Assert.Equal(HoardCall.Vendor, call.Call);
     }
 
     [Fact]
