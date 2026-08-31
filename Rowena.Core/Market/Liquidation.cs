@@ -9,15 +9,32 @@ public enum HoardCall
     /// <summary>The vendor pays more, or is the only buyer there is.</summary>
     Vendor,
 
-    /// <summary>Wanted for something worth making, so not surplus at all.</summary>
+    /// <summary>Not surplus at all: wanted for a craft, mine to use, or not yet learned.</summary>
     Keep,
 
     /// <summary>Nobody pays anything worth the bag slot.</summary>
     Worthless,
 }
 
+/// <summary>Why a stack is not for sale at any counter.</summary>
+public enum KeepWhy
+{
+    /// <summary>Nothing is holding it back: it is surplus, and the counters decide.</summary>
+    Surplus,
+
+    /// <summary>Wanted for something worth making.</summary>
+    Wanted,
+
+    /// <summary>Mine, because I said so: a thing I use rather than a thing I hold.</summary>
+    Mine,
+
+    /// <summary>An unlock I have not learned yet, so selling it costs the thing it teaches.</summary>
+    Unlearned,
+}
+
 /// <summary>What a stack is worth and what to do with it.</summary>
 /// <param name="Worth">What the whole stack fetches, taken to the better counter.</param>
+/// <param name="Keep">Why it is being kept, which is the whole of the reason when the call is to keep it.</param>
 /// <param name="Slow">True when the board would take longer than the horizon to absorb it.</param>
 public readonly record struct HoardVerdict(
     HoardCall Call,
@@ -25,7 +42,8 @@ public readonly record struct HoardVerdict(
     long EachOnBoard,
     long EachAtVendor,
     double? DaysToSell,
-    bool Slow);
+    bool Slow,
+    KeepWhy Keep = KeepWhy.Surplus);
 
 /// <summary>
 /// What to do with the pile, which is the question a full retainer actually asks.
@@ -39,6 +57,12 @@ public readonly record struct HoardVerdict(
 /// That last one is why this takes an outside opinion rather than working it out. Telling
 /// somebody to vendor the materials for the thing the craft table just told them to make
 /// would be the worst advice in the plugin, and only the caller knows what is on the list.
+///
+/// It is an opinion with more than one source, too. A craft list is one reason to hold
+/// something; a thing I use rather than sell is another, and it is not derivable from any
+/// sheet, because chocobo greens and copper ore look identical to arithmetic. The third is the
+/// game's own: an unlock I have not learned yet is worth what it teaches, and that is the one
+/// mistake here no amount of gil undoes.
 /// </remarks>
 public static class Liquidation
 {
@@ -49,15 +73,21 @@ public static class Liquidation
         long vendorPrice,
         MarketTax tax,
         int horizonDays,
-        bool needed)
+        KeepWhy keep)
     {
         var board = floor is { } price ? tax.NetProceeds(price) : 0;
         var vendor = Math.Max(0, vendorPrice);
         var days = salesPerDay > 0 ? quantity / salesPerDay : (double?)null;
         var slow = days is null or > 0 && (days is null || days > horizonDays);
 
-        if (needed)
-            return new HoardVerdict(HoardCall.Keep, quantity * Math.Max(board, vendor), board, vendor, days, slow);
+        // Before anything about counters, because keeping is not a verdict about what a thing
+        // fetches. A stack nobody pays for is still not clutter when it is the last copy of
+        // something I cannot buy back.
+        if (keep != KeepWhy.Surplus)
+        {
+            return new HoardVerdict(
+                HoardCall.Keep, quantity * Math.Max(board, vendor), board, vendor, days, slow, keep);
+        }
 
         // A board that never sells is not a counter, whatever it is asking. The vendor is the
         // one buyer that never runs out of appetite, so it wins by default rather than by

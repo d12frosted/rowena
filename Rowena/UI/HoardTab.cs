@@ -14,6 +14,11 @@ namespace Rowena.UI;
 /// is the thing a plugin is for: for each stack, does the board pay more than the vendor, will
 /// the board take it in any reasonable time, and is it wanted for something anyway.
 ///
+/// Three answers hold a stack back rather than one, and only the first is arithmetic. The craft
+/// table wants it; the game says I have not learned what it teaches; or I have said it is mine.
+/// The last is the one nothing else could supply, since chocobo greens and copper ore are the
+/// same shape of row and only one of them is a thing I use.
+///
 /// Priced from the cheap summaries rather than from full books. A bag of two hundred stacks
 /// would be two hundred deep fetches for a question that only needs to know roughly what a
 /// thing is worth and whether it moves, and the summary sweep has already been over most of
@@ -45,6 +50,8 @@ internal sealed class HoardTab
     private readonly MarketCache market;
     private readonly ItemCells cells;
     private readonly Configuration config;
+    private readonly Keeping keeping;
+    private readonly Unlocks unlocks;
     private readonly Func<IReadOnlySet<uint>> wanted;
 
     private readonly Rebuilt<Model> model;
@@ -58,6 +65,8 @@ internal sealed class HoardTab
         MarketCache market,
         ItemCells cells,
         Configuration config,
+        Keeping keeping,
+        Unlocks unlocks,
         Diagnostics diagnostics,
         Func<IReadOnlySet<uint>> wanted)
     {
@@ -68,6 +77,8 @@ internal sealed class HoardTab
         this.market = market;
         this.cells = cells;
         this.config = config;
+        this.keeping = keeping;
+        this.unlocks = unlocks;
         this.wanted = wanted;
 
         model = new Rebuilt<Model>("hoard", Build, diagnostics);
@@ -126,6 +137,7 @@ internal sealed class HoardTab
                     worth = row.Verdict.Worth,
                     days = row.Verdict.DaysToSell,
                     call = row.Verdict.Call.ToString(),
+                    keep = row.Verdict.Keep.ToString(),
                 }),
             },
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -177,7 +189,7 @@ internal sealed class HoardTab
         ImGui.TableSetupColumn("board / vendor", ImGuiTableColumnFlags.WidthFixed, Style.Px(130));
         ImGui.TableSetupColumn("worth", ImGuiTableColumnFlags.WidthFixed, Style.Px(100));
         ImGui.TableSetupColumn("clears in", ImGuiTableColumnFlags.WidthFixed, Style.Px(80));
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, Style.Px(140));
         Cell.Headers(Help);
 
         foreach (var row in current.Rows)
@@ -207,37 +219,51 @@ internal sealed class HoardTab
             Cell.Right(verdict.Slow ? Style.Bad : Style.Muted, Phrases.Absorb(verdict.DaysToSell));
 
             ImGui.TableNextColumn();
-            DrawCall(verdict);
+            DrawCall(row);
         }
 
         ImGui.EndTable();
     }
 
-    private static void DrawCall(HoardVerdict verdict)
+    private void DrawCall(Row row)
     {
-        var (colour, label, why) = verdict.Call switch
+        var verdict = row.Verdict;
+
+        var (colour, label, why) = verdict.Keep switch
         {
-            HoardCall.List when verdict.Slow => (
+            KeepWhy.Mine => (
+                Style.Muted, "yours",
+                "You said this is something you use rather than something you hold, so nothing\n"
+                + "here will offer to get rid of it. It is still counted, so you can see what it\n"
+                + "is worth if you change your mind."),
+
+            KeepWhy.Unlearned => (
+                Style.Warn, "not learned",
+                "This teaches you something you do not know yet: a roll, a minion, a mount, a\n"
+                + "recipe. What it fetches is beside the point, since the gil buys back a stack of\n"
+                + "materials and not this."),
+
+            KeepWhy.Wanted => (
+                Style.Muted, "keep it",
+                "Wanted for something the craft table thinks is worth making, so this is not\n"
+                + "surplus. Nothing here will offer to sell the materials for the thing it just\n"
+                + "recommended."),
+
+            _ when verdict.Call == HoardCall.List && verdict.Slow => (
                 Style.Plain, "list some",
                 $"The board pays {verdict.EachOnBoard:N0} against the vendor's {verdict.EachAtVendor:N0}, but it\n"
                 + "would take longer than your selling horizon to absorb this many. List what it\n"
                 + "will take and the rest is a storage decision rather than a pricing one."),
 
-            HoardCall.List => (
+            _ when verdict.Call == HoardCall.List => (
                 Style.Good, "list it",
                 $"{verdict.EachOnBoard:N0} each after the city's cut, against {verdict.EachAtVendor:N0} from a vendor,\n"
                 + "and the board gets through this many comfortably."),
 
-            HoardCall.Vendor => (
+            _ when verdict.Call == HoardCall.Vendor => (
                 Style.Plain, "vendor it",
                 $"A vendor pays {verdict.EachAtVendor:N0} and the board would leave you {verdict.EachOnBoard:N0}.\n"
                 + "No listing fee, no waiting, and nobody undercuts a vendor."),
-
-            HoardCall.Keep => (
-                Style.Muted, "keep it",
-                "Wanted for something the craft table thinks is worth making, so this is not\n"
-                + "surplus. Nothing here will offer to sell the materials for the thing it just\n"
-                + "recommended."),
 
             _ => (
                 Style.Muted, "nothing doing",
@@ -247,6 +273,38 @@ internal sealed class HoardTab
 
         ImGui.TextColored(colour, label);
         Style.Explain(why);
+
+        DrawKeep(row);
+    }
+
+    /// <summary>
+    /// The one thing on this table only a person can answer.
+    /// </summary>
+    /// <remarks>
+    /// Offered on every row that is being judged, and on the rows I have already claimed so the
+    /// claim can be undone. Not on the two the plugin worked out for itself: a craft list
+    /// changes on its own, and an unlock stops being one the moment it is learned, so a button
+    /// promising to remember either of those would be lying.
+    /// </remarks>
+    private void DrawKeep(Row row)
+    {
+        var mine = row.Verdict.Keep == KeepWhy.Mine;
+
+        if (!mine && row.Verdict.Keep != KeepWhy.Surplus)
+            return;
+
+        ImGui.SameLine();
+
+        if (!Style.Quiet(
+            mine ? "let go" : "keep",
+            mine
+                ? "Judge this like everything else again."
+                : "Something you use rather than sell. Said once and remembered, for this item\n"
+                  + "rather than for the stack of it that happens to be in your bags."))
+            return;
+
+        keeping.Keep(row.ItemId, !mine);
+        model.Invalidate();
     }
 
     /// <summary>
@@ -394,7 +452,7 @@ internal sealed class HoardTab
                 vendor,
                 tax,
                 config.SellingHorizon(),
-                needed.Contains(itemId));
+                Kept(itemId, needed));
 
             if (verdict.Call == HoardCall.Worthless)
                 continue;
@@ -430,6 +488,21 @@ internal sealed class HoardTab
             [.. missing],
             plan);
     }
+
+    /// <summary>
+    /// Why a stack is not for sale, if it is not.
+    /// </summary>
+    /// <remarks>
+    /// My own word first, because it is the only one of the three that was given deliberately:
+    /// if I have said a thing is mine, nothing the sheets or the craft list say should talk me
+    /// out of it. The game's word comes next, since it is the one that cannot be recovered from
+    /// by earning the gil back.
+    /// </remarks>
+    private KeepWhy Kept(uint itemId, IReadOnlySet<uint> needed) =>
+        keeping.Mine(itemId) ? KeepWhy.Mine
+            : unlocks.Learned(itemId) is false ? KeepWhy.Unlearned
+                : needed.Contains(itemId) ? KeepWhy.Wanted
+                    : KeepWhy.Surplus;
 
     /// <summary>What a stack fetches and how fast, from whichever source has an answer.</summary>
     private readonly record struct Priceable(long? Floor, double SalesPerDay);
