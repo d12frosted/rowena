@@ -70,6 +70,25 @@ internal sealed class RetainerStock : IDisposable
         return held;
     }
 
+    /// <summary>
+    /// What one retainer is holding, from the last time it was open.
+    /// </summary>
+    /// <remarks>
+    /// Asked at the bell, where the retainer in question is the one standing in front of me and
+    /// the reader has just been over its pages, so this is the one place the answer is current
+    /// rather than remembered.
+    /// </remarks>
+    public IReadOnlyDictionary<uint, int> Held(ulong retainerId)
+    {
+        var held = new Dictionary<uint, int>();
+        var stored = config.RetainerStock.FirstOrDefault(retainer => retainer.RetainerId == retainerId);
+
+        foreach (var stack in stored?.Items ?? [])
+            held[stack.ItemId] = held.GetValueOrDefault(stack.ItemId) + stack.Quantity;
+
+        return held;
+    }
+
     /// <summary>Which retainers hold one item, and how many each has.</summary>
     public IReadOnlyList<(string Retainer, int Quantity)> Where(uint itemId) =>
     [

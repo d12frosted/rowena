@@ -255,6 +255,23 @@ a tab per question:
   does not appear, rather than sending a click to whatever is open instead. Confirming can be
   left to you in settings.
 
+  Under the column, the other half of standing at a bell: what is not out yet. The slots are
+  the scarce thing, so it says what to put in the free ones and what to ask for each, ranked
+  by what a slot earns for holding the stack rather than by what the stack is worth. Only
+  what is actually to hand counts, which is your bags and this retainer's own pages: a stack
+  sitting with another retainer is an errand, not a recommendation. A full retainer is the
+  normal state and the more useful case, so with nothing free it names the few things that
+  would out-earn what is already in a slot, measured the same way and against this
+  retainer's own city rate. Listings whose board has not been read are left out of that
+  comparison rather than counted as earning nothing.
+
+  And the other answer: what is within reach that is not worth a slot at all, either because
+  a vendor pays more or because the stack would not earn the floor from settings. Nothing to
+  do at a bell, since a vendor is not one, but it is the reason those stacks are not what
+  the free slots are for. Nothing here lists anything for you: the price is a number and a
+  copy of it, because the dialog for a fresh listing is opened by a walk through the game's
+  own menus that nothing here is driving.
+
   Every row says how old the board reading behind it is, because the verdict beside it is
   only worth that number. Past the shelf life the age turns amber, and a listing nobody has
   looked up yet reads `none` rather than the same quiet dash a correctly priced one gets:
@@ -349,6 +366,11 @@ a tab per question:
   eighteen thousand gil and come seventh, because a week of that slot realises seven thousand
   of it. That one change is also the portfolio: nothing has to impose a quota of fast movers
   against slow ones, because pricing the slot by what it turns over prefers the mix on its own.
+
+  A slot holds a stack rather than a pile, and everything about a slot is read off that. Four
+  hundred greens are one listing; fourteen hundred hardsilver sand is two and a bit, so a slot
+  is judged on the nine hundred and ninety-nine that fit in it and not on all of them. What
+  the whole pile is worth stays a separate number and is still shown.
 
   The same measure decides what is not worth listing at all. A stack that would earn a slot
   less than the floor in settings goes to a vendor even where the board pays more per unit,
