@@ -34,6 +34,7 @@ public enum KeepWhy
 
 /// <summary>What a stack is worth and what to do with it.</summary>
 /// <param name="Worth">What the whole stack fetches, taken to the better counter.</param>
+/// <param name="Realised">What a market slot would earn for holding it over the horizon, which is not what it is worth.</param>
 /// <param name="Keep">Why it is being kept, which is the whole of the reason when the call is to keep it.</param>
 /// <param name="Slow">True when the board would take longer than the horizon to absorb it.</param>
 public readonly record struct HoardVerdict(
@@ -43,6 +44,7 @@ public readonly record struct HoardVerdict(
     long EachAtVendor,
     double? DaysToSell,
     bool Slow,
+    long Realised = 0,
     KeepWhy Keep = KeepWhy.Surplus);
 
 /// <summary>
@@ -73,6 +75,7 @@ public static class Liquidation
         long vendorPrice,
         MarketTax tax,
         int horizonDays,
+        long slotFloor,
         KeepWhy keep)
     {
         var board = floor is { } price ? tax.NetProceeds(price) : 0;
@@ -80,13 +83,18 @@ public static class Liquidation
         var days = salesPerDay > 0 ? quantity / salesPerDay : (double?)null;
         var slow = days is null or > 0 && (days is null || days > horizonDays);
 
+        // What a slot would earn for holding this, rather than what is in it. The same measure
+        // the slot plan ranks on, because the question the floor asks is the plan's question
+        // asked once: is this worth one of the twenty.
+        var realised = RetainerSlots.Realised(quantity * board, days, horizonDays);
+
         // Before anything about counters, because keeping is not a verdict about what a thing
         // fetches. A stack nobody pays for is still not clutter when it is the last copy of
         // something I cannot buy back.
         if (keep != KeepWhy.Surplus)
         {
             return new HoardVerdict(
-                HoardCall.Keep, quantity * Math.Max(board, vendor), board, vendor, days, slow, keep);
+                HoardCall.Keep, quantity * Math.Max(board, vendor), board, vendor, days, slow, realised, keep);
         }
 
         // A board that never sells is not a counter, whatever it is asking. The vendor is the
@@ -99,6 +107,13 @@ public static class Liquidation
             _ => vendor >= board ? HoardCall.Vendor : HoardCall.List,
         };
 
+        // The slots are the scarce thing, not the gil, so a stack that would not earn its keep
+        // in one is not a listing however kindly the board treats it. Only ever a redirection to
+        // a counter that pays: where the board is the one buyer there is, below the floor is
+        // still the answer, because the alternative is the bin.
+        if (call == HoardCall.List && realised < slotFloor && vendor > 0)
+            call = HoardCall.Vendor;
+
         var worth = call switch
         {
             HoardCall.List => quantity * board,
@@ -106,6 +121,6 @@ public static class Liquidation
             _ => 0L,
         };
 
-        return new HoardVerdict(call, worth, board, vendor, days, slow);
+        return new HoardVerdict(call, worth, board, vendor, days, slow, realised);
     }
 }

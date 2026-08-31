@@ -37,7 +37,9 @@ internal sealed class HoardTab
         "What the whole stack comes to at the better counter.",
         "How long the board would take to absorb the whole stack at the rate it has been\n"
         + "selling. Longer than your selling horizon is a storage problem rather than a listing.",
-        null,
+        "What to do with it. A stack that would not earn its market slot goes to a vendor even\n"
+        + "where the board pays more per unit: the slots are the scarce thing, and the floor\n"
+        + "under one is a setting.",
     ];
 
     private readonly Balances balances;
@@ -115,6 +117,7 @@ internal sealed class HoardTab
                 stacks = model.Current.Rows.Length,
                 slots = model.Current.Plan.Count,
                 slotsEarn = RetainerSlots.Earns(model.Current.Plan),
+                slotFloor = config.SlotFloor,
                 plan = model.Current.Plan.Take(8).Select(pick => new
                 {
                     name = cells.Name(pick.ItemId),
@@ -135,6 +138,7 @@ internal sealed class HoardTab
                     board = row.Verdict.EachOnBoard,
                     vendor = row.Verdict.EachAtVendor,
                     worth = row.Verdict.Worth,
+                    realised = row.Verdict.Realised,
                     days = row.Verdict.DaysToSell,
                     call = row.Verdict.Call.ToString(),
                     keep = row.Verdict.Keep.ToString(),
@@ -258,7 +262,16 @@ internal sealed class HoardTab
             _ when verdict.Call == HoardCall.List => (
                 Style.Good, "list it",
                 $"{verdict.EachOnBoard:N0} each after the city's cut, against {verdict.EachAtVendor:N0} from a vendor,\n"
-                + "and the board gets through this many comfortably."),
+                + $"and the board gets through this many comfortably. A slot earns {verdict.Realised:N0} of it\n"
+                + $"over {config.SellingHorizon()} days."),
+
+            // The board pays better per unit and the stack still goes to a vendor, so the
+            // reason had better not be the one about who pays more. It is the slot.
+            _ when verdict.Call == HoardCall.Vendor && verdict.EachOnBoard > verdict.EachAtVendor => (
+                Style.Plain, "vendor it",
+                $"The board pays {verdict.EachOnBoard:N0} against the vendor's {verdict.EachAtVendor:N0}, but the whole\n"
+                + $"stack would only earn a slot {verdict.Realised:N0} over {config.SellingHorizon()} days, and you have "
+                + $"{config.SlotFloor:N0}\nas the least a slot is worth. The vendor takes all of it now and needs no slot."),
 
             _ when verdict.Call == HoardCall.Vendor => (
                 Style.Plain, "vendor it",
@@ -452,6 +465,7 @@ internal sealed class HoardTab
                 vendor,
                 tax,
                 config.SellingHorizon(),
+                config.SlotFloor,
                 Kept(itemId, needed));
 
             if (verdict.Call == HoardCall.Worthless)
