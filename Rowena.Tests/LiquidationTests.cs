@@ -159,10 +159,10 @@ public class LiquidationTests
     }
 
     [Fact]
-    public void ASlotHoldsOneStackAndIsJudgedOnThatMuch()
+    public void AListingHoldsAStackAndTheStackDependsOnTheItem()
     {
-        // Measured: 1,425 Hardsilver Sand, which is two slots and a bit rather than one. Judged
-        // on the whole pile, a slot claimed to earn what two of them would.
+        // Measured: 1,425 Hardsilver Sand, which stacks to 999, so one listing is 999 of them
+        // and the rest is another listing.
         var call = Of(1_425, 683, 500, 2, slotHolds: 999);
 
         Assert.Equal(999, call.Listable);
@@ -171,14 +171,22 @@ public class LiquidationTests
     }
 
     [Fact]
-    public void AStackSmallerThanTheSlotIsJudgedWhole() =>
+    public void SomethingThatStacksToNinetyNineListsNinetyNine() =>
+        Assert.Equal(99, Of(400, 300, 90, 20, slotHolds: 99).Listable);
+
+    [Fact]
+    public void SomethingUniqueIsOneListingOfOne() =>
+        Assert.Equal(1, Of(4, 100_000, 50, 2, slotHolds: 1).Listable);
+
+    [Fact]
+    public void AStackSmallerThanTheListingIsJudgedWhole() =>
         Assert.Equal(40, Of(40, 100, 50, 2, slotHolds: 999).Listable);
 
     [Fact]
-    public void OnlyWhatFitsInTheSlotCountsTowardsTheFloor()
+    public void OnlyWhatFitsInTheListingCountsTowardsTheFloor()
     {
-        // Two hundred of something worth three, on a board that takes ten a day. The pile is
-        // six hundred gil and a slot holding ninety-nine of it earns a fraction of that.
+        // Two hundred of something worth three that stacks to ninety-nine. The pile is six
+        // hundred gil and a listing of ninety-nine earns a fraction of that.
         var call = Of(200, 3, 10, 1, slotFloor: 500, slotHolds: 99);
 
         Assert.Equal(HoardCall.Vendor, call.Call);

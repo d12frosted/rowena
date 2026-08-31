@@ -58,9 +58,9 @@ public readonly record struct HoardVerdict(
 /// stack, does the board pay more than the vendor, will the board take it in any reasonable
 /// time, and is it wanted for something anyway.
 ///
-/// Everything about a slot is about a stack rather than a pile. A slot holds one stack, so what
-/// it earns and whether it is worth having are both read off what fits in it; what the whole
-/// pile is worth is a separate number and stays one.
+/// Everything about a slot is about one listing rather than a pile. A listing takes a stack, and
+/// how big a stack is depends on the item, so what a slot earns and whether it is worth having
+/// are both read off that much; what the whole pile is worth is a separate number and stays one.
 ///
 /// That last one is why this takes an outside opinion rather than working it out. Telling
 /// somebody to vendor the materials for the thing the craft table just told them to make

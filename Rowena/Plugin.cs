@@ -149,7 +149,8 @@ public sealed class Plugin : IDalamudPlugin
         // dialog, and only into the field. Confirming it stays a button the game owns.
         var undercutting = new Undercutting(boards, config, Save);
         sellFill = new RetainerSellFill(
-            AddonLifecycle, Framework, config, undercutting, itemNames, notices, diagnostics, Log);
+            AddonLifecycle, Framework, config, undercutting, new MenuLabels(DataManager), boardRequests, market,
+            scope, itemNames, notices, diagnostics, Log);
 
         var sellingTab = new SellingTab(
             boardWatcher, boards, cells, config, diagnostics, sales, undercutting, sellFill,
@@ -217,6 +218,7 @@ public sealed class Plugin : IDalamudPlugin
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
                 ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
+                ["menu"] = () => Log.Information($"Context menu:\n{sellFill.DumpMenu()}"),
                 ["unlocks"] = () => Log.Information(
                     "Unlocks: "
                     + string.Join(
