@@ -44,6 +44,9 @@ internal sealed class RetainerSellFill : IDisposable
     private const string List = "RetainerSellList";
     private const string Menu = "ContextMenu";
 
+    /// <summary>The retainer's own pages, which are a window of their own.</summary>
+    private static readonly string[] RetainerBags = ["InventoryRetainer", "InventoryRetainerLarge"];
+
     /// <summary>The containers something can be put up for sale from.</summary>
     /// <remarks>
     /// Bags and the open retainer's own pages. Not the saddlebag: its window cannot be opened
@@ -157,6 +160,16 @@ internal sealed class RetainerSellFill : IDisposable
             ? null
             : (done, queue.Count + (current is null ? 0 : 1), current?.Kind == JobKind.Sell);
 
+    /// <summary>
+    /// Whether the retainer's own inventory is the window being looked at.
+    /// </summary>
+    /// <remarks>
+    /// Which of two piles a suggestion should be about. Standing at the sell list, it is what I
+    /// am carrying; with the retainer's pages open, it is those, because that is the pile in
+    /// front of me and both list in one step from where they are.
+    /// </remarks>
+    public unsafe bool LookingAtRetainerBags() => RetainerBags.Any(name => Visible(name) is not null);
+
     /// <summary>The open retainer as last read, if one is open and has been read.</summary>
     public unsafe StoredRetainer? ActiveRetainer()
     {
@@ -249,12 +262,16 @@ internal sealed class RetainerSellFill : IDisposable
     /// this from a bell is that the board can be asked again, exactly, a second before the
     /// number is typed in.
     /// </remarks>
-    public unsafe void Sell(uint itemId, int quantity)
+    /// <param name="fromRetainer">
+    /// Which pile the stack was offered from. A thing can sit in both, and listing the copy the
+    /// panel was not talking about would put up a different number of them.
+    /// </param>
+    public unsafe void Sell(uint itemId, int quantity, bool fromRetainer)
     {
         if (quantity <= 0 || Visible(List) is null)
             return;
 
-        queue.Enqueue(new Job(JobKind.Sell, -1, itemId, 0, quantity));
+        queue.Enqueue(new Job(JobKind.Sell, -1, itemId, 0, quantity, fromRetainer));
     }
 
     /// <summary>
@@ -518,7 +535,7 @@ internal sealed class RetainerSellFill : IDisposable
     /// </remarks>
     private unsafe void Begin(Job job)
     {
-        if (Locate(job.ItemId) is not { } found)
+        if (Locate(job.ItemId, job.FromRetainer) is not { } found)
         {
             Fail($"{names.Name(job.ItemId)} is not in your bags or this retainer");
             return;
@@ -554,7 +571,7 @@ internal sealed class RetainerSellFill : IDisposable
         if (market.FetchedAt(selling, current!.Value.ItemId) is not { } at || at < askedAt)
             return;
 
-        if (Locate(current.Value.ItemId) is not { } found)
+        if (Locate(current.Value.ItemId, current.Value.FromRetainer) is not { } found)
         {
             Fail($"{names.Name(current.Value.ItemId)} is no longer where it was");
             return;
@@ -595,8 +612,15 @@ internal sealed class RetainerSellFill : IDisposable
         Wait(Step.WantSaleMenu);
     }
 
-    /// <summary>Where this item is, preferring the biggest stack of it that could be listed.</summary>
-    private unsafe Found? Locate(uint itemId)
+    /// <summary>
+    /// Where this item is, preferring the biggest stack of it that could be listed.
+    /// </summary>
+    /// <remarks>
+    /// Searched in the pile the offer was about rather than everywhere. The same thing often
+    /// sits in a bag and in a retainer at once, and listing the copy the panel was not talking
+    /// about puts up a different number of them than the row said it would.
+    /// </remarks>
+    private unsafe Found? Locate(uint itemId, bool fromRetainer)
     {
         var inventory = InventoryManager.Instance();
 
@@ -605,7 +629,7 @@ internal sealed class RetainerSellFill : IDisposable
 
         Found? best = null;
 
-        foreach (var type in Sellable)
+        foreach (var type in Sellable.Where(type => Retained(type) == fromRetainer))
         {
             var container = inventory->GetInventoryContainer(type);
 
@@ -628,6 +652,8 @@ internal sealed class RetainerSellFill : IDisposable
 
         return best;
     }
+
+    private static bool Retained(InventoryType type) => type.ToString().StartsWith("RetainerPage", StringComparison.Ordinal);
 
     /// <summary>
     /// The window the item's menu belongs to.
@@ -923,7 +949,13 @@ internal sealed class RetainerSellFill : IDisposable
     /// <param name="Slot">The listing being repriced, or -1 when there is not one yet.</param>
     /// <param name="Price">Filled in for a reprice, worked out at the last moment for a sale.</param>
     /// <param name="Quantity">How many to put up, which a reprice does not touch.</param>
-    private readonly record struct Job(JobKind Kind, int Slot, uint ItemId, long Price, int Quantity)
+    private readonly record struct Job(
+        JobKind Kind,
+        int Slot,
+        uint ItemId,
+        long Price,
+        int Quantity,
+        bool FromRetainer = false)
     {
         public Job(int slot, uint itemId, long price)
             : this(JobKind.Reprice, slot, itemId, price, 0)

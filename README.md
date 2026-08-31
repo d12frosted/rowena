@@ -259,7 +259,9 @@ a tab per question:
   the scarce thing, so it says what to put in the free ones and what to ask for each, ranked
   by what a slot earns for holding the stack rather than by what the stack is worth. Only
   what is actually to hand counts, which is your bags and this retainer's own pages: a stack
-  sitting with another retainer is an errand, not a recommendation. A full retainer is the
+  sitting with another retainer is an errand, not a recommendation. Which of the two it ranks
+  follows the window in front of you: open the retainer's own pages and it is those alone,
+  since that is the pile you are looking at and both list in one step from where they sit. A full retainer is the
   normal state and the more useful case, so with nothing free it names the few things that
   would out-earn what is already in a slot, measured the same way and against this
   retainer's own city rate. Listings whose board has not been read are left out of that
