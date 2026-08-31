@@ -528,21 +528,13 @@ internal sealed class RetainerOverlay : Window
         var listed = retainer.Slots.Where(slot => slot.ItemId != 0).ToArray();
         var free = Math.Max(0, SlotsEach - listed.Length);
 
-        // Whichever pile is in front. At the sell list that is what I am carrying; with the
-        // retainer's own pages open it is those, and a window offering to list things out of a
-        // bag I am not looking at is answering a question nobody asked.
+        // One pile, and it is whichever one is in use: the retainer's pages when those are the
+        // window in front, my bags otherwise. Both list in one step from where they sit, so this
+        // is not about what is possible. It is that a list headed "what you are carrying" with a
+        // retainer's stock mixed into it is a list that has to be checked item by item, which is
+        // the work this window exists to save.
         var retained = sellFill.LookingAtRetainerBags();
-        var here = stock.Held(retainer.RetainerId);
-        var carried = retained ? new Dictionary<uint, int>() : balances.Carrying();
-
-        var holdings = retained
-            ? here
-            : carried.Keys
-                .Concat(here.Keys)
-                .Distinct()
-                .ToDictionary(
-                    itemId => itemId,
-                    itemId => carried.GetValueOrDefault(itemId) + here.GetValueOrDefault(itemId));
+        var holdings = retained ? stock.Held(retainer.RetainerId) : balances.Carrying();
 
         var reading = pile.Read(holdings, wanted(), tax);
         var already = listed.Select(slot => slot.ItemId).ToHashSet();
@@ -554,26 +546,16 @@ internal sealed class RetainerOverlay : Window
                 stack.ItemId,
                 cells.Name(stack.ItemId),
                 stack.Quantity,
-                here.GetValueOrDefault(stack.ItemId),
-                carried.GetValueOrDefault(stack.ItemId),
                 stack.Verdict.Listable,
                 pile.Ask(stack.ItemId),
                 boards.Selling(stack.ItemId) is not null,
                 stack.Verdict.Realised))
             .ToArray();
 
-        // Ordered by what is worth carrying out of here: the ones sitting in this retainer come
-        // first, since those are the ones a visit can do something about.
         var junk = reading.Stacks
             .Where(stack => stack.Verdict.Call == HoardCall.Vendor)
-            .Select(stack => new Junk(
-                stack.ItemId,
-                cells.Name(stack.ItemId),
-                stack.Quantity,
-                here.GetValueOrDefault(stack.ItemId),
-                stack.Verdict.Worth))
-            .OrderByDescending(stack => stack.Here > 0)
-            .ThenByDescending(stack => stack.Worth)
+            .Select(stack => new Junk(stack.ItemId, cells.Name(stack.ItemId), stack.Quantity, stack.Verdict.Worth))
+            .OrderByDescending(stack => stack.Worth)
             .ToArray();
         var weakest = Weakest(listed, tax, horizon);
 
@@ -687,12 +669,11 @@ internal sealed class RetainerOverlay : Window
 
             Style.Explain(
                 (current.Retained
-                    ? "This retainer's own pages, since those are the window you have open, against what\n"
-                      + "a slot would earn from each over your selling horizon."
-                    : "Your bags and this retainer's pages, against what a slot would earn from each over\n"
-                      + "your selling horizon.")
-                + "\nAnything already listed here is not offered again, and stacks sitting with your\n"
-                + "other retainers are not counted: they cannot be listed from where you are standing.");
+                    ? "This retainer's own pages, since those are the window you have open."
+                    : "Your bags, since that is the pile you are selling from. Open the retainer's own\n"
+                      + "pages and this ranks those instead.")
+                + "\nAgainst what a slot would earn from each over your selling horizon. Anything\n"
+                + "already listed here is not offered again.");
 
             return;
         }
@@ -707,9 +688,10 @@ internal sealed class RetainerOverlay : Window
             Style.Explain(
                 (current.Retained
                     ? "This retainer's own pages, because that is the window you have open. Close it and\n"
-                      + "this goes back to ranking what you are carrying as well."
-                    : "Your bags and this retainer's own pages, which is everything you could list without\n"
-                      + "walking anywhere.")
+                      + "this ranks what you are carrying instead."
+                    : "Your bags alone, because that is the pile you are selling from. Open the retainer's\n"
+                      + "own pages and it ranks those instead: one heading, one pile, so no row has to be\n"
+                      + "checked for where it actually is.")
                 + "\nRanked by what a slot earns while it holds the stack, not by what the stack is worth:\n"
                 + "a fortune that takes four months to clear earns a week of a slot a fraction of itself.");
 
@@ -747,7 +729,7 @@ internal sealed class RetainerOverlay : Window
             cells.Draw(pick.Name, pick.ItemId);
 
             ImGui.TableNextColumn();
-            DrawWhere(pick);
+            DrawWhere(pick, current.Retained);
 
             ImGui.TableNextColumn();
             DrawAsk(pick);
@@ -765,14 +747,17 @@ internal sealed class RetainerOverlay : Window
     }
 
     /// <summary>
-    /// How many are to hand, and how many of them a slot would take.
+    /// How many are there, and how many of them one listing would take.
     /// </summary>
     /// <remarks>
-    /// A slot holds a stack. Fourteen hundred of something that stacks to nine hundred and
+    /// A listing holds a stack. Fourteen hundred of something that stacks to nine hundred and
     /// ninety-nine is two listings and a bit, and a column saying only "1,425" beside a figure
     /// worked out on 999 of them is two numbers that do not describe the same thing.
+    ///
+    /// Where they are does not need saying on the row, because every row is from the same pile
+    /// and the heading above has already named it.
     /// </remarks>
-    private void DrawWhere(Pick pick)
+    private void DrawWhere(Pick pick, bool retained)
     {
         Cell.Right(
             Style.Muted,
@@ -781,18 +766,14 @@ internal sealed class RetainerOverlay : Window
         if (!ImGui.IsItemHovered())
             return;
 
-        var slot = pick.Listable < pick.Units
-            ? $"\n\nA slot holds {pick.Listable:N0} of these, so the rest is another listing and another slot."
-            : "";
-
         ImGui.SetTooltip(
-            (pick.Here > 0 && pick.InBags > 0
-                ? $"{pick.Here} in this retainer and {pick.InBags} in your bags. Listing them means\n"
-                  + "entrusting the ones you are carrying first."
-                : pick.Here > 0
-                    ? $"{pick.Here} already in this retainer's pages, so listing them is one window away."
-                    : $"{pick.InBags} in your bags. Entrust them to this retainer first, then list.")
-            + slot);
+            (retained
+                ? $"{pick.Units:N0} in this retainer's pages."
+                : $"{pick.Units:N0} in your bags.")
+            + (pick.Listable < pick.Units
+                ? $"\n\nA listing takes {pick.Listable:N0} of these, so the rest is another listing and\n"
+                  + "another slot."
+                : ""));
     }
 
     /// <summary>
@@ -890,14 +871,14 @@ internal sealed class RetainerOverlay : Window
         ImGui.TextColored(
             Style.Muted,
             $"{current.JunkStacks} {(current.JunkStacks == 1 ? "stack" : "stacks")} "
-            + $"{(current.Retained ? "in this retainer" : "within reach")} "
+            + $"{(current.Retained ? "in this retainer" : "in your bags")} "
             + $"{(current.JunkStacks == 1 ? "is" : "are")} worth more to a vendor: {current.JunkGil:N0} gil the lot.");
 
         Style.Explain(
             "Either a vendor pays more than the board would leave you, or the stack would not earn\n"
             + $"a market slot the {config.SlotFloor:N0} gil you set as the least one is worth. The selling\n"
-            + "happens at a vendor rather than here, so this is the list to retrieve before you go.\n"
-            + "The Bags tab has all of them.");
+            + "happens at a vendor rather than here, so this is what to have on you before you go.\n"
+            + "The Bags tab has all of them, wherever they are sitting.");
 
         foreach (var stack in current.Worst)
         {
@@ -910,18 +891,7 @@ internal sealed class RetainerOverlay : Window
             ImGui.TextColored(Style.Muted, $"{stack.Units:N0}x {stack.Name}");
             ImGui.SameLine();
 
-            Cell.Right(
-                Style.Muted,
-                $"{stack.Worth:N0}{(stack.Here > 0 && !current.Retained ? " (here)" : "")}");
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    stack.Here > 0
-                        ? $"{stack.Here} of these are in this retainer, so they want retrieving before\n"
-                          + "you walk to a vendor."
-                        : "In your bags already, so it is only the walk.");
-            }
+            Cell.Right(Style.Muted, $"{stack.Worth:N0}");
 
             ImGui.Unindent();
             ImGui.PopID();
@@ -938,8 +908,8 @@ internal sealed class RetainerOverlay : Window
     private static readonly string?[] FillHelp =
     [
         null,
-        "How many are to hand, and how many of them one slot would take. A slot holds a stack,\n"
-        + "so a pile bigger than one is more than one listing.",
+        "How many are in the pile named above, and how many of them one listing would take. A\n"
+        + "listing holds a stack, so a pile bigger than one is more than one listing.",
         "What to ask per unit, and a copy of it for the game's price box.",
         "What a slot earns for holding one stack of it over your selling horizon, which is what\n"
         + "the ranking is on. Not what the pile is worth: a stack that takes months to clear\n"
@@ -954,8 +924,6 @@ internal sealed class RetainerOverlay : Window
         uint ItemId,
         string Name,
         int Units,
-        int Here,
-        int InBags,
         int Listable,
         long? Ask,
         bool Read,
@@ -964,9 +932,8 @@ internal sealed class RetainerOverlay : Window
     /// <summary>The listing here earning its slot the least, which is what a swap has to beat.</summary>
     private readonly record struct Weak(uint ItemId, long Realised);
 
-    /// <summary>One stack within reach that a vendor is the better answer for.</summary>
-    /// <param name="Here">How many of it are in this retainer, which is what a visit can act on.</param>
-    private readonly record struct Junk(uint ItemId, string Name, int Units, int Here, long Worth);
+    /// <summary>One stack in the pile in front that a vendor is the better answer for.</summary>
+    private readonly record struct Junk(uint ItemId, string Name, int Units, long Worth);
 
     /// <param name="Retained">Whether the pile in front is the retainer's pages rather than my bags.</param>
     private sealed record Fill(
