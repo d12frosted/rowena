@@ -285,6 +285,16 @@ public sealed class Configuration : IPluginConfiguration
     public List<uint> UndercutIgnored { get; set; } = [];
 
     /// <summary>
+    /// Items I use rather than sell, so nothing here offers to get rid of them.
+    /// </summary>
+    /// <remarks>
+    /// Kept for good, unlike the undercut ignores above, which are about a stack that is out
+    /// and expire with it. This is about the item: a thing I feed a chocobo with does not stop
+    /// being that when the last of it goes.
+    /// </remarks>
+    public List<uint> Kept { get; set; } = [];
+
+    /// <summary>
     /// The smallest vendor find worth showing, in gil.
     /// </summary>
     /// <remarks>

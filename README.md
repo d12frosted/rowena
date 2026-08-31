@@ -326,6 +326,16 @@ a tab per question:
   That last one is why the craft table gets a say. Telling somebody to vendor the materials
   for the thing it just recommended would be the worst advice in here.
 
+  Two other things are held back, for reasons no amount of arithmetic reaches. The game's:
+  an item that teaches something I have not learned yet is worth the thing it teaches, not
+  what a vendor offers for it, so rolls, minions, mounts, cards, bardings, hairstyles,
+  fashion accessories, glasses, framer's kits and the master and folklore tomes are checked
+  against what I know before anything prices them. Learned, the duplicate is surplus like
+  any other stack. And mine: chocobo greens are not materials waiting to be sold, they are a
+  thing I feed a chocobo with, and nothing in a sheet separates them from copper ore. Saying
+  so once on the row keeps it said, for the item rather than for the stack of it that
+  happens to be in the bags today.
+
   Retainers are covered too. A retainer's pages are only readable while it is open, so what
   each one holds is remembered from the last look and the tab says how old that answer is: an
   hour-old reading of a retainer is the best there is until it is opened again, and far better

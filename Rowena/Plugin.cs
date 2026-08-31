@@ -160,8 +160,13 @@ public sealed class Plugin : IDalamudPlugin
         var diagnosticsPanel = new DiagnosticsPanel(
             diagnostics, market, live, boardWatcher, sweep, vendorSweep, places, config);
 
+        // The two things the pile cannot work out for itself: what I use rather than sell, and
+        // what I have not learned yet. One is my word, the other is the game's.
+        var keeping = new Keeping(config, Save);
+        var unlocks = new Unlocks(DataManager, Log);
+
         var hoardTab = new HoardTab(
-            balances, retainerStock, boardWatcher, boards, market, cells, config, diagnostics,
+            balances, retainerStock, boardWatcher, boards, market, cells, config, keeping, unlocks, diagnostics,
             () => craftTab.Wants());
 
         var overviewTab = new OverviewTab(
@@ -206,6 +211,15 @@ public sealed class Plugin : IDalamudPlugin
                 ["selling"] = () => mainWindow.Show(MainWindow.Tab.Selling),
                 ["overview"] = () => mainWindow.Show(MainWindow.Tab.Overview),
                 ["hoard"] = () => mainWindow.Show(MainWindow.Tab.Hoard),
+                ["unlocks"] = () => Log.Information(
+                    "Unlocks: "
+                    + string.Join(
+                        "; ",
+                        balances.Carrying().Keys
+                            .Select(itemId => (Name: itemNames.Name(itemId), Learned: unlocks.Learned(itemId)))
+                            .Where(read => read.Learned is not null)
+                            .Take(20)
+                            .Select(read => $"{read.Name}: {(read.Learned is true ? "learned" : "not learned")}"))),
                 ["recheck listings"] = () =>
                 {
                     // The same first-choice-then-fallback the overlay's refresh makes.
