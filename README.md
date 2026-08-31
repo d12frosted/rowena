@@ -258,14 +258,15 @@ a tab per question:
   Under the column, the other half of standing at a bell: what is not out yet. The slots are
   the scarce thing, so it says what to put in the free ones and what to ask for each, ranked
   by what a slot earns for holding the stack rather than by what the stack is worth. Only
-  what is actually to hand counts, which is your bags and this retainer's own pages: a stack
-  sitting with another retainer is an errand, not a recommendation. Which of the two it ranks
-  follows the window in front of you: open the retainer's own pages and it is those alone,
-  since that is the pile you are looking at and both list in one step from where they sit. A full retainer is the
-  normal state and the more useful case, so with nothing free it names the few things that
-  would out-earn what is already in a slot, measured the same way and against this
-  retainer's own city rate. Listings whose board has not been read are left out of that
-  comparison rather than counted as earning nothing.
+  what is in the pile you are selling from counts: your bags at the sell list, and the
+  retainer's own pages once those are the window in front. One heading and one pile, so no
+  row has to be checked for where it actually is, and a stack sitting with another retainer
+  is an errand rather than a recommendation.
+
+  A full retainer is the normal state and the more useful case, so with nothing free it names
+  the few things that would out-earn what is already in a slot, measured the same way and
+  against this retainer's own city rate. Listings whose board has not been read are left out
+  of that comparison rather than counted as earning nothing.
 
   Each row has the button that actually puts it out, and the number on screen is not the
   number it uses. What the window is showing came off a book that is minutes old at best, and
@@ -281,8 +282,8 @@ a tab per question:
 
   And the other answer: what is within reach that is not worth a slot at all, either because
   a vendor pays more or because the stack would not earn the floor from settings. Those are
-  named rather than counted, the ones sitting in this retainer first, because the useful part
-  at a bell is knowing what to retrieve before walking out. The selling happens at a vendor,
+  named rather than counted, from the same pile as everything else above them, because the
+  useful part at a bell is knowing what to have on you before walking out. The selling happens at a vendor,
   which a bell is not, so there is no button for it here.
 
   Every row says how old the board reading behind it is, because the verdict beside it is
