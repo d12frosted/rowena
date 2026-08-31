@@ -350,6 +350,13 @@ a tab per question:
   of it. That one change is also the portfolio: nothing has to impose a quota of fast movers
   against slow ones, because pricing the slot by what it turns over prefers the mix on its own.
 
+  The same measure decides what is not worth listing at all. A stack that would earn a slot
+  less than the floor in settings goes to a vendor even where the board pays more per unit,
+  because the scarce thing is the slot and not the gil: the vendor pays at once, takes the
+  lot, and never wants repricing. Read on the whole stack and on what actually sells in the
+  time, never on the price of one unit, which is the reading that would vendor those four
+  hundred greens.
+
   A stack with no price yet is not a stack worth nothing. Priced as nothing, everything the
   sweep had not reached read as a confident "vendor it", which is this plugin's own founding
   mistake wearing a different hat: a missing number is not a small number. Anything the board

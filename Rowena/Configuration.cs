@@ -285,6 +285,20 @@ public sealed class Configuration : IPluginConfiguration
     public List<uint> UndercutIgnored { get; set; } = [];
 
     /// <summary>
+    /// The least a stack must earn from a market slot to be worth one, in gil.
+    /// </summary>
+    /// <remarks>
+    /// Twenty slots a retainer and always more worth selling than slots to sell from, so the
+    /// scarce thing is the slot rather than the gil. A stack that would not earn this much over
+    /// the selling horizon goes to a vendor instead, which pays at once and takes no slot.
+    ///
+    /// Read on the whole stack and on what actually sells in the time, never on the price of
+    /// one unit. Four hundred chocobo greens at 295 are a cheap item and a hundred and eighteen
+    /// thousand gil, and a floor read per unit would send them to a vendor.
+    /// </remarks>
+    public int SlotFloor { get; set; } = 500;
+
+    /// <summary>
     /// Items I use rather than sell, so nothing here offers to get rid of them.
     /// </summary>
     /// <remarks>

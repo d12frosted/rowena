@@ -11,8 +11,9 @@ public class LiquidationTests
         double velocity,
         long vendor,
         KeepWhy keep = KeepWhy.Surplus,
-        int horizonDays = 7) =>
-        Liquidation.Of(quantity, floor, velocity, vendor, MarketTax.None, horizonDays, keep);
+        int horizonDays = 7,
+        long slotFloor = 0) =>
+        Liquidation.Of(quantity, floor, velocity, vendor, MarketTax.None, horizonDays, slotFloor, keep);
 
     [Fact]
     public void SomethingWorthMoreOnTheBoardIsWorthListing()
@@ -37,7 +38,7 @@ public class LiquidationTests
     {
         // A hundred on the board is ninety-five after the city takes its cut, so a vendor
         // paying ninety-six wins on a sticker price that looks lower.
-        var call = Liquidation.Of(10, 100, 50, 96, MarketTax.Standard, 7, KeepWhy.Surplus);
+        var call = Liquidation.Of(10, 100, 50, 96, MarketTax.Standard, 7, 0, KeepWhy.Surplus);
 
         Assert.Equal(HoardCall.Vendor, call.Call);
     }
@@ -106,6 +107,65 @@ public class LiquidationTests
     [Fact]
     public void SurplusIsTheDefaultAndSaysSo() =>
         Assert.Equal(KeepWhy.Surplus, Of(20, 1000, 50, 100).Keep);
+
+    [Fact]
+    public void AStackThatCannotEarnItsSlotGoesToTheVendor()
+    {
+        // Ten of something worth thirty is three hundred gil for a slot that could hold
+        // anything else. The vendor pays now, takes all ten, and asks for no slot at all.
+        var call = Of(10, 30, 50, 5, slotFloor: 500);
+
+        Assert.Equal(HoardCall.Vendor, call.Call);
+    }
+
+    [Fact]
+    public void TheFloorIsAboutTheStackAndNotTheUnitPrice()
+    {
+        // Four hundred chocobo greens at 295 are a cheap item and a hundred and eighteen
+        // thousand gil. A floor read per unit would vendor the second largest pile I own.
+        var call = Of(400, 295, 90, 20, slotFloor: 500);
+
+        Assert.Equal(HoardCall.List, call.Call);
+    }
+
+    [Fact]
+    public void AFortuneThatNeverSellsCannotEarnItsSlotEither()
+    {
+        // Ten thousand gil of stock at a hundredth of a sale a day realises seventy gil of it
+        // in a week. What a slot earns is what sells while it is occupied, not what is in it.
+        var call = Of(10, 1000, 0.01, 100, slotFloor: 500);
+
+        Assert.Equal(HoardCall.Vendor, call.Call);
+        Assert.Equal(70, call.Realised);
+    }
+
+    [Fact]
+    public void TheFloorNeverSendsAnythingToAVendorThatPaysNothing()
+    {
+        // Below the floor is a statement about the slot, not about the item. Where the board is
+        // the only counter there is, it is still the answer.
+        var call = Of(10, 30, 50, 0, slotFloor: 500);
+
+        Assert.Equal(HoardCall.List, call.Call);
+    }
+
+    [Fact]
+    public void KeepingBeatsTheFloorToo()
+    {
+        var call = Of(10, 30, 50, 5, KeepWhy.Mine, slotFloor: 500);
+
+        Assert.Equal(HoardCall.Keep, call.Call);
+    }
+
+    [Fact]
+    public void WhatASlotWouldEarnIsReported()
+    {
+        // A hundred units at a thousand, twenty a day: five days to clear, so all of it lands
+        // inside a seven day horizon and the slot earns the lot.
+        var call = Of(100, 1000, 20, 10);
+
+        Assert.Equal(100_000, call.Realised);
+    }
 
     [Fact]
     public void HowLongTheBoardWouldTakeToEatTheWholePileIsReported()

@@ -27,6 +27,8 @@ internal sealed class SettingsTab(
     Trades trades,
     Balances balances,
     BoardWatcher board,
+    Keeping keeping,
+    ItemCells cells,
     DiagnosticsPanel diagnostics,
     Action refreshPrices,
     Action save)
@@ -116,6 +118,18 @@ internal sealed class SettingsTab(
             value => config.UndercutOverlay = value,
             "One row per listing, in the list's order, with the undercut price and a button that\n"
             + "opens the game's price dialog on that listing with the price filled in.");
+
+        Group("the pile");
+
+        changed |= Number(
+            "Least a stack must earn from a slot", config.SlotFloor, value => config.SlotFloor = value,
+            "Twenty market slots a retainer, and always more worth selling than slots to sell from, so\n"
+            + "a stack that would not earn this much over the days above is not a listing. It goes to a\n"
+            + "vendor, which pays at once and takes no slot. Read on the whole stack and on what really\n"
+            + "sells in the time, never on the price of one: four hundred chocobo greens at 295 each are\n"
+            + "a cheap item and a hundred and eighteen thousand gil.");
+
+        DrawKept();
 
         Group("the craft sweep");
 
@@ -560,6 +574,48 @@ internal sealed class SettingsTab(
 
         trades.Replace(catalog);
         refreshPrices();
+    }
+
+    /// <summary>
+    /// The things I have said are mine, and the way to stop saying it.
+    /// </summary>
+    /// <remarks>
+    /// The Bags tab is where the claim is made, and it would be the natural place to undo it,
+    /// except that a claim outlives the stack it was about: say it about chocobo greens, feed
+    /// them all to a chocobo, and the row is gone along with its button. So the list lives here,
+    /// where a durable preference belongs anyway.
+    /// </remarks>
+    private void DrawKept()
+    {
+        if (keeping.All.Count == 0)
+        {
+            ImGui.TextColored(
+                Style.Muted,
+                "    Nothing set aside. The Bags tab is where you say a thing is yours to use.");
+
+            return;
+        }
+
+        ImGui.TextColored(
+            Style.Muted,
+            $"    {keeping.All.Count} item{(keeping.All.Count == 1 ? "" : "s")} you use rather than sell:");
+
+        foreach (var itemId in keeping.All.ToArray())
+        {
+            ImGui.PushID((int)itemId);
+            ImGui.Indent();
+
+            cells.Icon(itemId, 16f);
+            ImGui.SameLine();
+            ImGui.TextColored(Style.Plain, cells.Name(itemId));
+            ImGui.SameLine();
+
+            if (Style.Quiet("let go", "Judge this like everything else again."))
+                keeping.Keep(itemId, false);
+
+            ImGui.Unindent();
+            ImGui.PopID();
+        }
     }
 
     private static void Group(string title)

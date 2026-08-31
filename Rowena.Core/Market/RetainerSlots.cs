@@ -62,9 +62,17 @@ public static class RetainerSlots
     /// <remarks>
     /// Something that never sells earns nothing, however dear it is. That is not the same as
     /// being worthless: it is worth whatever a vendor pays, and no slot at all.
+    ///
+    /// Public because it is the same measure the pile uses to decide whether a stack is worth a
+    /// slot in the first place. Two copies of this arithmetic would eventually disagree, and a
+    /// stack called too small to list while the plan lists it would be worse than either
+    /// answer.
     /// </remarks>
-    private static long Realised(SlotCandidate candidate, double horizonDays) =>
-        candidate is { Worth: > 0, DaysToClear: { } days and > 0 }
-            ? (long)(candidate.Worth * Math.Min(1d, horizonDays / days))
+    public static long Realised(long worth, double? daysToClear, double horizonDays) =>
+        worth > 0 && daysToClear is { } days and > 0
+            ? (long)(worth * Math.Min(1d, horizonDays / days))
             : 0;
+
+    private static long Realised(SlotCandidate candidate, double horizonDays) =>
+        Realised(candidate.Worth, candidate.DaysToClear, horizonDays);
 }

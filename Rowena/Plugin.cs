@@ -175,7 +175,7 @@ public sealed class Plugin : IDalamudPlugin
 
         var settingsTab = new SettingsTab(
             config, gatherClock, realised, market, catalogFile, trades, balances, boardWatcher,
-            diagnosticsPanel,
+            keeping, cells, diagnosticsPanel,
             () => mainWindow!.RefreshPrices(), Save);
 
         mainWindow = new MainWindow(
