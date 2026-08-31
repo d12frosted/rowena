@@ -265,12 +265,23 @@ a tab per question:
   retainer's own city rate. Listings whose board has not been read are left out of that
   comparison rather than counted as earning nothing.
 
+  Each row has the button that actually puts it out, and the number on screen is not the
+  number it uses. What the window is showing came off a book that is minutes old at best, and
+  a minute is long enough for somebody to have gone under it, so the board itself is asked
+  again as the run starts and the price that goes into the dialog is the one that came back.
+  A board that does not answer stops the run rather than falling back on what was on screen.
+  From there it walks the game's own windows the way repricing does: the item's menu, "Put Up
+  for Sale", then the dialog with the quantity and the price. The menu entry is found by the
+  game's own words for it, in whatever language the client speaks, rather than by counting
+  entries: "Discard" is on that menu too, and a mis-counted click is not a harmless miss. No
+  match, or two, and it stops. The fields are read back before anything is confirmed, and the
+  confirm itself is the same setting the repricing uses.
+
   And the other answer: what is within reach that is not worth a slot at all, either because
-  a vendor pays more or because the stack would not earn the floor from settings. Nothing to
-  do at a bell, since a vendor is not one, but it is the reason those stacks are not what
-  the free slots are for. Nothing here lists anything for you: the price is a number and a
-  copy of it, because the dialog for a fresh listing is opened by a walk through the game's
-  own menus that nothing here is driving.
+  a vendor pays more or because the stack would not earn the floor from settings. Those are
+  named rather than counted, the ones sitting in this retainer first, because the useful part
+  at a bell is knowing what to retrieve before walking out. The selling happens at a vendor,
+  which a bell is not, so there is no button for it here.
 
   Every row says how old the board reading behind it is, because the verdict beside it is
   only worth that number. Past the shelf life the age turns amber, and a listing nobody has

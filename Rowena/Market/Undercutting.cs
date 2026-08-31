@@ -15,6 +15,10 @@ internal sealed class Undercutting(Boards boards, Configuration config, Action s
     public UndercutPlan? Plan(uint itemId, long mine, bool hq = false) =>
         Undercut.Of(mine, boards.Selling(itemId), config.UndercutBy, hq);
 
+    /// <summary>What to ask for something that is not listed yet, from the book as it stands.</summary>
+    public long? Fresh(uint itemId, bool hq = false) =>
+        Undercut.Fresh(boards.Selling(itemId), config.UndercutBy, hq);
+
     public bool Ignored(uint itemId) => config.UndercutIgnored.Contains(itemId);
 
     public void Ignore(uint itemId, bool ignore)

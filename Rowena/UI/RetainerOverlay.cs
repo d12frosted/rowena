@@ -220,7 +220,9 @@ internal sealed class RetainerOverlay : Window
     {
         if (sellFill.Running is { } running)
         {
-            ImGui.TextColored(Style.Plain, $"repricing, {running.Done} done, {running.Left} to go");
+            ImGui.TextColored(
+                Style.Plain,
+                $"{(running.Listing ? "listing" : "repricing")}, {running.Done} done, {running.Left} to go");
             ImGui.SameLine();
 
             if (Style.Row("stop"))
@@ -488,6 +490,13 @@ internal sealed class RetainerOverlay : Window
     /// <summary>A retainer's market slots. Twenty, always.</summary>
     private const int SlotsEach = 20;
 
+    /// <summary>How many of the vendor stacks are named rather than counted.</summary>
+    /// <remarks>
+    /// Enough to be worth a detour on the way out, few enough that the window stays a window.
+    /// The rest are a tab's business rather than a bell's.
+    /// </remarks>
+    private const int Named = 5;
+
     /// <summary>How many swaps are worth naming when every slot is taken.</summary>
     /// <remarks>
     /// A full retainer is the normal state, so this is the line that will actually be read most
@@ -511,7 +520,7 @@ internal sealed class RetainerOverlay : Window
     private Fill Build()
     {
         if (sellFill.ActiveRetainer() is not { } retainer)
-            return new Fill([], 0, 0, 0, null);
+            return new Fill([], 0, [], 0, 0, null);
 
         var horizon = config.SellingHorizon();
         var tax = board.TaxFor(retainer.CityId);
@@ -547,7 +556,19 @@ internal sealed class RetainerOverlay : Window
                 stack.Verdict.Realised))
             .ToArray();
 
-        var junk = reading.Stacks.Where(stack => stack.Verdict.Call == HoardCall.Vendor).ToArray();
+        // Ordered by what is worth carrying out of here: the ones sitting in this retainer come
+        // first, since those are the ones a visit can do something about.
+        var junk = reading.Stacks
+            .Where(stack => stack.Verdict.Call == HoardCall.Vendor)
+            .Select(stack => new Junk(
+                stack.ItemId,
+                cells.Name(stack.ItemId),
+                stack.Quantity,
+                here.GetValueOrDefault(stack.ItemId),
+                stack.Verdict.Worth))
+            .OrderByDescending(stack => stack.Here > 0)
+            .ThenByDescending(stack => stack.Worth)
+            .ToArray();
         var weakest = Weakest(listed, tax, horizon);
 
         // With nothing free, a pick is only worth saying if it beats something that is already
@@ -566,8 +587,9 @@ internal sealed class RetainerOverlay : Window
         return new Fill(
             shown,
             free,
+            [.. junk.Take(Named)],
             junk.Length,
-            junk.Sum(stack => stack.Verdict.Worth),
+            junk.Sum(stack => stack.Worth),
             weakest);
     }
 
@@ -691,13 +713,14 @@ internal sealed class RetainerOverlay : Window
 
     private void DrawPicks(Fill current)
     {
-        if (!ImGui.BeginTable("fill", 4, ImGuiTableFlags.RowBg))
+        if (!ImGui.BeginTable("fill", 5, ImGuiTableFlags.RowBg))
             return;
 
         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthFixed, Style.Px(220));
         ImGui.TableSetupColumn("to hand", ImGuiTableColumnFlags.WidthFixed, Style.Px(120));
         ImGui.TableSetupColumn("ask", ImGuiTableColumnFlags.WidthFixed, Style.Px(130));
         ImGui.TableSetupColumn("earns", ImGuiTableColumnFlags.WidthFixed, Style.Px(90));
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, Style.Px(60));
         Cell.Headers(FillHelp);
 
         foreach (var pick in current.Picks)
@@ -716,6 +739,9 @@ internal sealed class RetainerOverlay : Window
 
             ImGui.TableNextColumn();
             Cell.Right(Style.Good, $"{pick.Realised:N0}");
+
+            ImGui.TableNextColumn();
+            DrawList(pick, current.Free > 0);
 
             ImGui.PopID();
         }
@@ -794,11 +820,57 @@ internal sealed class RetainerOverlay : Window
             + "same price the column above would reprice it to once it is out.");
     }
 
-    /// <summary>What is within reach and not worth a slot, which is the other half of the answer.</summary>
+    /// <summary>
+    /// The button that actually puts it out.
+    /// </summary>
+    /// <remarks>
+    /// It carries no price. What this window is showing was worked out from a book that is
+    /// minutes old at best, and a minute is long enough for somebody to have gone under it, so
+    /// the board is asked again as the run starts and the number that goes into the dialog is
+    /// the one that came back. A board that does not answer stops the run rather than falling
+    /// back on what was on screen.
+    ///
+    /// Disabled with nothing free, since the game would refuse it: a swap means taking something
+    /// down first, which is a decision rather than a step in a run.
+    /// </remarks>
+    private void DrawList(Pick pick, bool room)
+    {
+        var busy = sellFill.Running is not null;
+
+        ImGui.BeginDisabled(busy || !room || pick.Ask is null);
+
+        if (Style.Row(
+                "list",
+                !room
+                    ? "Every slot here is taken. Take one of the listings above down first, and this\n"
+                      + "becomes a listing rather than a suggestion."
+                    : pick.Ask is null
+                        ? "There is no price to put on it yet."
+                        : $"Asks the board what this is going for, then walks the game's own windows to put\n"
+                          + $"{pick.Listable:N0} of it up at whatever comes back. The number on screen is not the\n"
+                          + "number used: it is minutes old, and a minute is enough for somebody to have gone\n"
+                          + "under it. The dialog's confirm is pressed only if you have left that setting on.")
+            && !busy && room)
+            sellFill.Sell(pick.ItemId, pick.Listable);
+
+        ImGui.EndDisabled();
+    }
+
+    /// <summary>
+    /// What is within reach and not worth a slot, which is the other half of the answer.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than counted, because a count is not something anybody can act on and the
+    /// point of saying it here is the retrieving: these are the stacks to pull out of the
+    /// retainer while standing at it. The selling itself happens at a vendor, which a bell is
+    /// not, so there is no button and this does not pretend otherwise.
+    /// </remarks>
     private void DrawJunk(Fill current)
     {
         if (current.JunkStacks == 0)
             return;
+
+        Style.Gap(2f);
 
         ImGui.TextColored(
             Style.Muted,
@@ -807,9 +879,42 @@ internal sealed class RetainerOverlay : Window
 
         Style.Explain(
             "Either a vendor pays more than the board would leave you, or the stack would not earn\n"
-            + $"a market slot the {config.SlotFloor:N0} gil you set as the least one is worth. Not something to\n"
-            + "do here, since a vendor is not a bell; the Bags tab names them, and the point at this\n"
-            + "window is that they are not what the free slots are for.");
+            + $"a market slot the {config.SlotFloor:N0} gil you set as the least one is worth. The selling\n"
+            + "happens at a vendor rather than here, so this is the list to retrieve before you go.\n"
+            + "The Bags tab has all of them.");
+
+        foreach (var stack in current.Worst)
+        {
+            ImGui.PushID((int)stack.ItemId);
+            ImGui.Indent();
+
+            cells.Icon(stack.ItemId, 16f);
+            ImGui.SameLine();
+
+            ImGui.TextColored(Style.Muted, $"{stack.Units:N0}x {stack.Name}");
+            ImGui.SameLine();
+
+            Cell.Right(Style.Muted, $"{stack.Worth:N0}{(stack.Here > 0 ? " (here)" : "")}");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    stack.Here > 0
+                        ? $"{stack.Here} of these are in this retainer, so they want retrieving before\n"
+                          + "you walk to a vendor."
+                        : "In your bags already, so it is only the walk.");
+            }
+
+            ImGui.Unindent();
+            ImGui.PopID();
+        }
+
+        if (current.JunkStacks > current.Worst.Count)
+        {
+            ImGui.TextColored(
+                Style.Muted,
+                $"    and {current.JunkStacks - current.Worst.Count} more, on the Bags tab.");
+        }
     }
 
     private static readonly string?[] FillHelp =
@@ -821,6 +926,7 @@ internal sealed class RetainerOverlay : Window
         "What a slot earns for holding one stack of it over your selling horizon, which is what\n"
         + "the ranking is on. Not what the pile is worth: a stack that takes months to clear\n"
         + "earns a week of a slot very little of itself.",
+        null,
     ];
 
     /// <summary>One stack worth a slot here, and what to do about it.</summary>
@@ -840,9 +946,14 @@ internal sealed class RetainerOverlay : Window
     /// <summary>The listing here earning its slot the least, which is what a swap has to beat.</summary>
     private readonly record struct Weak(uint ItemId, long Realised);
 
+    /// <summary>One stack within reach that a vendor is the better answer for.</summary>
+    /// <param name="Here">How many of it are in this retainer, which is what a visit can act on.</param>
+    private readonly record struct Junk(uint ItemId, string Name, int Units, int Here, long Worth);
+
     private sealed record Fill(
         IReadOnlyList<Pick> Picks,
         int Free,
+        IReadOnlyList<Junk> Worst,
         int JunkStacks,
         long JunkGil,
         Weak? Weakest);
